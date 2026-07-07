@@ -13,8 +13,12 @@ import com.areslib.telemetry.ITelemetry
  */
 interface SwerveHardwareIO : SubsystemIO {
     override fun logTelemetry(telemetry: ITelemetry, prefix: String) {
-        telemetry.putDoubleArray("$prefix/Currents", currents)
-        telemetry.putDoubleArray("$prefix/EncoderPositions", encoderPositions)
+        val curr = DoubleArray(4)
+        val enc = DoubleArray(4)
+        getCurrents(curr)
+        getEncoderPositions(enc)
+        telemetry.putDoubleArray("$prefix/Currents", curr)
+        telemetry.putDoubleArray("$prefix/EncoderPositions", enc)
     }
 
     /** Refreshes cached status signals from the hardware. */
@@ -27,12 +31,10 @@ interface SwerveHardwareIO : SubsystemIO {
     fun write(driveState: DriveState)
 
     /** Gets measured motor supply currents. */
-    val currents: DoubleArray
-        get() = DoubleArray(4)
+    fun getCurrents(out: DoubleArray) {}
 
     /** Gets measured absolute encoder positions. */
-    val encoderPositions: DoubleArray
-        get() = DoubleArray(4)
+    fun getEncoderPositions(out: DoubleArray) {}
 
     /** Gets Pigeon2 absolute pitch degrees. */
     val pitchDegrees: Double
@@ -43,8 +45,7 @@ interface SwerveHardwareIO : SubsystemIO {
         get() = 0.0
 
     /** Gets measured module linear velocities. */
-    val moduleSpeeds: DoubleArray
-        get() = DoubleArray(4)
+    fun getModuleSpeeds(out: DoubleArray) {}
 
     /** Feeds AprilTag measurements into drivetrain's pose estimator. */
     fun addVisionMeasurement(pose: edu.wpi.first.math.geometry.Pose2d, timestampSeconds: Double) {}

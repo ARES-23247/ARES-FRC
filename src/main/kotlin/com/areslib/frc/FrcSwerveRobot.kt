@@ -93,6 +93,8 @@ class FrcSwerveRobot(
         set(value) { powerManager.batteryVoltageSupplier = value }
 
     private var wasBeached = false
+    private val scratchSpeeds = DoubleArray(4)
+    private val scratchCurrents = DoubleArray(4)
 
     init {
         RobotWebServer.start()
@@ -236,11 +238,11 @@ class FrcSwerveRobot(
             val isTilted = Math.abs(pitch) > 8.0 || Math.abs(roll) > 8.0
             
             // Loss of traction: high speed but very low current draw
-            val speeds = swerveIO.moduleSpeeds
-            val currents = swerveIO.currents
+            swerveIO.getModuleSpeeds(scratchSpeeds)
+            swerveIO.getCurrents(scratchCurrents)
             var slipCount = 0
             for (i in 0..3) {
-                if (Math.abs(speeds[i]) > 1.5 && Math.abs(currents[i]) < 8.0) {
+                if (Math.abs(scratchSpeeds[i]) > 1.5 && Math.abs(scratchCurrents[i]) < 8.0) {
                     slipCount++
                 }
             }

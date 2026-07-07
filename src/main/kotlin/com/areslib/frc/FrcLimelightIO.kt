@@ -28,6 +28,10 @@ class FrcLimelightIO(
 
     private var lastLinearVelocityMps = 0.0
     private var lastYawRateDegPerSec = 0.0
+    
+    // Pre-allocated buffers to prevent GC
+    private val scratchOrientation = DoubleArray(6)
+    private val scratchMeasurements = ArrayList<VisionMeasurement>(1)
 
     init {
         // Enforce match-ready settings to NetworkTables on startup
@@ -50,11 +54,14 @@ class FrcLimelightIO(
         lastLinearVelocityMps = linearVelocityMps
         lastYawRateDegPerSec = yawRateDegPerSec
         
-        orientationPub.set(doubleArrayOf(
-            yawDegrees, yawRateDegPerSec,
-            pitchDegrees, pitchRateDegPerSec,
-            rollDegrees, rollRateDegPerSec
-        ))
+        scratchOrientation[0] = yawDegrees
+        scratchOrientation[1] = yawRateDegPerSec
+        scratchOrientation[2] = pitchDegrees
+        scratchOrientation[3] = pitchRateDegPerSec
+        scratchOrientation[4] = rollDegrees
+        scratchOrientation[5] = rollRateDegPerSec
+        
+        orientationPub.set(scratchOrientation)
     }
 
     override fun updateInputs(inputs: VisionIOInputs) {
@@ -99,14 +106,15 @@ class FrcLimelightIO(
                 rotation = Rotation3d(roll, pitch, yaw)
             )
             
-            inputs.measurements = listOf(
-                VisionMeasurement(
-                    timestampMs = timestampMs,
-                    targetPose = pose,
-                    tagId = -1,
-                    ambiguity = ambiguity
-                )
-            )
+            scratchMeasurements.clear()
+            scratchMeasurements.add(VisionMeasurement(
+                timestampMs = timestampMs,
+                targetPose = pose,
+                tagId = -1,
+                ambiguity = ambiguity
+            ))
+            
+            inputs.measurements = scratchMeasurements.toList()
         } else {
             inputs.measurements = emptyList()
         }

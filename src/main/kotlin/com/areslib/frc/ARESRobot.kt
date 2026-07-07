@@ -43,6 +43,11 @@ class ARESRobot : TimedRobot() {
     private val shotResult = ShotResult()
     private var speakerTranslation = Translation2d(4.625, 4.035)
 
+    // Pre-allocated objects
+    private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
+    private val targetPosesBlue = arrayOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
+    private val targetPoseScratch = DoubleArray(3)
+
     // Simulation timing
     private var lastSimTime = 0.0
 
@@ -88,7 +93,7 @@ class ARESRobot : TimedRobot() {
             )
         }
 
-        lastSimTime = Timer.getFPGATimestamp()
+        lastSimTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
 
         // Wire brownout guard to read live battery voltage from roboRIO
         robot.batteryVoltageSupplier = {
@@ -169,14 +174,8 @@ class ARESRobot : TimedRobot() {
                 }
                 rbPressed -> {
                     // Aim and Shuttle
-                    val isRed = alliance.isPresent && alliance.get() == DriverStation.Alliance.Red
-                    val targetPoses = if (isRed) {
-                        listOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
-                    } else {
-                        listOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
-                    }
-                    val shuttleTarget = targetPoses.minByOrNull { kotlin.math.hypot(it.x - currentPose.x, it.y - currentPose.y) }
-                        ?: Translation2d(2.0, 6.0)
+                    val isRed = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red
+                    val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
 
                     rotation = robot.marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
@@ -335,7 +334,7 @@ class ARESRobot : TimedRobot() {
             println("ERROR: Failed to load autonomous path SimPath: ${e.message}")
             activePath = null
         }
-        autoStartTime = Timer.getFPGATimestamp()
+        autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         autoDistance = 0.0
     }
 
@@ -395,9 +394,10 @@ class ARESRobot : TimedRobot() {
             }
 
             // Trajectory telemetry
-            robot.telemetry.putDoubleArray("Robot/TargetPose", doubleArrayOf(
-                targetPoint.pose.x, targetPoint.pose.y, targetPoint.pose.heading.radians
-            ))
+            targetPoseScratch[0] = targetPoint.pose.x
+            targetPoseScratch[1] = targetPoint.pose.y
+            targetPoseScratch[2] = targetPoint.pose.heading.radians
+            robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
             val dx = targetPoint.pose.x - currentPose.x
             val dy = targetPoint.pose.y - currentPose.y
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
@@ -415,7 +415,7 @@ class ARESRobot : TimedRobot() {
     override fun simulationPeriodic() {
         if (!RobotBase.isSimulation()) return
 
-        val now = Timer.getFPGATimestamp()
+        val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         val dt = Math.min(now - lastSimTime, 0.05)
         lastSimTime = now
 

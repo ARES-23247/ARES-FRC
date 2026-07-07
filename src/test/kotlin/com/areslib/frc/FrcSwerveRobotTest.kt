@@ -40,8 +40,9 @@ class FrcSwerveRobotTest {
 
         override fun write(driveState: DriveState) {}
 
-        override val currents: DoubleArray
-            get() = mockCurrents
+        override fun getCurrents(out: DoubleArray) {
+            System.arraycopy(mockCurrents, 0, out, 0, out.size)
+        }
 
         override val pitchDegrees: Double
             get() = mockPitch
@@ -49,8 +50,9 @@ class FrcSwerveRobotTest {
         override val rollDegrees: Double
             get() = mockRoll
 
-        override val moduleSpeeds: DoubleArray
-            get() = mockSpeeds
+        override fun getModuleSpeeds(out: DoubleArray) {
+            System.arraycopy(mockSpeeds, 0, out, 0, out.size)
+        }
 
         override fun seedPose(pose: Pose2d) {
             seedPoseCalledWith = pose

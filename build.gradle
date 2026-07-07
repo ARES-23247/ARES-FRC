@@ -1,11 +1,13 @@
 plugins {
     id "java"
     id "application"
-    id "org.jetbrains.kotlin.jvm"
+    id "org.jetbrains.kotlin.jvm" version "1.9.22"
     id "edu.wpi.first.GradleRIO" version "2026.2.1"
 }
 
 repositories {
+    mavenLocal()
+    mavenCentral()
     maven { url 'https://jitpack.io' }
 }
 
