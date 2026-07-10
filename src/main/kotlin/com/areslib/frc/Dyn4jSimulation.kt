@@ -46,100 +46,35 @@ class Dyn4jSimulation(seed: Long = 42L) {
     private val balls = mutableListOf<Body>()
     private val flyingBalls = mutableListOf<FlyingBall>()
     private var shootCooldownTimer = 0.0
+    private val forceVector = Vector2()
 
     // ── Sim Models ──
-    private val flywheelSim = FlywheelSim()
-    private val intakePivotSim = IntakePivotSim()
+    internal val flywheelSim = FlywheelSim()
+    internal val intakePivotSim = IntakePivotSim()
 
     // ── Simulated Voltages (written by IO, consumed by step) ──
-    private var simFlywheelVoltage = 0.0
-    private var simCowlVoltage = 0.0
-    private var simIntakePivotVoltage = 0.0
-    private var simIntakeRollerVoltage = 0.0
-    private var simFeederVoltage = 0.0
-    private var simFloorVoltage = 0.0
-    private var simFloorVelocityRps = 0.0
-    private var simClimberVoltage = 0.0
-    private var simClimberExtensionMeters = 0.0
-    private var simCowlAngle = 0.0
-    private var simFeederPieceDetected = false
+    internal var simFlywheelVoltage = 0.0
+    internal var simCowlVoltage = 0.0
+    internal var simIntakePivotVoltage = 0.0
+    internal var simIntakeRollerVoltage = 0.0
+    internal var simFeederVoltage = 0.0
+    internal var simFloorVoltage = 0.0
+    internal var simFloorVelocityRps = 0.0
+    internal var simClimberVoltage = 0.0
+    internal var simClimberExtensionMeters = 0.0
+    internal var simCowlAngle = 0.0
+    internal var simFeederPieceDetected = false
     var flywheelRotationAngle = 0.0
         private set
 
     // ── Simulated Hardware IO Objects ──
 
-    val flywheelIO: FlywheelIO = object : FlywheelIO {
-        override fun setVelocityRpm(rpm: Double) {
-            val error = rpm - flywheelSim.velocityRpm
-            simFlywheelVoltage = (error * 0.003).coerceIn(-12.0, 12.0)
-        }
-        override fun setAppliedVoltage(volts: Double) {
-            simFlywheelVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override val velocityRpm: Double get() = flywheelSim.velocityRpm
-        override val currentAmps: Double get() = flywheelSim.getCurrentAmps(simFlywheelVoltage)
-        override val tempCelsius: Double get() = 30.0
-    }
-
-    val cowlIO: CowlIO = object : CowlIO {
-        override fun setTargetAngle(degrees: Double) {
-            // CowlIO receives target angle in mechanism rotations (0.50 to 1.75).
-            // We scale rotations by 32.0 to convert to simulation degrees (16.0 to 56.0).
-            val targetDegrees = degrees * 32.0
-            val error = targetDegrees - simCowlAngle
-            simCowlVoltage = (error * 0.5).coerceIn(-12.0, 12.0)
-        }
-        override fun setAppliedVoltage(volts: Double) {
-            simCowlVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        // Returns current angle in mechanism rotations to match hardware behavior
-        override val angleDegrees: Double get() = simCowlAngle / 32.0
-        override val currentAmps: Double get() = Math.abs(simCowlVoltage) * 0.2
-    }
-
-    val intakeIO: IntakeIO = object : IntakeIO {
-        override fun setPivotAngle(degrees: Double) {
-            val error = degrees - intakePivotSim.angleDegrees
-            simIntakePivotVoltage = (error * 0.4).coerceIn(-12.0, 12.0)
-        }
-        override fun setPivotVoltage(volts: Double) {
-            simIntakePivotVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override fun setRollerVoltage(volts: Double) {
-            simIntakeRollerVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override val pivotAngleDegrees: Double get() = intakePivotSim.angleDegrees
-        override val pivotCurrentAmps: Double get() = Math.abs(simIntakePivotVoltage) * 0.3
-        override val rollerCurrentAmps: Double get() = Math.abs(simIntakeRollerVoltage) * 0.2
-    }
-
-    val feederIO: FeederIO = object : FeederIO {
-        override fun setAppliedVoltage(volts: Double) {
-            simFeederVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override val isBeamBroken: Boolean get() = simFeederPieceDetected
-        override val currentAmps: Double get() = Math.abs(simFeederVoltage) * 0.1
-    }
-
-    val floorIO: FloorIO = object : FloorIO {
-        override fun setAppliedVoltage(volts: Double) {
-            simFloorVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override val velocityRps: Double get() = simFloorVelocityRps
-        override val currentAmps: Double get() = Math.abs(simFloorVoltage) * 0.15
-    }
-
-    val climberIO: ClimberIO = object : ClimberIO {
-        override fun setTargetExtension(meters: Double) {
-            val error = meters - simClimberExtensionMeters
-            simClimberVoltage = (error * 10.0).coerceIn(-12.0, 12.0)
-        }
-        override fun setAppliedVoltage(volts: Double) {
-            simClimberVoltage = volts.coerceIn(-12.0, 12.0)
-        }
-        override val extensionMeters: Double get() = simClimberExtensionMeters
-        override val currentAmps: Double get() = Math.abs(simClimberVoltage) * 0.25
-    }
+    val flywheelIO: FlywheelIO = com.areslib.frc.sim.io.SimulatedFlywheelIO(this)
+    val cowlIO: CowlIO = com.areslib.frc.sim.io.SimulatedCowlIO(this)
+    val intakeIO: IntakeIO = com.areslib.frc.sim.io.SimulatedIntakeIO(this)
+    val feederIO: FeederIO = com.areslib.frc.sim.io.SimulatedFeederIO(this)
+    val floorIO: FloorIO = com.areslib.frc.sim.io.SimulatedFloorIO(this)
+    val climberIO: ClimberIO = com.areslib.frc.sim.io.SimulatedClimberIO(this)
 
     init {
         world.setGravity(Vector2(0.0, 0.0))
@@ -153,7 +88,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
         robotBody.translate(2.0, 2.0)
         world.addBody(robotBody)
 
-        createWalls()
+        com.areslib.frc.sim.field.FrcFieldBuilder.buildFrcField(world)
         spawnFuel(seed)
     }
 
@@ -180,7 +115,8 @@ class Dyn4jSimulation(seed: Long = 42L) {
         val torque = (state.drive.angularVelocityRadiansPerSecond - robotBody.angularVelocity) * kpAngular
 
         robotBody.isAtRest = false
-        robotBody.applyForce(Vector2(forceX, forceY))
+        forceVector.set(forceX, forceY)
+        robotBody.applyForce(forceVector)
         robotBody.applyTorque(torque)
 
         world.step(1, dt)
@@ -444,43 +380,6 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
     // ── Field Setup ──
 
-    private fun createWalls() {
-        val width = 16.541
-        val height = 8.069
-
-        // Outer bounds
-        addWall(width / 2.0, height, width, 0.1)   // Top
-        addWall(width / 2.0, 0.0, width, 0.1)      // Bottom
-        addWall(0.0, height / 2.0, 0.1, height)     // Left
-        addWall(width, height / 2.0, 0.1, height)   // Right
-
-        // Hubs (Static scoring centers)
-        addWall(4.135, 4.0345, 1.1938, 1.1938)      // Blue Hub
-        addWall(width - 4.135, 4.0345, 1.1938, 1.1938) // Red Hub
-
-        // Towers (Climbing truss frames or shield generator columns)
-        addWall(width / 2.0 - 1.8, height / 2.0 - 1.8, 0.3, 0.3) // bottom-left tower
-        addWall(width / 2.0 - 1.8, height / 2.0 + 1.8, 0.3, 0.3) // top-left tower
-        addWall(width / 2.0 + 1.8, height / 2.0 - 1.8, 0.3, 0.3) // bottom-right tower
-        addWall(width / 2.0 + 1.8, height / 2.0 + 1.8, 0.3, 0.3) // top-right tower
-
-        // Trench Barriers (Long horizontal boundaries parallel to side walls forming high-speed driving lanes)
-        addWall(width / 2.0, 1.45, 3.2, 0.15)      // Bottom Trench Wall
-        addWall(width / 2.0, height - 1.45, 3.2, 0.15) // Top Trench Wall
-
-        // Climb Ramps / Stations (Raised climb base blocks at side ends)
-        addWall(2.5, height / 2.0, 0.6, 1.4)       // Blue Climb Base
-        addWall(width - 2.5, height / 2.0, 0.6, 1.4) // Red Climb Base
-    }
-
-    private fun addWall(x: Double, y: Double, w: Double, h: Double) {
-        val wall = Body()
-        wall.addFixture(Geometry.createRectangle(w, h))
-        wall.setMass(MassType.INFINITE)
-        wall.translate(x, y)
-        world.addBody(wall)
-    }
-
     private fun spawnFuel(@Suppress("UNUSED_PARAMETER") seed: Long) {
         val width = 16.541
         val height = 8.069
@@ -560,10 +459,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
         val height = if (config.fieldType == com.areslib.state.FieldType.FRC) 8.069 else 3.6576
 
         // Outer bounds
-        addWall(width / 2.0, height, width, 0.1)   // Top
-        addWall(width / 2.0, 0.0, width, 0.1)      // Bottom
-        addWall(0.0, height / 2.0, 0.1, height)     // Left
-        addWall(width, height / 2.0, 0.1, height)   // Right
+        com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(world, width, height)
 
         // Load obstacles
         com.areslib.sim.FieldObstacleLoader.loadObstacles(world, config.obstacles)

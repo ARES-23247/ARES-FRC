@@ -14,6 +14,7 @@ import com.areslib.reducer.rootReducer
 import com.areslib.frc.action.*
 import com.areslib.frc.subsystem.*
 import com.areslib.frc.state.marvinXIX
+import com.areslib.telemetry.GamepadState
 
 import edu.wpi.first.wpilibj.TimedRobot
 import edu.wpi.first.wpilibj.XboxController
@@ -35,13 +36,18 @@ class ARESRobot : TimedRobot() {
     private lateinit var sim: Dyn4jSimulation
     private val controller = XboxController(0)
     private val coPilotController = XboxController(1)
+    private val controllerState = GamepadState()
+    private val coPilotControllerState = GamepadState()
+    private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
 
     private var intakeDeployed = false
     private var driverYawOffset = 0.0
 
-    // Pre-allocated ShotResult for SOTM (zero-allocation)
+    // Pre-allocated speaker constants
+    private val RED_SPEAKER = Translation2d(11.915, 4.035)
+    private val BLUE_SPEAKER = Translation2d(4.625, 4.035)
+    private var speakerTranslation = BLUE_SPEAKER
     private val shotResult = ShotResult()
-    private var speakerTranslation = Translation2d(4.625, 4.035)
 
     // Pre-allocated objects
     private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
@@ -106,8 +112,18 @@ class ARESRobot : TimedRobot() {
     }
 
     override fun robotPeriodic() {
+        val allianceOpt = DriverStation.getAlliance()
+        if (allianceOpt.isPresent) {
+            val alliance = allianceOpt.get()
+            if (alliance != cachedAlliance) {
+                cachedAlliance = alliance
+                speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
+            }
+        }
+        controller.updateState(controllerState)
+        coPilotController.updateState(coPilotControllerState)
         // Unified update: reads sensors, writes outputs, publishes telemetry + CSV
-        robot.update(controller.toState(), coPilotController.toState())
+        robot.update(controllerState, coPilotControllerState)
     }
 
     // ── Teleop ──
@@ -118,18 +134,10 @@ class ARESRobot : TimedRobot() {
 
     override fun teleopPeriodic() {
         try {
-            val alliance = DriverStation.getAlliance()
-            if (alliance.isPresent) {
-                speakerTranslation = if (alliance.get() == DriverStation.Alliance.Red) {
-                    Translation2d(11.915, 4.035)
-                } else {
-                    Translation2d(4.625, 4.035)
-                }
-            }
+            val marvin = robot.store.state.superstructure.marvinXIX
 
-            val applyDeadband = { value: Double -> if (Math.abs(value) < 0.1) 0.0 else value }
-            val rawForward = applyDeadband(-controller.leftY) * 4.5
-            val rawStrafe = applyDeadband(-controller.leftX) * 4.5
+            val rawForward = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftY, 0.1) * 4.5
+            val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftX, 0.1) * 4.5
             
             // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
             val cosOffset = Math.cos(driverYawOffset)
@@ -137,13 +145,9 @@ class ARESRobot : TimedRobot() {
             val forward = rawForward * cosOffset - rawStrafe * sinOffset
             val strafe = rawForward * sinOffset + rawStrafe * cosOffset
             
-            var rotation = applyDeadband(-controller.rightX) * Math.PI
+            var rotation = edu.wpi.first.math.MathUtil.applyDeadband(-controller.rightX, 0.1) * Math.PI
 
-            val currentPose = Pose2d(
-                robot.store.state.drive.odometryX,
-                robot.store.state.drive.odometryY,
-                Rotation2d(robot.store.state.drive.odometryHeading)
-            )
+            val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
             // ── Copilot Swerve Lock Override ──
             if (coPilotController.xButton) {
@@ -162,6 +166,9 @@ class ARESRobot : TimedRobot() {
             val bPressed = controller.bButton
             val copilotRtPressed = coPilotController.rightTriggerAxis > 0.5
             val copilotRbPressed = coPilotController.rightBumperButton
+            var targetFlywheelActive = false
+            var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
+            var targetCowlAngle = marvin.cowl.targetAngleDegrees
 
             when {
                 rtPressed -> {
@@ -192,19 +199,33 @@ class ARESRobot : TimedRobot() {
                     )
                 }
                 copilotRtPressed -> {
-                    // Copilot manual Hub shot reference
-                    robot.store.dispatch(SetFlywheelSpeed(3350.0))
-                    robot.store.dispatch(SetCowlAngle(0.5))
-                    robot.store.dispatch(RobotAction.SetFlywheelActive(true, com.areslib.util.RobotClock.currentTimeMillis()))
+                    targetFlywheelActive = true
+                    targetFlywheelSpeed = 3350.0
+                    targetCowlAngle = 0.5
                 }
                 copilotRbPressed -> {
-                    // Copilot manual Front of Ladder shot reference
-                    robot.store.dispatch(SetFlywheelSpeed(3650.0))
-                    robot.store.dispatch(SetCowlAngle(1.1))
-                    robot.store.dispatch(RobotAction.SetFlywheelActive(true, com.areslib.util.RobotClock.currentTimeMillis()))
+                    targetFlywheelActive = true
+                    targetFlywheelSpeed = 3650.0
+                    targetCowlAngle = 1.1
                 }
                 else -> {
-                    robot.store.dispatch(RobotAction.SetFlywheelActive(false, com.areslib.util.RobotClock.currentTimeMillis()))
+                    targetFlywheelActive = false
+                }
+            }
+
+            // Dispatch flywheel & cowl changes only
+            if (!rtPressed && !rbPressed && !bPressed) {
+                val currentFlywheelActive = robot.store.state.superstructure.flywheelActive
+                if (currentFlywheelActive != targetFlywheelActive) {
+                    robot.store.dispatch(RobotAction.SetFlywheelActive(targetFlywheelActive, com.areslib.util.RobotClock.currentTimeMillis()))
+                }
+                if (targetFlywheelActive) {
+                    if (marvin.flywheel.targetVelocityRpm != targetFlywheelSpeed) {
+                        robot.store.dispatch(SetFlywheelSpeed(targetFlywheelSpeed))
+                    }
+                    if (marvin.cowl.targetAngleDegrees != targetCowlAngle) {
+                        robot.store.dispatch(SetCowlAngle(targetCowlAngle))
+                    }
                 }
             }
 
@@ -231,53 +252,81 @@ class ARESRobot : TimedRobot() {
                 270 -> intakeDeployed = false
             }
 
+
+            
             // Dispatch states according to pilot control priorities
+            var targetPivot = intakeDeployed
+            var targetIntakeRollers = 0.0
+            var targetFloorSpeed = 0.0
+            var targetFeederSpeed = 0.0
+
             when {
                 lbPressed -> {
                     // Unjam sequence takes top priority
                     if (isSlamtakeActive) {
                         robot.store.dispatch(StopSlamtake())
                     }
-                    robot.store.dispatch(SetIntakePivot(deployed = true))
-                    robot.store.dispatch(SetIntakeRollers(-5.0))
-                    robot.store.dispatch(SetFloorSpeed(-5.0))
-                    robot.store.dispatch(SetFeederSpeed(-5.0))
+                    targetPivot = true
+                    targetIntakeRollers = -5.0
+                    targetFloorSpeed = -5.0
+                    targetFeederSpeed = -5.0
                 }
                 isSlamtakeActive -> {
-                    // Handled inside MarvinReducer!
+                    // Handled inside MarvinReducer! We do not mutate targets manually here
                 }
                 ltPressed -> {
                     // Active manual intake
-                    robot.store.dispatch(SetIntakePivot(deployed = true))
-                    robot.store.dispatch(SetIntakeRollers(10.0))
-                    robot.store.dispatch(SetFloorSpeed(10.0))
-                    robot.store.dispatch(SetFeederSpeed(10.0))
+                    targetPivot = true
+                    targetIntakeRollers = 10.0
+                    targetFloorSpeed = 10.0
+                    targetFeederSpeed = 10.0
                 }
                 copilotLtPressed -> {
                     // Copilot manual feed override
-                    robot.store.dispatch(SetIntakePivot(deployed = intakeDeployed))
-                    robot.store.dispatch(SetIntakeRollers(10.0))
-                    robot.store.dispatch(SetFloorSpeed(10.0))
-                    robot.store.dispatch(SetFeederSpeed(10.0))
+                    targetPivot = intakeDeployed
+                    targetIntakeRollers = 10.0
+                    targetFloorSpeed = 10.0
+                    targetFeederSpeed = 10.0
                 }
                 else -> {
                     // Default stop everything
-                    robot.store.dispatch(SetIntakePivot(deployed = intakeDeployed))
-                    robot.store.dispatch(SetIntakeRollers(0.0))
-                    robot.store.dispatch(SetFloorSpeed(0.0))
+                    targetPivot = intakeDeployed
+                    targetIntakeRollers = 0.0
+                    targetFloorSpeed = 0.0
                     if (!rtPressed && !rbPressed && !bPressed) {
-                        robot.store.dispatch(SetFeederSpeed(0.0))
+                        targetFeederSpeed = 0.0
+                    } else {
+                        targetFeederSpeed = marvin.feeder.targetVelocityRps
                     }
+                }
+            }
+
+            // Only dispatch changes to avoid hot-path Redux allocations
+            if (!isSlamtakeActive) {
+                if (marvin.intake.isDeployed != targetPivot) {
+                    robot.store.dispatch(SetIntakePivot(deployed = targetPivot))
+                }
+                if (marvin.intake.targetRollerVelocityRps != targetIntakeRollers) {
+                    robot.store.dispatch(SetIntakeRollers(targetIntakeRollers))
+                }
+                if (marvin.floor.targetVelocityRps != targetFloorSpeed) {
+                    robot.store.dispatch(SetFloorSpeed(targetFloorSpeed))
+                }
+                if (marvin.feeder.targetVelocityRps != targetFeederSpeed) {
+                    robot.store.dispatch(SetFeederSpeed(targetFeederSpeed))
                 }
             }
 
             // ── POV Up/Down: Climber Voltage (Driver or Copilot) ──
             val povUp = controller.pov == 0 || coPilotController.pov == 0
             val povDown = controller.pov == 180 || coPilotController.pov == 180
-            when {
-                povUp -> robot.store.dispatch(SetClimberVoltage(6.0))
-                povDown -> robot.store.dispatch(SetClimberVoltage(-6.0))
-                else -> robot.store.dispatch(SetClimberVoltage(0.0))
+            val targetClimberVoltage = when {
+                povUp -> 6.0
+                povDown -> -6.0
+                else -> 0.0
+            }
+            if (marvin.climber.targetVoltage != targetClimberVoltage) {
+                robot.store.dispatch(SetClimberVoltage(targetClimberVoltage))
             }
 
             // ── Beach / Traction Loss detection ──
