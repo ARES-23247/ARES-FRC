@@ -427,3 +427,50 @@ class ARESRobot : TimedRobot() {
         sim.publishVisualization(robot.store.state, robot.telemetry)
     }
 }
+
+/**
+ * Extension method to create physical robot instance, referencing team TunerConstants.
+ */
+fun FrcSwerveRobot.Companion.createPhysicalMarvinXIX(): FrcSwerveRobot {
+    val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
+
+    // Marvin 19 Physical Hardware on "CAN2" high-speed bus
+    val leftMasterFX = com.ctre.phoenix6.hardware.TalonFX(9, can2Bus)
+    val leftFollowerFX = com.ctre.phoenix6.hardware.TalonFX(10, can2Bus)
+    val rightMasterFX = com.ctre.phoenix6.hardware.TalonFX(11, can2Bus)
+    val rightFollowerFX = com.ctre.phoenix6.hardware.TalonFX(12, can2Bus)
+    val cowlFX = com.ctre.phoenix6.hardware.TalonFX(13, can2Bus)
+    val pivotFX = com.ctre.phoenix6.hardware.TalonFX(14, can2Bus)
+    val rollerFX = com.ctre.phoenix6.hardware.TalonFX(15, can2Bus)
+    val floorFX = com.ctre.phoenix6.hardware.TalonFX(16, can2Bus)
+    val climberFX = com.ctre.phoenix6.hardware.TalonFX(19, can2Bus)
+    val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
+
+    // Initialize CTRE SwerveDrivetrain using Tuner X constants
+    val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
+        frc.robot.generated.TunerConstants.DrivetrainConstants,
+        frc.robot.generated.TunerConstants.FrontLeft,
+        frc.robot.generated.TunerConstants.FrontRight,
+        frc.robot.generated.TunerConstants.BackLeft,
+        frc.robot.generated.TunerConstants.BackRight
+    )
+    val swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
+
+    // Initialize Limelight cameras
+    val limelightShooter = FrcLimelightIO("limelight-shooter")
+    val limelightBack = FrcLimelightIO("limelight-back")
+    val compositeVision = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
+
+    return FrcSwerveRobot(
+        swerveIO = swerveIO,
+        flywheelIO = FRCFlywheelHardwareIO(leftMasterFX, leftFollowerFX, rightMasterFX, rightFollowerFX),
+        cowlIO = FRCCowlHardwareIO(cowlFX),
+        intakeIO = FRCIntakeHardwareIO(pivotFX, rollerFX),
+        feederIO = FRCFeederHardwareIO(feederFX),
+        floorIO = FRCFloorHardwareIO(floorFX),
+        climberIO = FRCClimberHardwareIO(climberFX),
+        visionIO = compositeVision,
+        isSimulation = false
+    )
+}
+
