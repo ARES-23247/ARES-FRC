@@ -85,16 +85,10 @@ class MarvinShooterSubsystem(private val store: Store) {
         val headingAligned = Math.abs(wrappedError) < 0.05
         val rpmAligned = Math.abs(store.state.superstructure.marvinXIX.flywheel.velocityRpm - shotResult.targetFlywheelRpm) < 150.0
         
-        if (headingAligned && rpmAligned) {
-            store.dispatch(SetFeederSpeed(10.0, timestamp))
-            if (runFloorRollers) {
-                store.dispatch(SetFloorSpeed(10.0, timestamp))
-            }
-        } else {
-            store.dispatch(SetFeederSpeed(0.0, timestamp))
-            if (runFloorRollers) {
-                store.dispatch(SetFloorSpeed(0.0, timestamp))
-            }
+        val speed = if (headingAligned && rpmAligned) 10.0 else 0.0
+        store.dispatch(SetFeederSpeed(speed, timestamp))
+        if (runFloorRollers) {
+            store.dispatch(SetFloorSpeed(speed, timestamp))
         }
         
         return rotation
@@ -123,11 +117,8 @@ class MarvinShooterSubsystem(private val store: Store) {
         
         val headingAligned = Math.abs(wrappedError) < 0.05
         val rpmAligned = Math.abs(store.state.superstructure.marvinXIX.flywheel.velocityRpm - targetRpm) < 150.0
-        if (headingAligned && rpmAligned) {
-            store.dispatch(SetFeederSpeed(10.0, timestamp))
-        } else {
-            store.dispatch(SetFeederSpeed(0.0, timestamp))
-        }
+        val feederSpeed = if (headingAligned && rpmAligned) 10.0 else 0.0
+        store.dispatch(SetFeederSpeed(feederSpeed, timestamp))
         
         return rotation
     }

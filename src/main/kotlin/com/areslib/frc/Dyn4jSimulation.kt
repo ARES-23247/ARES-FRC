@@ -289,50 +289,53 @@ class Dyn4jSimulation(seed: Long = 42L) {
                 }
             }
 
-            if (scored) {
-                flyingIterator.remove()
-                println("BALL SCORED! Ejecting to center...")
-                
-                val ejectAngle = random.nextDouble() * 2.0 * Math.PI
-                val ejectSpeed = 1.5 + random.nextDouble() * 1.5 // 1.5 to 3.0 m/s
-                val evx = Math.cos(ejectAngle) * ejectSpeed
-                val evy = Math.sin(ejectAngle) * ejectSpeed
+            when {
+                scored -> {
+                    flyingIterator.remove()
+                    println("BALL SCORED! Ejecting to center...")
+                    
+                    val ejectAngle = random.nextDouble() * 2.0 * Math.PI
+                    val ejectSpeed = 1.5 + random.nextDouble() * 1.5 // 1.5 to 3.0 m/s
+                    val evx = Math.cos(ejectAngle) * ejectSpeed
+                    val evy = Math.sin(ejectAngle) * ejectSpeed
 
-                val ball = Body()
-                val fixture = ball.addFixture(Geometry.createCircle(0.0635))
-                fixture.friction = 0.6
-                fixture.restitution = 0.4
-                fixture.density = 5.92
-                ball.setMass(MassType.NORMAL)
-                ball.linearDamping = 2.0
-                ball.angularDamping = 2.0
-                ball.translate(8.2705, 4.0345)
-                ball.linearVelocity.set(evx, evy)
-                
-                world.addBody(ball)
-                balls.add(ball)
-            } else if (fb.z <= 0.0635) { // Lands on the ground
-                flyingIterator.remove()
-                println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
+                    val ball = Body()
+                    val fixture = ball.addFixture(Geometry.createCircle(0.0635))
+                    fixture.friction = 0.6
+                    fixture.restitution = 0.4
+                    fixture.density = 5.92
+                    ball.setMass(MassType.NORMAL)
+                    ball.linearDamping = 2.0
+                    ball.angularDamping = 2.0
+                    ball.translate(8.2705, 4.0345)
+                    ball.linearVelocity.set(evx, evy)
+                    
+                    world.addBody(ball)
+                    balls.add(ball)
+                }
+                fb.z <= 0.0635 -> { // Lands on the ground
+                    flyingIterator.remove()
+                    println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
 
-                val fieldWidth = 16.541
-                val fieldHeight = 8.069
-                val cx = fb.x.coerceIn(0.1, fieldWidth - 0.1)
-                val cy = fb.y.coerceIn(0.1, fieldHeight - 0.1)
+                    val fieldWidth = 16.541
+                    val fieldHeight = 8.069
+                    val cx = fb.x.coerceIn(0.1, fieldWidth - 0.1)
+                    val cy = fb.y.coerceIn(0.1, fieldHeight - 0.1)
 
-                val ball = Body()
-                val fixture = ball.addFixture(Geometry.createCircle(0.0635))
-                fixture.friction = 0.6
-                fixture.restitution = 0.4
-                fixture.density = 5.92
-                ball.setMass(MassType.NORMAL)
-                ball.linearDamping = 2.0
-                ball.angularDamping = 2.0
-                ball.translate(cx, cy)
-                ball.linearVelocity.set(fb.vx, fb.vy)
+                    val ball = Body()
+                    val fixture = ball.addFixture(Geometry.createCircle(0.0635))
+                    fixture.friction = 0.6
+                    fixture.restitution = 0.4
+                    fixture.density = 5.92
+                    ball.setMass(MassType.NORMAL)
+                    ball.linearDamping = 2.0
+                    ball.angularDamping = 2.0
+                    ball.translate(cx, cy)
+                    ball.linearVelocity.set(fb.vx, fb.vy)
 
-                world.addBody(ball)
-                balls.add(ball)
+                    world.addBody(ball)
+                    balls.add(ball)
+                }
             }
         }
 

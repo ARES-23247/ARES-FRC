@@ -226,10 +226,9 @@ class ARESRobot : TimedRobot() {
             val copilotLtPressed = coPilotController.leftTriggerAxis > 0.5
 
             // ── POV Left/Right: Manual Intake Deploy Override ──
-            if (controller.pov == 90) {
-                intakeDeployed = true
-            } else if (controller.pov == 270) {
-                intakeDeployed = false
+            when (controller.pov) {
+                90 -> intakeDeployed = true
+                270 -> intakeDeployed = false
             }
 
             // Dispatch states according to pilot control priorities
@@ -275,12 +274,10 @@ class ARESRobot : TimedRobot() {
             // ── POV Up/Down: Climber Voltage (Driver or Copilot) ──
             val povUp = controller.pov == 0 || coPilotController.pov == 0
             val povDown = controller.pov == 180 || coPilotController.pov == 180
-            if (povUp) {
-                robot.store.dispatch(SetClimberVoltage(6.0))
-            } else if (povDown) {
-                robot.store.dispatch(SetClimberVoltage(-6.0))
-            } else {
-                robot.store.dispatch(SetClimberVoltage(0.0))
+            when {
+                povUp -> robot.store.dispatch(SetClimberVoltage(6.0))
+                povDown -> robot.store.dispatch(SetClimberVoltage(-6.0))
+                else -> robot.store.dispatch(SetClimberVoltage(0.0))
             }
 
             // ── Beach / Traction Loss detection ──
