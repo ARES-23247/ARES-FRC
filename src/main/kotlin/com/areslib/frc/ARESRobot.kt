@@ -305,15 +305,13 @@ class ARESRobot : TimedRobot() {
             val alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)
             val aresAlliance = if (alliance == DriverStation.Alliance.Red) com.areslib.state.Alliance.RED else com.areslib.state.Alliance.BLUE
             
-            if (path != null) {
-                path = com.areslib.math.AllianceMirroring.mirror(
-                    path,
-                    aresAlliance,
-                    com.areslib.math.FieldSymmetry.MIRRORED,
-                    fieldLength = com.areslib.math.CoordinateTransformers.FRC_FIELD_LENGTH,
-                    fieldWidth = com.areslib.math.CoordinateTransformers.FRC_FIELD_WIDTH
-                )
-            }
+            path = com.areslib.math.AllianceMirroring.mirror(
+                path,
+                aresAlliance,
+                com.areslib.math.FieldSymmetry.MIRRORED,
+                fieldLength = com.areslib.math.CoordinateTransformers.FRC_FIELD_LENGTH,
+                fieldWidth = com.areslib.math.CoordinateTransformers.FRC_FIELD_WIDTH
+            )
             activePath = path
 
             val startPoint = activePath?.points?.firstOrNull()
