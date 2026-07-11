@@ -128,5 +128,7 @@ class FrcSwerveRobotTest {
         assertEquals(1.5, seeded.x, 1e-6)
         assertEquals(2.2, seeded.y, 1e-6)
         assertEquals(Math.toRadians(90.0), seeded.heading.radians, 1e-6)
+
+        robot.close()
     }
 }
