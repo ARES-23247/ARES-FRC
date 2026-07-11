@@ -10,18 +10,25 @@ import com.areslib.math.Pose2d
 import com.areslib.math.Rotation2d
 import com.areslib.math.Translation2d
 import com.areslib.pathing.Path
+import com.areslib.state.RobotState
+import com.areslib.state.SuperstructureState
+import com.areslib.state.VisionState
 import com.areslib.reducer.rootReducer
-import com.areslib.frc.action.*
-import com.areslib.frc.subsystem.*
-import com.areslib.frc.state.marvinXIX
+import com.areslib.frc.marvin.*
 import com.areslib.telemetry.GamepadState
+import com.areslib.hardware.FlywheelIO
+import com.areslib.hardware.CowlIO
+import com.areslib.hardware.IntakeIO
+import com.areslib.hardware.FeederIO
+import com.areslib.hardware.FloorIO
+import com.areslib.hardware.ClimberIO
+import com.areslib.hardware.vision.VisionIO
 
 import edu.wpi.first.wpilibj.TimedRobot
 import edu.wpi.first.wpilibj.XboxController
 import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.Timer
 import edu.wpi.first.wpilibj.DriverStation
-import com.ctre.phoenix6.swerve.SwerveDrivetrain
 
 /**
  * Main Robot lifecycle for the FRC CTRE Swerve Integration.
@@ -34,6 +41,10 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var robot: FrcSwerveRobot
     private lateinit var sim: Dyn4jSimulation
+    private lateinit var marvinShooter: MarvinShooterSubsystem
+    private lateinit var marvinIntake: MarvinIntakeSubsystem
+    private lateinit var marvinClimber: MarvinClimberSubsystem
+
     private val controller = XboxController(0)
     private val coPilotController = XboxController(1)
     private val controllerState = GamepadState()
@@ -71,32 +82,127 @@ class ARESRobot : TimedRobot() {
         sim = Dyn4jSimulation(seed = 42L)
 
         val isReal = RobotBase.isReal()
-        robot = if (isReal) {
-            try {
-                FrcSwerveRobot.createPhysicalMarvinXIX()
-            } catch (e: Exception) {
-                println("Failed to initialize physical hardware: ${e.message}")
-                // Fallback to sim IO
-                FrcSwerveRobot(
-                    flywheelIO = sim.flywheelIO,
-                    cowlIO = sim.cowlIO,
-                    intakeIO = sim.intakeIO,
-                    feederIO = sim.feederIO,
-                    floorIO = sim.floorIO,
-                    climberIO = sim.climberIO,
-                    isSimulation = true
-                )
-            }
-        } else {
-            FrcSwerveRobot(
-                flywheelIO = sim.flywheelIO,
-                cowlIO = sim.cowlIO,
-                intakeIO = sim.intakeIO,
-                feederIO = sim.feederIO,
-                floorIO = sim.floorIO,
-                climberIO = sim.climberIO,
-                isSimulation = true
+
+        // 1. Declare the hardware IO instances (either physical or simulation)
+        val swerveIO: SwerveHardwareIO?
+        val visionIO: VisionIO?
+        val flywheelIO: FlywheelIO
+        val cowlIO: CowlIO
+        val intakeIO: IntakeIO
+        val feederIO: FeederIO
+        val floorIO: FloorIO
+        val climberIO: ClimberIO
+
+        if (isReal) {
+            val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
+            val leftMasterFX = com.ctre.phoenix6.hardware.TalonFX(9, can2Bus)
+            val leftFollowerFX = com.ctre.phoenix6.hardware.TalonFX(10, can2Bus)
+            val rightMasterFX = com.ctre.phoenix6.hardware.TalonFX(11, can2Bus)
+            val rightFollowerFX = com.ctre.phoenix6.hardware.TalonFX(12, can2Bus)
+            val cowlFX = com.ctre.phoenix6.hardware.TalonFX(13, can2Bus)
+            val pivotFX = com.ctre.phoenix6.hardware.TalonFX(14, can2Bus)
+            val rollerFX = com.ctre.phoenix6.hardware.TalonFX(15, can2Bus)
+            val floorFX = com.ctre.phoenix6.hardware.TalonFX(16, can2Bus)
+            val climberFX = com.ctre.phoenix6.hardware.TalonFX(19, can2Bus)
+            val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
+
+            val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
+                frc.robot.generated.TunerConstants.DrivetrainConstants,
+                frc.robot.generated.TunerConstants.FrontLeft,
+                frc.robot.generated.TunerConstants.FrontRight,
+                frc.robot.generated.TunerConstants.BackLeft,
+                frc.robot.generated.TunerConstants.BackRight
             )
+            swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
+
+            val limelightShooter = FrcLimelightIO("limelight-shooter")
+            val limelightBack = FrcLimelightIO("limelight-back")
+            visionIO = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
+
+            flywheelIO = FRCFlywheelHardwareIO(leftMasterFX, leftFollowerFX, rightMasterFX, rightFollowerFX)
+            cowlIO = FRCCowlHardwareIO(cowlFX)
+            intakeIO = FRCIntakeHardwareIO(pivotFX, rollerFX)
+            feederIO = FRCFeederHardwareIO(feederFX)
+            floorIO = FRCFloorHardwareIO(floorFX)
+            climberIO = FRCClimberHardwareIO(climberFX)
+        } else {
+            // Simulation IOs
+            swerveIO = null
+            visionIO = null
+            flywheelIO = sim.flywheelIO
+            cowlIO = sim.cowlIO
+            intakeIO = sim.intakeIO
+            feederIO = sim.feederIO
+            floorIO = sim.floorIO
+            climberIO = sim.climberIO
+        }
+
+        // 2. Compose the root reducer with the Marvin reducer
+        fun composedReducer(state: RobotState, action: RobotAction): RobotState {
+            return MarvinReducer.reduce(state, action)
+        }
+
+        // 3. Create the initial state containing the MarvinState
+        val initialState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState()
+            ),
+            vision = VisionState(
+                filterConfig = com.areslib.hardware.vision.VisionFilterConfig.frcDefaults()
+            )
+        )
+
+        // 4. Instantiate FrcSwerveRobot
+        robot = FrcSwerveRobot(
+            swerveIO = swerveIO,
+            visionIO = visionIO,
+            isSimulation = !isReal,
+            initialState = initialState,
+            reducer = ::composedReducer
+        )
+
+        // 5. Create and register the MarvinSuperstructure subsystem
+        val superstructureSubsystem = MarvinSuperstructure(
+            flywheelIO = flywheelIO,
+            cowlIO = cowlIO,
+            intakeIO = intakeIO,
+            feederIO = feederIO,
+            floorIO = floorIO,
+            climberIO = climberIO
+        )
+        robot.registerSubsystem(superstructureSubsystem)
+
+        // 6. Instantiate the facades
+        marvinShooter = MarvinShooterSubsystem(robot.store)
+        marvinIntake = MarvinIntakeSubsystem(robot.store)
+        marvinClimber = MarvinClimberSubsystem(robot.store)
+
+        // 7. Register a custom telemetry publisher for Marvin state
+        robot.telemetryManager.customPublishers.add { state, telemetry ->
+            val marvin = state.superstructure.marvin
+            // Log Marvin state
+            telemetry.putNumber("Superstructure/Flywheel/VelocityRpm", marvin.flywheel.velocityRpm)
+            telemetry.putNumber("Superstructure/Flywheel/TargetVelocityRpm", marvin.flywheel.targetVelocityRpm)
+            telemetry.putNumber("Superstructure/Cowl/AngleDegrees", marvin.cowl.angleDegrees)
+            telemetry.putNumber("Superstructure/Cowl/TargetAngleDegrees", marvin.cowl.targetAngleDegrees)
+            telemetry.putNumber("Superstructure/Intake/PivotAngleDegrees", marvin.intake.pivotAngleDegrees)
+            telemetry.putNumber("Superstructure/Intake/TargetAngleDegrees", marvin.intake.targetAngleDegrees)
+            telemetry.putBoolean("Superstructure/Intake/IsDeployed", marvin.intake.isDeployed)
+            telemetry.putNumber("Superstructure/Intake/RollerVelocityRps", marvin.intake.rollerVelocityRps)
+            telemetry.putNumber("Superstructure/Feeder/VelocityRps", marvin.feeder.velocityRps)
+            telemetry.putBoolean("Superstructure/Feeder/PieceDetected", marvin.feeder.gamePieceDetected)
+            telemetry.putNumber("Superstructure/Floor/VelocityRps", marvin.floor.velocityRps)
+            telemetry.putNumber("Superstructure/Climber/ExtensionMeters", marvin.climber.extensionMeters)
+            telemetry.putNumber("Superstructure/Climber/TargetVoltage", marvin.climber.targetVoltage)
+            telemetry.putBoolean("Superstructure/SlamtakeActive", marvin.slamtakeActive)
+
+            // Log individual hardware devices via logTelemetry
+            flywheelIO.logTelemetry(telemetry, "Hardware/Motors/Flywheel")
+            cowlIO.logTelemetry(telemetry, "Hardware/Motors/Cowl")
+            intakeIO.logTelemetry(telemetry, "Hardware/Motors/Intake")
+            feederIO.logTelemetry(telemetry, "Hardware/Motors/Feeder")
+            floorIO.logTelemetry(telemetry, "Hardware/Motors/Floor")
+            climberIO.logTelemetry(telemetry, "Hardware/Motors/Climber")
         }
 
         lastSimTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
@@ -134,7 +240,7 @@ class ARESRobot : TimedRobot() {
 
     override fun teleopPeriodic() {
         try {
-            val marvin = robot.store.state.superstructure.marvinXIX
+            val marvin = robot.store.state.superstructure.marvin
 
             val rawForward = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftY, 0.1) * 4.5
             val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftX, 0.1) * 4.5
@@ -173,7 +279,7 @@ class ARESRobot : TimedRobot() {
             when {
                 rtPressed -> {
                     // Shoot-on-the-Move (SOTM) Speaker Aiming
-                    rotation = robot.marvinShooter.updateShootOnTheMove(
+                    rotation = marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
                         targetTranslation = speakerTranslation,
                         shotResult = shotResult
@@ -184,7 +290,7 @@ class ARESRobot : TimedRobot() {
                     val isRed = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red
                     val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
 
-                    rotation = robot.marvinShooter.updateShootOnTheMove(
+                    rotation = marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
                         targetTranslation = shuttleTarget,
                         shotResult = shotResult,
@@ -193,7 +299,7 @@ class ARESRobot : TimedRobot() {
                 }
                 bPressed -> {
                     // Static Shoot (Speaker Aiming)
-                    rotation = robot.marvinShooter.updateStaticShoot(
+                    rotation = marvinShooter.updateStaticShoot(
                         currentPose = currentPose,
                         targetTranslation = speakerTranslation
                     )
@@ -234,7 +340,7 @@ class ARESRobot : TimedRobot() {
 
             // ── A Button: Start Slamtake Sequence ──
             val aPressed = controller.aButton
-            val isSlamtakeActive = robot.store.state.superstructure.marvinXIX.slamtakeActive
+            val isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
             if (aPressed && !isSlamtakeActive) {
                 robot.store.dispatch(StartSlamtake())
             }
@@ -252,8 +358,6 @@ class ARESRobot : TimedRobot() {
                 270 -> intakeDeployed = false
             }
 
-
-            
             // Dispatch states according to pilot control priorities
             var targetPivot = intakeDeployed
             var targetIntakeRollers = 0.0
@@ -427,12 +531,12 @@ class ARESRobot : TimedRobot() {
                     println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
                     robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
                     when (event.eventName) {
-                        "FlywheelOn" -> robot.marvinShooter.spinUp(4000.0)
+                        "FlywheelOn" -> marvinShooter.spinUp(4000.0)
                         "IntakeDeploy" -> {
-                            robot.marvinIntake.deploy()
-                            robot.marvinIntake.setRollerSpeed(15.0)
+                            marvinIntake.deploy()
+                            marvinIntake.setRollerSpeed(15.0)
                         }
-                        "FeederShoot" -> robot.marvinShooter.shoot()
+                        "FeederShoot" -> marvinShooter.shoot()
                     }
                 }
             }
@@ -476,50 +580,3 @@ class ARESRobot : TimedRobot() {
         sim.publishVisualization(robot.store.state, robot.telemetry)
     }
 }
-
-/**
- * Extension method to create physical robot instance, referencing team TunerConstants.
- */
-fun FrcSwerveRobot.Companion.createPhysicalMarvinXIX(): FrcSwerveRobot {
-    val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
-
-    // Marvin 19 Physical Hardware on "CAN2" high-speed bus
-    val leftMasterFX = com.ctre.phoenix6.hardware.TalonFX(9, can2Bus)
-    val leftFollowerFX = com.ctre.phoenix6.hardware.TalonFX(10, can2Bus)
-    val rightMasterFX = com.ctre.phoenix6.hardware.TalonFX(11, can2Bus)
-    val rightFollowerFX = com.ctre.phoenix6.hardware.TalonFX(12, can2Bus)
-    val cowlFX = com.ctre.phoenix6.hardware.TalonFX(13, can2Bus)
-    val pivotFX = com.ctre.phoenix6.hardware.TalonFX(14, can2Bus)
-    val rollerFX = com.ctre.phoenix6.hardware.TalonFX(15, can2Bus)
-    val floorFX = com.ctre.phoenix6.hardware.TalonFX(16, can2Bus)
-    val climberFX = com.ctre.phoenix6.hardware.TalonFX(19, can2Bus)
-    val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
-
-    // Initialize CTRE SwerveDrivetrain using Tuner X constants
-    val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
-        frc.robot.generated.TunerConstants.DrivetrainConstants,
-        frc.robot.generated.TunerConstants.FrontLeft,
-        frc.robot.generated.TunerConstants.FrontRight,
-        frc.robot.generated.TunerConstants.BackLeft,
-        frc.robot.generated.TunerConstants.BackRight
-    )
-    val swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
-
-    // Initialize Limelight cameras
-    val limelightShooter = FrcLimelightIO("limelight-shooter")
-    val limelightBack = FrcLimelightIO("limelight-back")
-    val compositeVision = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
-
-    return FrcSwerveRobot(
-        swerveIO = swerveIO,
-        flywheelIO = FRCFlywheelHardwareIO(leftMasterFX, leftFollowerFX, rightMasterFX, rightFollowerFX),
-        cowlIO = FRCCowlHardwareIO(cowlFX),
-        intakeIO = FRCIntakeHardwareIO(pivotFX, rollerFX),
-        feederIO = FRCFeederHardwareIO(feederFX),
-        floorIO = FRCFloorHardwareIO(floorFX),
-        climberIO = FRCClimberHardwareIO(climberFX),
-        visionIO = compositeVision,
-        isSimulation = false
-    )
-}
-

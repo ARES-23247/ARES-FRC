@@ -4,18 +4,11 @@ import com.areslib.action.RobotAction
 import com.areslib.state.*
 import com.areslib.math.Pose2d
 import com.areslib.math.Rotation2d
-import com.areslib.hardware.FlywheelIO
-import com.areslib.hardware.CowlIO
-import com.areslib.hardware.IntakeIO
-import com.areslib.hardware.FeederIO
-import com.areslib.hardware.FloorIO
-import com.areslib.hardware.ClimberIO
 import com.areslib.telemetry.ITelemetry
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class FrcSwerveRobotTest {
-
 
     class MockSwerveHardwareIO : SwerveHardwareIO {
         var mockPitch = 0.0
@@ -59,36 +52,6 @@ class FrcSwerveRobotTest {
         }
     }
 
-    // Dummy superstructure IOs
-    val dummyFlywheel = object : FlywheelIO {
-        override fun setVelocityRpm(rpm: Double) {}
-        override fun setAppliedVoltage(volts: Double) {}
-    }
-
-    val dummyCowl = object : CowlIO {
-        override fun setTargetAngle(degrees: Double) {}
-        override fun setAppliedVoltage(volts: Double) {}
-    }
-
-    val dummyIntake = object : IntakeIO {
-        override fun setPivotAngle(degrees: Double) {}
-        override fun setPivotVoltage(volts: Double) {}
-        override fun setRollerVoltage(volts: Double) {}
-    }
-
-    val dummyFeeder = object : FeederIO {
-        override fun setAppliedVoltage(volts: Double) {}
-    }
-
-    val dummyFloor = object : FloorIO {
-        override fun setAppliedVoltage(volts: Double) {}
-    }
-
-    val dummyClimber = object : ClimberIO {
-        override fun setTargetExtension(meters: Double) {}
-        override fun setAppliedVoltage(volts: Double) {}
-    }
-
     @Test
     fun testBeachedOdometryFreezeAndRecovery() {
         val swerveIO = MockSwerveHardwareIO()
@@ -103,12 +66,6 @@ class FrcSwerveRobotTest {
         }
         val robot = FrcSwerveRobot(
             swerveIO = swerveIO,
-            flywheelIO = dummyFlywheel,
-            cowlIO = dummyCowl,
-            intakeIO = dummyIntake,
-            feederIO = dummyFeeder,
-            floorIO = dummyFloor,
-            climberIO = dummyClimber,
             isSimulation = false,
             baseTelemetry = mockTelemetry,
             isEnabledProvider = { false },

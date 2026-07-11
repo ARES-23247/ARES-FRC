@@ -2,8 +2,7 @@ package com.areslib.frc.reducer
 
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
-import com.areslib.frc.action.*
-import com.areslib.frc.state.*
+import com.areslib.frc.marvin.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -12,19 +11,21 @@ class MarvinReducerTest {
 
     @Test
     fun `test SetClimberExtension action updates climber target`() {
-        val initialState = RobotState()
+        val initialState = RobotState(
+            superstructure = SuperstructureState(custom = MarvinState())
+        )
         
         // 1. If intake is stowed (pivotAngleDegrees = 0.0), target extension should be clamped to 0.0
         val statePivotStowed = MarvinReducer.reduce(
             initialState,
             SetClimberExtension(0.25, 1000L)
         )
-        assertEquals(0.0, statePivotStowed.superstructure.marvinXIX.climber.targetExtensionMeters, "Climber extension must be clamped to 0.0 when pivot is stowed")
+        assertEquals(0.0, statePivotStowed.superstructure.marvin.climber.targetExtensionMeters, "Climber extension must be clamped to 0.0 when pivot is stowed")
 
         // 2. If intake is deployed (pivotAngleDegrees = 90.0), target extension should be set correctly
         val statePivotDeployed = RobotState(
             superstructure = SuperstructureState().copy(
-                custom = MarvinXIXSuperstructureState(
+                custom = MarvinState(
                     intake = IntakeState(pivotAngleDegrees = 90.0, targetAngleDegrees = 90.0)
                 )
             )
@@ -33,7 +34,7 @@ class MarvinReducerTest {
             statePivotDeployed,
             SetClimberExtension(0.25, 1000L)
         )
-        assertEquals(0.25, statePivotDeployedUpdated.superstructure.marvinXIX.climber.targetExtensionMeters, "Climber extension should set correctly when pivot is deployed")
+        assertEquals(0.25, statePivotDeployedUpdated.superstructure.marvin.climber.targetExtensionMeters, "Climber extension should set correctly when pivot is deployed")
     }
 
     @Test
@@ -41,7 +42,7 @@ class MarvinReducerTest {
         // If climber target or physical extension > 0.02, intake pivot target angle must be >= 45.0
         val statePivotStowed = RobotState(
             superstructure = SuperstructureState().copy(
-                custom = MarvinXIXSuperstructureState(
+                custom = MarvinState(
                     intake = IntakeState(pivotAngleDegrees = 0.0, targetAngleDegrees = 0.0)
                 )
             )
@@ -59,13 +60,13 @@ class MarvinReducerTest {
                 timestampMs = 1000L
             )
         )
-        assertEquals(45.0, stateExtendedSensor.superstructure.marvinXIX.intake.targetAngleDegrees, "Intake pivot target must be forced to 45.0 when climber is physically extended")
-        assertTrue(stateExtendedSensor.superstructure.marvinXIX.intake.isDeployed)
+        assertEquals(45.0, stateExtendedSensor.superstructure.marvin.intake.targetAngleDegrees, "Intake pivot target must be forced to 45.0 when climber is physically extended")
+        assertTrue(stateExtendedSensor.superstructure.marvin.intake.isDeployed)
 
         // When climber target is extended
         val statePivotDeployed = RobotState(
             superstructure = SuperstructureState().copy(
-                custom = MarvinXIXSuperstructureState(
+                custom = MarvinState(
                     intake = IntakeState(pivotAngleDegrees = 90.0, targetAngleDegrees = 90.0)
                 )
             )
@@ -79,7 +80,7 @@ class MarvinReducerTest {
             stateClimberTargetExtended,
             SetIntakePivot(deployed = false, 1100L)
         )
-        assertEquals(45.0, statePivotStowAction.superstructure.marvinXIX.intake.targetAngleDegrees, "Intake pivot target must be clamped to 45.0 when climber is commanded extended")
-        assertTrue(statePivotStowAction.superstructure.marvinXIX.intake.isDeployed)
+        assertEquals(45.0, statePivotStowAction.superstructure.marvin.intake.targetAngleDegrees, "Intake pivot target must be clamped to 45.0 when climber is commanded extended")
+        assertTrue(statePivotStowAction.superstructure.marvin.intake.isDeployed)
     }
 }

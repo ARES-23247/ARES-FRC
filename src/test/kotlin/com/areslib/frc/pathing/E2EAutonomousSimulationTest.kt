@@ -4,13 +4,12 @@ import com.areslib.control.HolonomicDriveController
 import com.areslib.control.PIDController
 import com.areslib.math.Pose2d
 import com.areslib.math.Rotation2d
-import com.areslib.frc.reducer.MarvinReducer
+import com.areslib.frc.marvin.*
 import com.areslib.state.RobotState
 import com.areslib.state.DriveState
+import com.areslib.state.SuperstructureState
 import com.areslib.state.SuperstructureMode
 import com.areslib.action.RobotAction
-import com.areslib.frc.action.*
-import com.areslib.frc.state.marvinXIX
 import com.areslib.pathing.PathPlannerParser
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -49,7 +48,8 @@ class E2EAutonomousSimulationTest {
                 odometryX = startPoint.pose.x,
                 odometryY = startPoint.pose.y,
                 odometryHeading = startPoint.pose.heading.radians
-            )
+            ),
+            superstructure = SuperstructureState(custom = MarvinState())
         )
 
         var autoDistance = 0.0
@@ -131,7 +131,7 @@ class E2EAutonomousSimulationTest {
 
         // 5. Hard assertions on the final reduced state
         val superstructure = currentState.superstructure
-        val marvin = superstructure.marvinXIX
+        val marvin = superstructure.marvin
         assertEquals(4000.0, marvin.flywheel.targetVelocityRpm, "Flywheel target RPM should be exactly 4000.0")
         assertTrue(marvin.intake.isDeployed, "Intake pivot should remain deployed")
         assertEquals(15.0, marvin.intake.targetRollerVelocityRps, "Intake roller target velocity should be 15.0 RPS")

@@ -8,7 +8,7 @@ import com.areslib.math.Translation3d
 import com.areslib.math.Rotation3d
 import com.areslib.subsystem.Store
 import com.areslib.state.RobotState
-import com.areslib.frc.reducer.MarvinReducer
+import com.areslib.frc.marvin.MarvinReducer
 import com.areslib.telemetry.RobotStatusTracker
 import com.areslib.hardware.vision.VisionFilterConfig
 import com.areslib.state.VisionState
