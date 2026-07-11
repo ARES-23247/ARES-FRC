@@ -31,15 +31,32 @@ public class TunerConstants {
      // .withKP(0.10775).withKI(0).withKD(0)
      // .withKS(0.1).withKV(0.09);
 
+    public static double STEER_KP = 20.375;
+    public static double STEER_KI = 0.0;
+    public static double STEER_KD = 0.2502;
+    public static double STEER_KS = 0.1;
+    public static double STEER_KV = 0.0;
+    public static double STEER_KA = 0.0;
+
+    public static double DRIVE_KP = 0.0686955;
+    public static double DRIVE_KI = 0.0;
+    public static double DRIVE_KD = 0.0;
+    public static double DRIVE_KS = 0.2;
+    public static double DRIVE_KV = 0.108255;
+    public static double DRIVE_KA = 0.0;
+
+    public static double SPEED_AT_12_VOLTS = 5.85;
+    public static double SLIP_CURRENT_AMPS = 120.0;
+
     private static final Slot0Configs steerGains = new Slot0Configs()
-    .withKP(20.375).withKI(0).withKD(0.2502)
-    .withKS(0.1).withKV(0).withKA(0)
+    .withKP(STEER_KP).withKI(STEER_KI).withKD(STEER_KD)
+    .withKS(STEER_KS).withKV(STEER_KV).withKA(STEER_KA)
      .withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign);
     // When using closed-loop control, the drive motor uses the control
     // output type specified by SwerveModuleConstants.DriveMotorClosedLoopOutput
     private static final Slot0Configs driveGains = new Slot0Configs()
-    .withKP(0.0686955).withKI(0).withKD(0)
-    .withKS(0.2).withKV(0.108255)
+    .withKP(DRIVE_KP).withKI(DRIVE_KI).withKD(DRIVE_KD)
+    .withKS(DRIVE_KS).withKV(DRIVE_KV).withKA(DRIVE_KA)
     .withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign);
 
 
@@ -61,7 +78,7 @@ public class TunerConstants {
 
     // The stator current at which the wheels start to slip;
     // This needs to be tuned to your individual robot
-    private static final Current kSlipCurrent = Amps.of(120);
+    private static final Current kSlipCurrent = Amps.of(SLIP_CURRENT_AMPS);
 
     // Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     // Some configs will be overwritten; check the `with*InitialConfigs()` API documentation.
@@ -91,7 +108,7 @@ public class TunerConstants {
 
     // Theoretical free speed (m/s) at 12 V applied output;
     // This needs to be tuned to your individual robot
-    public static final LinearVelocity kSpeedAt12Volts = MetersPerSecond.of(5.85);
+    public static final LinearVelocity kSpeedAt12Volts = MetersPerSecond.of(SPEED_AT_12_VOLTS);
 
     // Every 1 rotation of the azimuth results in kCoupleRatio drive motor turns;
     // This may need to be tuned to your individual robot
