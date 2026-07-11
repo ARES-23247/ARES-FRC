@@ -158,3 +158,13 @@ tasks.withType(JavaExec) {
     mainClass = ROBOT_MAIN_CLASS
     classpath = sourceSets.main.runtimeClasspath
 }
+
+koverReport {
+    defaults {
+        filters {
+            excludes {
+                classes("frc.robot.generated.*", "com.areslib.frc.Main*")
+            }
+        }
+    }
+}
