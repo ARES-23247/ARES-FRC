@@ -96,8 +96,9 @@ dependencies {
 }
 
 task extractTestNatives(type: Copy) {
+    dependsOn configurations.testRuntimeClasspath
     from {
-        configurations.simulationRelease.collect { 
+        (configurations.simulationRelease + configurations.testRuntimeClasspath).collect { 
             it.isDirectory() ? it : (it.name.endsWith('.zip') || it.name.endsWith('.jar') ? zipTree(it) : it)
         }
     }

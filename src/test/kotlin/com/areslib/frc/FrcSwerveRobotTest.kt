@@ -16,6 +16,27 @@ class FrcSwerveRobotTest {
         @JvmStatic
         @BeforeAll
         fun setup() {
+            val jniDir = java.io.File("build/jni/release")
+            if (jniDir.exists()) {
+                val libs = listOf(
+                    "wpiutil",
+                    "wpinet",
+                    "ntcore",
+                    "wpiHal",
+                    "wpiHaljni"
+                )
+                val ext = if (System.getProperty("os.name").lowercase().contains("win")) ".dll" else ".so"
+                for (lib in libs) {
+                    val libFile = java.io.File(jniDir, "$lib$ext")
+                    if (libFile.exists()) {
+                        try {
+                            System.load(libFile.absolutePath)
+                        } catch (e: Throwable) {
+                            System.err.println("FrcSwerveRobotTest: Failed to load native library $lib: ${e.message}")
+                        }
+                    }
+                }
+            }
             edu.wpi.first.hal.HAL.initialize(500, 0)
         }
     }
