@@ -95,14 +95,32 @@ dependencies {
     testRuntimeOnly wpi.java.vendor.jniRelease(wpi.platforms.desktop)
 }
 
+task extractTestNatives(type: Copy) {
+    from {
+        configurations.simulationRelease.collect { 
+            it.isDirectory() ? it : (it.name.endsWith('.zip') || it.name.endsWith('.jar') ? zipTree(it) : it)
+        }
+    }
+    into "${buildDir}/jni/release"
+    include "**/*.dll"
+    include "**/*.so"
+    include "**/*.dylib"
+    eachFile { fcd ->
+        fcd.relativePath = new RelativePath(true, fcd.name)
+    }
+    includeEmptyDirs = false
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 test {
+    dependsOn extractTestNatives
     useJUnitPlatform()
     
     // Ensure desktop JNI binaries are on the test classpath for JUnit execution
     classpath += configurations.simulationRelease
 
     // Set the library path to the extracted native binaries directory
-    systemProperty "java.library.path", "${buildDir}/jni/release"
+    systemProperty "java.library.path", file("${buildDir}/jni/release").absolutePath
 
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
