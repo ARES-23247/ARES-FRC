@@ -5,6 +5,7 @@ import com.areslib.state.*
 import com.areslib.math.Pose2d
 import com.areslib.math.Rotation2d
 import com.areslib.telemetry.ITelemetry
+import com.areslib.hardware.SwerveHardwareIO
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test

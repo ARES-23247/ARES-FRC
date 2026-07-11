@@ -22,6 +22,7 @@ import com.areslib.hardware.IntakeIO
 import com.areslib.hardware.FeederIO
 import com.areslib.hardware.FloorIO
 import com.areslib.hardware.ClimberIO
+import com.areslib.hardware.SwerveHardwareIO
 import com.areslib.hardware.vision.VisionIO
 
 import edu.wpi.first.wpilibj.TimedRobot
