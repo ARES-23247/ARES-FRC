@@ -60,7 +60,15 @@ def includeDesktopSupport = true
 
 dependencies {
     implementation 'com.areslib:core:1.0-SNAPSHOT'
-    implementation 'com.areslib:simulator:1.0-SNAPSHOT'
+    implementation('com.areslib:simulator:1.0-SNAPSHOT') {
+        exclude group: 'edu.wpi.first.wpilibj'
+        exclude group: 'edu.wpi.first.cameraserver'
+        exclude group: 'edu.wpi.first.wpinet'
+        exclude group: 'edu.wpi.first.ntcore'
+        exclude group: 'edu.wpi.first.wpiutil'
+        exclude group: 'edu.wpi.first.wpimath'
+        exclude group: 'edu.wpi.first.hal'
+    }
     implementation 'com.areslib:frc-hardware:1.0-SNAPSHOT'
     implementation 'org.dyn4j:dyn4j:4.2.2'
     
@@ -89,6 +97,13 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        showExceptions true
+        exceptionFormat "full"
+        showCauses true
+        showStackTraces true
+    }
 }
 
 // Simulation configuration.
