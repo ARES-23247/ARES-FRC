@@ -3,6 +3,7 @@ plugins {
     id "application"
     id "org.jetbrains.kotlin.jvm" version "1.9.22"
     id "edu.wpi.first.GradleRIO" version "2026.2.1"
+    id "org.jetbrains.kotlinx.kover" version "0.7.6"
 }
 
 repositories {
