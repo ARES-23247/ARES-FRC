@@ -97,6 +97,13 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    
+    // Ensure desktop JNI binaries are on the test classpath for JUnit execution
+    classpath += configurations.simulationRelease
+
+    // Set the library path to the extracted native binaries directory
+    systemProperty "java.library.path", "${buildDir}/jni/release"
+
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         showExceptions true
