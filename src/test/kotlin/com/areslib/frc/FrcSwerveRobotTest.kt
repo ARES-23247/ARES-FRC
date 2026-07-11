@@ -6,9 +6,18 @@ import com.areslib.math.Pose2d
 import com.areslib.math.Rotation2d
 import com.areslib.telemetry.ITelemetry
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
 class FrcSwerveRobotTest {
+
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun setup() {
+            edu.wpi.first.hal.HAL.initialize(500, 0)
+        }
+    }
 
     class MockSwerveHardwareIO : SwerveHardwareIO {
         var mockPitch = 0.0
