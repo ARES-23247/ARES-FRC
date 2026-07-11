@@ -116,11 +116,21 @@ test {
     dependsOn extractTestNatives
     useJUnitPlatform()
     
+    // Configure test task to run using WPILib's compatible JDK to avoid JNI loader MSVC runtime crashes
+    def wpilibJdk = file("C:/Users/Public/wpilib/2026/jdk/bin/java.exe")
+    if (wpilibJdk.exists()) {
+        executable = wpilibJdk.absolutePath
+    }
+    
     // Ensure desktop JNI binaries are on the test classpath for JUnit execution
     classpath += configurations.simulationRelease
 
     // Set the library path to the extracted native binaries directory
-    systemProperty "java.library.path", file("${buildDir}/jni/release").absolutePath
+    def jniPath = file("${buildDir}/jni/release").absolutePath
+    systemProperty "java.library.path", jniPath
+    
+    // Prepend the native binaries directory to PATH so Windows can resolve transitive DLL dependencies
+    environment "PATH", "${jniPath};${System.getenv('PATH')}"
 
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
