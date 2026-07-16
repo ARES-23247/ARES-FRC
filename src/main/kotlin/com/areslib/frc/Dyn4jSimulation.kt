@@ -1,16 +1,17 @@
 package com.areslib.frc
 
 import com.areslib.action.RobotAction
-import com.areslib.hardware.FlywheelIO
-import com.areslib.hardware.CowlIO
-import com.areslib.hardware.IntakeIO
-import com.areslib.hardware.FeederIO
-import com.areslib.hardware.FloorIO
-import com.areslib.hardware.ClimberIO
-import com.areslib.sim.FlywheelSim
-import com.areslib.sim.IntakePivotSim
+import com.areslib.frc.hardware.FlywheelIO
+import com.areslib.frc.hardware.CowlIO
+import com.areslib.frc.hardware.IntakeIO
+import com.areslib.frc.hardware.FeederIO
+import com.areslib.frc.hardware.FloorIO
+import com.areslib.frc.hardware.ClimberIO
+import com.areslib.sim.model.FlywheelSim
+import com.areslib.sim.model.IntakePivotSim
 import com.areslib.state.RobotState
 import com.areslib.telemetry.ITelemetry
+import com.areslib.frc.marvin.*
 
 import org.dyn4j.dynamics.Body
 import org.dyn4j.world.World
@@ -152,7 +153,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
         val intakeDeployed = intakePivotSim.angleDegrees > 45.0
         val intakeSpinning = simIntakeRollerVoltage > 1.0
 
-        if (intakeDeployed && intakeSpinning && state.superstructure.inventoryCount < 40) {
+        if (intakeDeployed && intakeSpinning && state.superstructure.marvin.inventoryCount < 40) {
             val ballIterator = balls.iterator()
             while (ballIterator.hasNext()) {
                 val ball = ballIterator.next()
@@ -162,8 +163,8 @@ class Dyn4jSimulation(seed: Long = 42L) {
                 if (dist < 0.5) {
                     world.removeBody(ball)
                     ballIterator.remove()
-                    val newCount = state.superstructure.inventoryCount + 1
-                    actions.add(RobotAction.SetInventoryCount(newCount, timestamp))
+                    val newCount = state.superstructure.marvin.inventoryCount + 1
+                    actions.add(com.areslib.frc.marvin.SetInventoryCount(newCount, timestamp))
                     simFeederPieceDetected = true
                     println("BALL INGESTED! Inventory: $newCount")
                     break
@@ -172,29 +173,29 @@ class Dyn4jSimulation(seed: Long = 42L) {
         }
 
         // ── Shooting ──
-        val flywheelAtSpeed = state.superstructure.isFlywheelAtSpeed
+        val flywheelAtSpeed = state.superstructure.marvin.isFlywheelAtSpeed
         val feederSpinning = simFeederVoltage > 2.0
-        if (flywheelAtSpeed && feederSpinning && state.superstructure.inventoryCount > 0 && shootCooldownTimer <= 0.0) {
+        if (flywheelAtSpeed && feederSpinning && state.superstructure.marvin.inventoryCount > 0 && shootCooldownTimer <= 0.0) {
             shootCooldownTimer = 0.15
-            val newCount = state.superstructure.inventoryCount - 1
-            actions.add(RobotAction.SetInventoryCount(newCount, timestamp))
+            val newCount = state.superstructure.marvin.inventoryCount - 1
+            actions.add(com.areslib.frc.marvin.SetInventoryCount(newCount, timestamp))
             simFeederPieceDetected = newCount > 0
 
             val vLaunch = flywheelRps * 0.18 // At 4000 RPM, vLaunch is ~12.0 m/s
             
             val hoodRad = Math.toRadians(simCowlAngle)
-            val vPlanar = vLaunch * Math.cos(hoodRad)
-            val vVert = vLaunch * Math.sin(hoodRad)
+            val vPlanar = vLaunch * kotlin.math.cos(hoodRad)
+            val vVert = vLaunch * kotlin.math.sin(hoodRad)
 
             val robotVx = robotBody.linearVelocity.x
             val robotVy = robotBody.linearVelocity.y
             
-            val bx = robotX + Math.cos(robotHeading) * 0.5
-            val by = robotY + Math.sin(robotHeading) * 0.5
+            val bx = robotX + kotlin.math.cos(robotHeading) * 0.5
+            val by = robotY + kotlin.math.sin(robotHeading) * 0.5
             val bz = 0.6 // Launch height from shooter
 
-            val vx = robotVx + Math.cos(robotHeading) * vPlanar
-            val vy = robotVy + Math.sin(robotHeading) * vPlanar
+            val vx = robotVx + kotlin.math.cos(robotHeading) * vPlanar
+            val vy = robotVy + kotlin.math.sin(robotHeading) * vPlanar
             val vz = vVert
 
             val flyingBall = FlyingBall(bx, by, bz, vx, vy, vz)
@@ -462,10 +463,10 @@ class Dyn4jSimulation(seed: Long = 42L) {
         com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(world, width, height)
 
         // Load obstacles
-        com.areslib.sim.FieldObstacleLoader.loadObstacles(world, config.obstacles)
+        com.areslib.sim.field.FieldObstacleLoader.loadObstacles(world, config.obstacles)
 
         // Load elements
-        val loadedElements = com.areslib.sim.FieldElementLoader.loadElements(world, config.elementTypes, config.elements)
+        val loadedElements = com.areslib.sim.field.FieldElementLoader.loadElements(world, config.elementTypes, config.elements)
         balls.addAll(loadedElements)
         println("[FRC Sim] Successfully built world with ${config.obstacles.size} obstacles and ${config.elements.size} elements.")
     }

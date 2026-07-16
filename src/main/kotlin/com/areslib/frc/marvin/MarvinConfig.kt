@@ -1,6 +1,6 @@
 package com.areslib.frc.marvin
 
-import com.areslib.control.ShotConfig
+import com.areslib.control.assist.ShotConfig
 
 object MarvinConfig {
     val SHOT_CONFIG = ShotConfig(

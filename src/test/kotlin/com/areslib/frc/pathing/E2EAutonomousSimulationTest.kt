@@ -1,14 +1,13 @@
 package com.areslib.frc.pathing
 
-import com.areslib.control.HolonomicDriveController
-import com.areslib.control.PIDController
-import com.areslib.math.Pose2d
-import com.areslib.math.Rotation2d
+import com.areslib.control.drivetrain.HolonomicDriveController
+import com.areslib.control.feedback.PIDController
+import com.areslib.math.geometry.Pose2d
+import com.areslib.math.geometry.Rotation2d
 import com.areslib.frc.marvin.*
 import com.areslib.state.RobotState
 import com.areslib.state.DriveState
 import com.areslib.state.SuperstructureState
-import com.areslib.state.SuperstructureMode
 import com.areslib.action.RobotAction
 import com.areslib.pathing.PathPlannerParser
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -100,20 +99,19 @@ class E2EAutonomousSimulationTest {
                     when (event.eventName) {
                         "FlywheelOn" -> {
                             flywheelOnTriggered = true
-                            currentState = MarvinReducer.reduce(currentState, RobotAction.SetFlywheelActive(true, timeNow))
+                            currentState = MarvinReducer.reduce(currentState, SetFlywheelActive(true, timeNow))
                             currentState = MarvinReducer.reduce(currentState, SetFlywheelSpeed(4000.0, timeNow))
                         }
                         "IntakeDeploy" -> {
                             intakeDeployTriggered = true
-                            currentState = MarvinReducer.reduce(currentState, RobotAction.SetIntakeActive(true, timeNow))
                             currentState = MarvinReducer.reduce(currentState, SetIntakePivot(true, timeNow))
                             currentState = MarvinReducer.reduce(currentState, SetIntakeRollers(15.0, timeNow))
                         }
                         "FeederShoot" -> {
                             feederShootTriggered = true
-                            currentState = MarvinReducer.reduce(currentState, RobotAction.SetInventoryCount(1, timeNow))
+                            currentState = MarvinReducer.reduce(currentState, SetInventoryCount(1, timeNow))
                             currentState = MarvinReducer.reduce(currentState, SetFeederSpeed(20.0, timeNow))
-                            currentState = MarvinReducer.reduce(currentState, RobotAction.SetTransferActive(true, timeNow))
+                            currentState = MarvinReducer.reduce(currentState, SetTransferActive(true, timeNow))
                         }
                     }
                 }

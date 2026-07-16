@@ -1,6 +1,6 @@
 package com.areslib.frc.sim.io
 
-import com.areslib.hardware.CowlIO
+import com.areslib.frc.hardware.CowlIO
 import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedCowlIO(private val sim: Dyn4jSimulation) : CowlIO {

@@ -1,14 +1,13 @@
 package com.areslib.frc.marvin
 
-import com.areslib.subsystem.Store
-import com.areslib.state.SuperstructureMode
+import com.areslib.Store
 import com.areslib.state.RobotState
 import com.areslib.action.RobotAction
-import com.areslib.math.Pose2d
-import com.areslib.math.Translation2d
-import com.areslib.math.ChassisSpeeds
-import com.areslib.control.ShotResult
-import com.areslib.control.ShotSetup
+import com.areslib.math.geometry.Pose2d
+import com.areslib.math.geometry.Translation2d
+import com.areslib.math.geometry.ChassisSpeeds
+import com.areslib.control.assist.ShotResult
+import com.areslib.control.assist.ShotSetup
 
 class MarvinShooterSubsystem(private val store: Store) {
     private val shotSetup = ShotSetup(MarvinConfig.SHOT_CONFIG)
@@ -20,8 +19,6 @@ class MarvinShooterSubsystem(private val store: Store) {
     private var lastFloorSpeed = Double.NaN
     private var lastTransferActive: Boolean? = null
 
-    val mode: SuperstructureMode
-        get() = store.state.superstructure.mode
 
     val flywheelRPM: Double
         get() = store.state.superstructure.marvin.flywheel.velocityRpm
@@ -33,7 +30,7 @@ class MarvinShooterSubsystem(private val store: Store) {
         get() = store.state.superstructure.marvin.cowl.angleDegrees
 
     val transferActive: Boolean
-        get() = store.state.superstructure.transferActive
+        get() = store.state.superstructure.marvin.transferActive
 
     fun spinUp(targetRpm: Double) {
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
@@ -42,7 +39,7 @@ class MarvinShooterSubsystem(private val store: Store) {
             lastFlywheelRpm = targetRpm
         }
         if (lastFlywheelActive != true) {
-            store.dispatch(RobotAction.SetFlywheelActive(true, timestamp))
+            store.dispatch(SetFlywheelActive(true, timestamp))
             lastFlywheelActive = true
         }
     }
@@ -50,7 +47,7 @@ class MarvinShooterSubsystem(private val store: Store) {
     fun shoot() {
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         if (lastTransferActive != true) {
-            store.dispatch(RobotAction.SetTransferActive(true, timestamp))
+            store.dispatch(SetTransferActive(true, timestamp))
             lastTransferActive = true
         }
     }
@@ -58,11 +55,11 @@ class MarvinShooterSubsystem(private val store: Store) {
     fun stop() {
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         if (lastFlywheelActive != false) {
-            store.dispatch(RobotAction.SetFlywheelActive(false, timestamp))
+            store.dispatch(SetFlywheelActive(false, timestamp))
             lastFlywheelActive = false
         }
         if (lastTransferActive != false) {
-            store.dispatch(RobotAction.SetTransferActive(false, timestamp))
+            store.dispatch(SetTransferActive(false, timestamp))
             lastTransferActive = false
         }
     }
@@ -106,7 +103,7 @@ class MarvinShooterSubsystem(private val store: Store) {
             lastFlywheelRpm = targetRpm
         }
         if (lastFlywheelActive != true) {
-            store.dispatch(RobotAction.SetFlywheelActive(true, timestamp))
+            store.dispatch(SetFlywheelActive(true, timestamp))
             lastFlywheelActive = true
         }
         val targetCowl = shotResult.targetCowlAngleDegrees
@@ -116,12 +113,12 @@ class MarvinShooterSubsystem(private val store: Store) {
         }
         
         val headingError = shotResult.robotTargetHeadingRad - currentPose.heading.radians
-        val wrappedError = com.areslib.math.InputMath.wrapAngle(headingError)
+        val wrappedError = com.areslib.math.wrapAngle(headingError)
         val kp = 4.0
         val rotation = wrappedError * kp + shotResult.angularVelocityFeedforwardRadPerSec
         
-        val headingAligned = Math.abs(wrappedError) < 0.05
-        val rpmAligned = Math.abs(store.state.superstructure.marvin.flywheel.velocityRpm - shotResult.targetFlywheelRpm) < 150.0
+        val headingAligned = kotlin.math.abs(wrappedError) < 0.05
+        val rpmAligned = kotlin.math.abs(store.state.superstructure.marvin.flywheel.velocityRpm - shotResult.targetFlywheelRpm) < 150.0
         
         val speed = if (headingAligned && rpmAligned) 10.0 else 0.0
         if (speed != lastFeederSpeed) {
@@ -155,7 +152,7 @@ class MarvinShooterSubsystem(private val store: Store) {
             lastFlywheelRpm = targetRpm
         }
         if (lastFlywheelActive != true) {
-            store.dispatch(RobotAction.SetFlywheelActive(true, timestamp))
+            store.dispatch(SetFlywheelActive(true, timestamp))
             lastFlywheelActive = true
         }
         if (targetCowl != lastCowlAngle) {
@@ -164,12 +161,12 @@ class MarvinShooterSubsystem(private val store: Store) {
         }
         
         val headingError = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x) - currentPose.heading.radians + Math.PI
-        val wrappedError = com.areslib.math.InputMath.wrapAngle(headingError)
+        val wrappedError = com.areslib.math.wrapAngle(headingError)
         val kp = 4.0
         val rotation = wrappedError * kp
         
-        val headingAligned = Math.abs(wrappedError) < 0.05
-        val rpmAligned = Math.abs(store.state.superstructure.marvin.flywheel.velocityRpm - targetRpm) < 150.0
+        val headingAligned = kotlin.math.abs(wrappedError) < 0.05
+        val rpmAligned = kotlin.math.abs(store.state.superstructure.marvin.flywheel.velocityRpm - targetRpm) < 150.0
         val feederSpeed = if (headingAligned && rpmAligned) 10.0 else 0.0
         if (feederSpeed != lastFeederSpeed) {
             store.dispatch(SetFeederSpeed(feederSpeed, timestamp))

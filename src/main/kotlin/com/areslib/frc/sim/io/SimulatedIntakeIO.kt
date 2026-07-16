@@ -1,6 +1,6 @@
 package com.areslib.frc.sim.io
 
-import com.areslib.hardware.IntakeIO
+import com.areslib.frc.hardware.IntakeIO
 import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedIntakeIO(private val sim: Dyn4jSimulation) : IntakeIO {

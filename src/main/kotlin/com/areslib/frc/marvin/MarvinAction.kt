@@ -12,6 +12,21 @@ data class SetCowlAngle @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+data class SetFlywheelActive @kotlin.jvm.JvmOverloads constructor(
+    val active: Boolean,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
+    val active: Boolean,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+data class SetInventoryCount @kotlin.jvm.JvmOverloads constructor(
+    val count: Int,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
 data class SetIntakePivot @kotlin.jvm.JvmOverloads constructor(
     val deployed: Boolean,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()

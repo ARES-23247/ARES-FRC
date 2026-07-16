@@ -13,7 +13,7 @@ class Dyn4jSimulationTest {
     @Test
     fun testHighCapacityInventoryLimit() {
         val sim = Dyn4jSimulation(seed = 42L)
-        val state = RobotState(superstructure = SuperstructureState(inventoryCount = 39))
+        val state = RobotState(superstructure = SuperstructureState(custom = com.areslib.frc.marvin.MarvinState(inventoryCount = 39)))
 
         // Get private 'balls' field via reflection
         val ballsField = Dyn4jSimulation::class.java.getDeclaredField("balls")
@@ -38,12 +38,12 @@ class Dyn4jSimulationTest {
             val stepActions = sim.step(state, 0.02)
             allActions.addAll(stepActions)
             pivotDegrees = sim.intakeIO.pivotAngleDegrees
-            if (pivotDegrees > 45.0 && stepActions.any { it is RobotAction.SetInventoryCount }) break
+            if (pivotDegrees > 45.0 && stepActions.any { it is com.areslib.frc.marvin.SetInventoryCount }) break
         }
         assertTrue(pivotDegrees > 45.0, "Intake pivot should have deployed beyond 45 degrees")
 
         // Verify that ingestion was successful and we got SetInventoryCount action for 40
-        val inventoryAction = allActions.find { it is RobotAction.SetInventoryCount } as? RobotAction.SetInventoryCount
+        val inventoryAction = allActions.find { it is com.areslib.frc.marvin.SetInventoryCount } as? com.areslib.frc.marvin.SetInventoryCount
         assertNotNull(inventoryAction, "Should have triggered ball ingestion action")
         assertEquals(40, inventoryAction!!.count, "Ingestion should successfully reach 40 balls")
     }
@@ -55,17 +55,19 @@ class Dyn4jSimulationTest {
         
         // Setup state with active flywheel ready at 4000 RPM, and cowl angle
         val superstructure = SuperstructureState(
-            flywheelActive = true,
-            flywheelRPM = 4000.0,
-            inventoryCount = 10
+            custom = com.areslib.frc.marvin.MarvinState(
+                flywheelActive = true,
+                flywheel = com.areslib.frc.marvin.FlywheelState(velocityRpm = 4000.0, targetVelocityRpm = 4000.0),
+                inventoryCount = 10
+            )
         )
         val state = RobotState(superstructure = superstructure)
 
         // Set flywheel RPM instantly using reflection
         val flywheelSimField = Dyn4jSimulation::class.java.getDeclaredField("flywheelSim")
         flywheelSimField.isAccessible = true
-        val flywheelSimInstance = flywheelSimField.get(sim) as com.areslib.sim.FlywheelSim
-        val angularVelField = com.areslib.sim.FlywheelSim::class.java.getDeclaredField("angularVelocityRadPerSec")
+        val flywheelSimInstance = flywheelSimField.get(sim) as com.areslib.sim.model.FlywheelSim
+        val angularVelField = com.areslib.sim.model.FlywheelSim::class.java.getDeclaredField("angularVelocityRadPerSec")
         angularVelField.isAccessible = true
         angularVelField.set(flywheelSimInstance, 4000.0 * 2.0 * Math.PI / 60.0)
 
@@ -81,11 +83,11 @@ class Dyn4jSimulationTest {
         var actions: List<RobotAction> = emptyList()
         for (i in 0..20) {
             actions = sim.step(state, 0.02)
-            if (actions.any { it is RobotAction.SetInventoryCount }) break
+            if (actions.any { it is com.areslib.frc.marvin.SetInventoryCount }) break
         }
 
         // Verify shoot action dispatched decrement
-        val shootAction = actions.find { it is RobotAction.SetInventoryCount } as? RobotAction.SetInventoryCount
+        val shootAction = actions.find { it is com.areslib.frc.marvin.SetInventoryCount } as? com.areslib.frc.marvin.SetInventoryCount
         assertNotNull(shootAction, "Should have triggered a shooting action")
         assertEquals(9, shootAction!!.count)
 

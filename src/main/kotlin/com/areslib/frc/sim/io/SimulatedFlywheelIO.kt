@@ -1,6 +1,6 @@
 package com.areslib.frc.sim.io
 
-import com.areslib.hardware.FlywheelIO
+import com.areslib.frc.hardware.FlywheelIO
 import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedFlywheelIO(private val sim: Dyn4jSimulation) : FlywheelIO {

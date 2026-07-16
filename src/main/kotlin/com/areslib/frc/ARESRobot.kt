@@ -1,14 +1,14 @@
 package com.areslib.frc
 
 import com.areslib.action.RobotAction
-import com.areslib.control.HolonomicDriveController
-import com.areslib.control.PIDController
-import com.areslib.control.ShotResult
-import com.areslib.control.ShotSetup
-import com.areslib.math.ChassisSpeeds
-import com.areslib.math.Pose2d
-import com.areslib.math.Rotation2d
-import com.areslib.math.Translation2d
+import com.areslib.control.drivetrain.HolonomicDriveController
+import com.areslib.control.feedback.PIDController
+import com.areslib.control.assist.ShotResult
+import com.areslib.control.assist.ShotSetup
+import com.areslib.math.geometry.ChassisSpeeds
+import com.areslib.math.geometry.Pose2d
+import com.areslib.math.geometry.Rotation2d
+import com.areslib.math.geometry.Translation2d
 import com.areslib.pathing.Path
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
@@ -16,13 +16,21 @@ import com.areslib.state.VisionState
 import com.areslib.reducer.rootReducer
 import com.areslib.frc.marvin.*
 import com.areslib.telemetry.GamepadState
-import com.areslib.hardware.FlywheelIO
-import com.areslib.hardware.CowlIO
-import com.areslib.hardware.IntakeIO
-import com.areslib.hardware.FeederIO
-import com.areslib.hardware.FloorIO
-import com.areslib.hardware.ClimberIO
-import com.areslib.hardware.SwerveHardwareIO
+import com.areslib.frc.hardware.FlywheelIO
+import com.areslib.frc.hardware.CowlIO
+import com.areslib.frc.hardware.IntakeIO
+import com.areslib.frc.hardware.FeederIO
+import com.areslib.frc.hardware.FloorIO
+import com.areslib.frc.hardware.ClimberIO
+import com.areslib.frc.hardware.FRCClimberHardwareIO
+import com.areslib.frc.hardware.FRCCowlHardwareIO
+import com.areslib.frc.hardware.FRCFeederHardwareIO
+import com.areslib.frc.hardware.FRCFloorHardwareIO
+import com.areslib.frc.hardware.FRCFlywheelHardwareIO
+import com.areslib.frc.hardware.FRCIntakeHardwareIO
+
+import com.areslib.hardware.SubsystemIO
+import com.areslib.hardware.drive.SwerveHardwareIO
 import com.areslib.hardware.vision.VisionIO
 
 import edu.wpi.first.wpilibj.TimedRobot
@@ -137,6 +145,14 @@ class ARESRobot : TimedRobot() {
             floorIO = sim.floorIO
             climberIO = sim.climberIO
         }
+
+        // Register subsystems to HardwareRegistry so they are refreshed/logged automatically
+        flywheelIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Flywheel", it) }
+        cowlIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Cowl", it) }
+        intakeIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Intake", it) }
+        feederIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Feeder", it) }
+        floorIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Floor", it) }
+        climberIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Climber", it) }
 
         // 2. Compose the root reducer with the Marvin reducer
         fun composedReducer(state: RobotState, action: RobotAction): RobotState {
@@ -322,9 +338,9 @@ class ARESRobot : TimedRobot() {
 
             // Dispatch flywheel & cowl changes only
             if (!rtPressed && !rbPressed && !bPressed) {
-                val currentFlywheelActive = robot.store.state.superstructure.flywheelActive
+                val currentFlywheelActive = robot.store.state.superstructure.marvin.flywheelActive
                 if (currentFlywheelActive != targetFlywheelActive) {
-                    robot.store.dispatch(RobotAction.SetFlywheelActive(targetFlywheelActive, com.areslib.util.RobotClock.currentTimeMillis()))
+                    robot.store.dispatch(SetFlywheelActive(targetFlywheelActive, com.areslib.util.RobotClock.currentTimeMillis()))
                 }
                 if (targetFlywheelActive) {
                     if (marvin.flywheel.targetVelocityRpm != targetFlywheelSpeed) {
@@ -459,18 +475,28 @@ class ARESRobot : TimedRobot() {
             val alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)
             val aresAlliance = if (alliance == DriverStation.Alliance.Red) com.areslib.state.Alliance.RED else com.areslib.state.Alliance.BLUE
             
-            path = com.areslib.math.AllianceMirroring.mirror(
+            path = com.areslib.math.coordinate.AllianceMirroring.mirror(
                 path,
                 aresAlliance,
-                com.areslib.math.FieldSymmetry.MIRRORED,
-                fieldLength = com.areslib.math.CoordinateTransformers.FRC_FIELD_LENGTH,
-                fieldWidth = com.areslib.math.CoordinateTransformers.FRC_FIELD_WIDTH
+                com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
+                fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
+                fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
             )
             activePath = path
 
             val startPoint = activePath?.points?.firstOrNull()
             if (startPoint != null) {
                 sim.resetPose(startPoint.pose.x, startPoint.pose.y, startPoint.pose.heading.radians)
+                
+                // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
+                robot.swerveDrivetrainIO?.seedPose(
+                    com.areslib.math.geometry.Pose2d(
+                        startPoint.pose.x,
+                        startPoint.pose.y,
+                        com.areslib.math.geometry.Rotation2d(startPoint.pose.heading.radians)
+                    )
+                )
+
                 robot.store.dispatch(RobotAction.PoseUpdate(
                     xMeters = startPoint.pose.x,
                     yMeters = startPoint.pose.y,
@@ -501,11 +527,7 @@ class ARESRobot : TimedRobot() {
             val path = activePath ?: return
             val dt = 0.02
 
-            val currentPose = Pose2d(
-                robot.store.state.drive.odometryX,
-                robot.store.state.drive.odometryY,
-                Rotation2d(robot.store.state.drive.odometryHeading)
-            )
+            val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
             val targetPoint = path.sampleAtDistance(autoDistance)
 

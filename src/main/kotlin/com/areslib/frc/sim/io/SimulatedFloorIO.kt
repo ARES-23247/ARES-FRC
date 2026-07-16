@@ -1,6 +1,6 @@
 package com.areslib.frc.sim.io
 
-import com.areslib.hardware.FloorIO
+import com.areslib.frc.hardware.FloorIO
 import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedFloorIO(private val sim: Dyn4jSimulation) : FloorIO {

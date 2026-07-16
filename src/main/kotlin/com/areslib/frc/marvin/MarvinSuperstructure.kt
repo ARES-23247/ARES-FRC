@@ -1,14 +1,14 @@
 package com.areslib.frc.marvin
 
 import com.areslib.subsystem.Subsystem
-import com.areslib.subsystem.Store
+import com.areslib.Store
 import com.areslib.state.RobotState
-import com.areslib.hardware.FlywheelIO
-import com.areslib.hardware.CowlIO
-import com.areslib.hardware.IntakeIO
-import com.areslib.hardware.FeederIO
-import com.areslib.hardware.FloorIO
-import com.areslib.hardware.ClimberIO
+import com.areslib.frc.hardware.FlywheelIO
+import com.areslib.frc.hardware.CowlIO
+import com.areslib.frc.hardware.IntakeIO
+import com.areslib.frc.hardware.FeederIO
+import com.areslib.frc.hardware.FloorIO
+import com.areslib.frc.hardware.ClimberIO
 
 /**
  * Season-specific subsystem implementation managing the Marvin 19 superstructure hardware.

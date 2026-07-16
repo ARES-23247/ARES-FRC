@@ -4,8 +4,8 @@ import com.areslib.action.RobotAction
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
 import com.areslib.reducer.rootReducer
-import com.areslib.control.ControlBarrierFunction
-import com.areslib.control.CBFFilteredOutput
+import com.areslib.control.safety.ControlBarrierFunction
+import com.areslib.control.safety.CBFFilteredOutput
 
 object MarvinReducer {
     private val cbf = ControlBarrierFunction(
@@ -29,6 +29,9 @@ object MarvinReducer {
             is SetFeederSpeed -> currentMarvin.withFeederSpeed(action.speedRps)
             is SetFloorSpeed -> currentMarvin.withFloorSpeed(action.speedRps)
             is SetClimberVoltage -> currentMarvin.withClimberVoltage(action.volts)
+            is SetFlywheelActive -> currentMarvin.copy(flywheelActive = action.active)
+            is SetTransferActive -> currentMarvin.copy(transferActive = action.active)
+            is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
             is SetClimberExtension -> currentMarvin.withClimberExtension(action.meters)
             is StartSlamtake -> {
                 currentMarvin.copy(

@@ -72,8 +72,14 @@ data class MarvinState(
     val climber: ClimberState = ClimberState(),
     val floor: FloorState = FloorState(),
     val slamtakeActive: Boolean = false,
-    val slamtakeStartTimeMs: Long = 0L
+    val slamtakeStartTimeMs: Long = 0L,
+    val flywheelActive: Boolean = false,
+    val transferActive: Boolean = false,
+    val inventoryCount: Int = 0
 ) : SubsystemState {
+    val isFlywheelAtSpeed: Boolean
+        get() = flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
+
     fun withFlywheelSpeed(rpm: Double) = copy(flywheel = flywheel.copy(targetVelocityRpm = rpm))
     fun withCowlAngle(degrees: Double) = copy(cowl = cowl.copy(targetAngleDegrees = degrees))
     fun withIntakePivot(deployed: Boolean) = copy(intake = intake.copy(
