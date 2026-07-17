@@ -259,8 +259,8 @@ class ARESRobot : TimedRobot() {
         try {
             val marvin = robot.store.state.superstructure.marvin
 
-            val rawForward = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftY, 0.1) * 4.5
-            val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controller.leftX, 0.1) * 4.5
+            val rawForward = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) * 4.5
+            val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
             // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
             val cosOffset = Math.cos(driverYawOffset)
@@ -268,27 +268,27 @@ class ARESRobot : TimedRobot() {
             val forward = rawForward * cosOffset - rawStrafe * sinOffset
             val strafe = rawForward * sinOffset + rawStrafe * cosOffset
             
-            var rotation = edu.wpi.first.math.MathUtil.applyDeadband(-controller.rightX, 0.1) * Math.PI
+            var rotation = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
 
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
             // ── Copilot Swerve Lock Override ──
-            if (coPilotController.xButton) {
+            if (coPilotControllerState.x) {
                 robot.drive.joystickDrive(0.0, 0.0, 0.0)
                 return
             }
 
             // ── Gyro Reset (Driver Coordinate Alignment) ──
-            if (controller.backButton || coPilotController.backButton) {
+            if (controllerState.back || coPilotControllerState.back) {
                 driverYawOffset = robot.store.state.drive.odometryHeading
             }
 
             // ── Driver / Copilot Shooting Triggers ──
-            val rtPressed = controller.rightTriggerAxis > 0.5
-            val rbPressed = controller.rightBumperButton
-            val bPressed = controller.bButton
-            val copilotRtPressed = coPilotController.rightTriggerAxis > 0.5
-            val copilotRbPressed = coPilotController.rightBumperButton
+            val rtPressed = controllerState.rightTrigger > 0.5f
+            val rbPressed = controllerState.rightBumper
+            val bPressed = controllerState.b
+            val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
+            val copilotRbPressed = coPilotControllerState.rightBumper
             var targetFlywheelActive = false
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleDegrees
@@ -356,23 +356,23 @@ class ARESRobot : TimedRobot() {
             robot.drive.joystickDrive(forward, strafe, rotation)
 
             // ── A Button: Start Slamtake Sequence ──
-            val aPressed = controller.aButton
+            val aPressed = controllerState.a
             val isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
             if (aPressed && !isSlamtakeActive) {
                 robot.store.dispatch(StartSlamtake())
             }
 
             // ── Left Bumper: Unjam ──
-            val lbPressed = controller.leftBumperButton
+            val lbPressed = controllerState.leftBumper
 
             // ── Left Trigger: Intake/Feeder active run ──
-            val ltPressed = controller.leftTriggerAxis > 0.5
-            val copilotLtPressed = coPilotController.leftTriggerAxis > 0.5
+            val ltPressed = controllerState.leftTrigger > 0.5f
+            val copilotLtPressed = coPilotControllerState.leftTrigger > 0.5f
 
             // ── POV Left/Right: Manual Intake Deploy Override ──
-            when (controller.pov) {
-                90 -> intakeDeployed = true
-                270 -> intakeDeployed = false
+            when {
+                controllerState.dpadRight -> intakeDeployed = true
+                controllerState.dpadLeft -> intakeDeployed = false
             }
 
             // Dispatch states according to pilot control priorities
@@ -439,8 +439,8 @@ class ARESRobot : TimedRobot() {
             }
 
             // ── POV Up/Down: Climber Voltage (Driver or Copilot) ──
-            val povUp = controller.pov == 0 || coPilotController.pov == 0
-            val povDown = controller.pov == 180 || coPilotController.pov == 180
+            val povUp = controllerState.dpadUp || coPilotControllerState.dpadUp
+            val povDown = controllerState.dpadDown || coPilotControllerState.dpadDown
             val targetClimberVoltage = when {
                 povUp -> 6.0
                 povDown -> -6.0
