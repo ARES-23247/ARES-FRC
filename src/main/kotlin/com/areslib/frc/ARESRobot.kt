@@ -515,14 +515,8 @@ class ARESRobot : TimedRobot() {
 
     override fun autonomousPeriodic() {
         try {
-            val alliance = DriverStation.getAlliance()
-            if (alliance.isPresent) {
-                speakerTranslation = if (alliance.get() == DriverStation.Alliance.Red) {
-                    Translation2d(11.915, 4.035)
-                } else {
-                    Translation2d(4.625, 4.035)
-                }
-            }
+            // speakerTranslation is already kept in sync with cachedAlliance in robotPeriodic().
+            // No per-frame DriverStation.getAlliance() Optional or Translation2d allocation needed.
 
             val path = activePath ?: return
             val dt = 0.02
@@ -539,13 +533,15 @@ class ARESRobot : TimedRobot() {
                 dtSeconds = dt
             )
 
-            // Field-relative conversion
-            val cos = currentPose.heading.cos
-            val sin = currentPose.heading.sin
-            val fieldX = speeds.vxMetersPerSecond * cos - speeds.vyMetersPerSecond * sin
-            val fieldY = speeds.vxMetersPerSecond * sin + speeds.vyMetersPerSecond * cos
-
-            robot.drive.joystickDrive(fieldX, fieldY, speeds.omegaRadiansPerSecond)
+            // HolonomicDriveController.calculate() already returns robot-relative speeds
+            // (via ChassisSpeeds.fromFieldRelativeSpeeds). Pass them directly with
+            // isFieldCentric = false to avoid a double rotation.
+            robot.drive.joystickDrive(
+                speeds.vxMetersPerSecond,
+                speeds.vyMetersPerSecond,
+                speeds.omegaRadiansPerSecond,
+                isFieldCentric = false
+            )
 
             // Event markers
             for (event in path.events) {
