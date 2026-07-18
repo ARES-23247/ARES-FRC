@@ -66,8 +66,8 @@ class FRCCowlHardwareIO(
     }
 
     override fun setTargetAngle(degrees: Double) {
-        // Convert target cowl angle from degrees to mechanism rotations
-        val rotations = degrees / 32.0
+        // Use target cowl angle directly
+        val rotations = degrees
         motor.setControl(positionRequest.withPosition(rotations))
     }
 
@@ -76,8 +76,7 @@ class FRCCowlHardwareIO(
     }
 
     override val angleDegrees: Double
-        // Convert mechanism rotations to degrees
-        get() = cowlPosition.valueAsDouble * 32.0
+        get() = cowlPosition.valueAsDouble
 
     override val currentAmps: Double
         get() = cowlCurrent.valueAsDouble

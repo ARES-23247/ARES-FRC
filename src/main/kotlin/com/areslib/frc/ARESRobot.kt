@@ -304,7 +304,7 @@ class ARESRobot : TimedRobot() {
                 }
                 rbPressed -> {
                     // Aim and Shuttle
-                    val isRed = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red
+                    val isRed = cachedAlliance == DriverStation.Alliance.Red
                     val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
 
                     rotation = marvinShooter.updateShootOnTheMove(
