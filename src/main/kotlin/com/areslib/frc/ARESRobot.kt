@@ -359,7 +359,7 @@ class ARESRobot : TimedRobot() {
             }
 
             // Apply drive command
-            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = false)
+            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
 
             // ── A Button: Start Slamtake Sequence ──
             val aPressed = controllerState.a

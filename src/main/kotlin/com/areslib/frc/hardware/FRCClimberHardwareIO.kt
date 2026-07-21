@@ -55,7 +55,8 @@ class FRCClimberHardwareIO(
         // Software soft limits
         config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.73
         config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true
-        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = false
+        config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
+        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true
 
         motor.configurator.apply(config)
     }
