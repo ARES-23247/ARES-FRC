@@ -23,7 +23,7 @@ object MarvinReducer {
         val currentMarvin = nextState.superstructure.marvin
         val nextMarvin = when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
-            is SetCowlAngle -> currentMarvin.withCowlAngle(action.degrees)
+            is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
             is SetIntakePivot -> currentMarvin.withIntakePivot(action.deployed)
             is SetIntakeRollers -> currentMarvin.withIntakeRollers(action.speedRps)
             is SetFeederSpeed -> currentMarvin.withFeederSpeed(action.speedRps)
@@ -47,7 +47,7 @@ object MarvinReducer {
             is SuperstructureSensorUpdate -> {
                 var updatedMarvin = currentMarvin.copy(
                     flywheel = currentMarvin.flywheel.copy(velocityRpm = action.flywheelRpm),
-                    cowl = currentMarvin.cowl.copy(angleDegrees = action.cowlAngle),
+                    cowl = currentMarvin.cowl.copy(angleRotations = action.cowlAngleRotations),
                     intake = currentMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle),
                     feeder = currentMarvin.feeder.copy(gamePieceDetected = action.pieceDetected),
                     floor = currentMarvin.floor.copy(velocityRps = action.floorVelocityRps),

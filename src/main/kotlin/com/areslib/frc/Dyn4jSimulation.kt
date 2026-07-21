@@ -76,6 +76,8 @@ class Dyn4jSimulation(seed: Long = 42L) {
     val feederIO: FeederIO = com.areslib.frc.sim.io.SimulatedFeederIO(this)
     val floorIO: FloorIO = com.areslib.frc.sim.io.SimulatedFloorIO(this)
     val climberIO: ClimberIO = com.areslib.frc.sim.io.SimulatedClimberIO(this)
+    
+    private var gamePieceData = DoubleArray(100 * 7)
 
     init {
         world.setGravity(Vector2(0.0, 0.0))
@@ -93,12 +95,15 @@ class Dyn4jSimulation(seed: Long = 42L) {
         spawnFuel(seed)
     }
 
+    private val scratchActions = mutableListOf<RobotAction>()
+
     /**
      * Step the physics simulation forward by [dt] seconds using the current [state].
      * Returns a list of RobotActions to dispatch back to the Store (inventory changes, etc).
      */
     fun step(state: RobotState, dt: Double): List<RobotAction> {
-        val actions = mutableListOf<RobotAction>()
+        scratchActions.clear()
+        val actions = scratchActions
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
 
         if (dt <= 0.0) return actions
@@ -154,15 +159,14 @@ class Dyn4jSimulation(seed: Long = 42L) {
         val intakeSpinning = simIntakeRollerVoltage > 1.0
 
         if (intakeDeployed && intakeSpinning && state.superstructure.marvin.inventoryCount < 40) {
-            val ballIterator = balls.iterator()
-            while (ballIterator.hasNext()) {
-                val ball = ballIterator.next()
+            for (i in balls.indices.reversed()) {
+                val ball = balls[i]
                 val bx = ball.transform.translationX
                 val by = ball.transform.translationY
                 val dist = Math.hypot(bx - robotX, by - robotY)
                 if (dist < 0.5) {
                     world.removeBody(ball)
-                    ballIterator.remove()
+                    balls.removeAt(i)
                     val newCount = state.superstructure.marvin.inventoryCount + 1
                     actions.add(com.areslib.frc.marvin.SetInventoryCount(newCount, timestamp))
                     simFeederPieceDetected = true
@@ -205,10 +209,9 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
         // ── Flying Balls Physics & Scoring ──
         val g = 9.80665
-        val flyingIterator = flyingBalls.iterator()
         val random = java.util.Random()
-        while (flyingIterator.hasNext()) {
-            val fb = flyingIterator.next()
+        for (i in flyingBalls.indices.reversed()) {
+            val fb = flyingBalls[i]
             fb.x += fb.vx * dt
             fb.y += fb.vy * dt
             fb.z += fb.vz * dt
@@ -228,7 +231,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
             when {
                 scored -> {
-                    flyingIterator.remove()
+                    flyingBalls.removeAt(i)
                     println("BALL SCORED! Ejecting to center...")
                     
                     val ejectAngle = random.nextDouble() * 2.0 * Math.PI
@@ -251,7 +254,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
                     balls.add(ball)
                 }
                 fb.z <= 0.0635 -> { // Lands on the ground
-                    flyingIterator.remove()
+                    flyingBalls.removeAt(i)
                     println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
 
                     val fieldWidth = 16.541
@@ -341,7 +344,9 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
         // ── Fuel 3D Poses ──
         val totalBallsCount = balls.size + flyingBalls.size
-        val gamePieceData = DoubleArray(totalBallsCount * 7)
+        if (gamePieceData.size < totalBallsCount * 7) {
+            gamePieceData = DoubleArray(totalBallsCount * 7 * 2)
+        }
         for (i in balls.indices) {
             val idx = i * 7
             gamePieceData[idx] = balls[i].transform.translationX
@@ -365,7 +370,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
             gamePieceData[idx + 5] = 0.0 // qy
             gamePieceData[idx + 6] = 0.0 // qz
         }
-        telemetry.putDoubleArray("Robot/FuelPoses", gamePieceData)
+        telemetry.putDoubleArray("Robot/FuelPoses", gamePieceData.copyOfRange(0, totalBallsCount * 7))
     }
 
     /**

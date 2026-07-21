@@ -8,7 +8,7 @@ data class SetFlywheelSpeed @kotlin.jvm.JvmOverloads constructor(
 ) : RobotAction
 
 data class SetCowlAngle @kotlin.jvm.JvmOverloads constructor(
-    val degrees: Double,
+    val rotations: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
@@ -59,7 +59,7 @@ data class SetClimberExtension @kotlin.jvm.JvmOverloads constructor(
 
 data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
     val flywheelRpm: Double,
-    val cowlAngle: Double,
+    val cowlAngleRotations: Double,
     val intakeAngle: Double,
     val pieceDetected: Boolean,
     val floorVelocityRps: Double = 0.0,

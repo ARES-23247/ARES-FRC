@@ -17,8 +17,8 @@ data class FlywheelState(
  * Immutable representation of the adjustable cowl/hood angle state.
  */
 data class CowlState(
-    val angleDegrees: Double = 0.0,
-    val targetAngleDegrees: Double = 0.0,
+    val angleRotations: Double = 0.0,
+    val targetAngleRotations: Double = 0.0,
     val currentAmps: Double = 0.0
 )
 
@@ -81,7 +81,7 @@ data class MarvinState(
         get() = flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
 
     fun withFlywheelSpeed(rpm: Double) = copy(flywheel = flywheel.copy(targetVelocityRpm = rpm))
-    fun withCowlAngle(degrees: Double) = copy(cowl = cowl.copy(targetAngleDegrees = degrees))
+    fun withCowlAngle(rotations: Double) = copy(cowl = cowl.copy(targetAngleRotations = rotations))
     fun withIntakePivot(deployed: Boolean) = copy(intake = intake.copy(
         isDeployed = deployed,
         targetAngleDegrees = if (deployed) 90.0 else 0.0

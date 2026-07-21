@@ -59,6 +59,7 @@ class ARESRobot : TimedRobot() {
     private val controllerState = GamepadState()
     private val coPilotControllerState = GamepadState()
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
+    private var lastBeached = false
 
     private var intakeDeployed = false
     private var driverYawOffset = 0.0
@@ -73,6 +74,7 @@ class ARESRobot : TimedRobot() {
     private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
     private val targetPosesBlue = arrayOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
     private val targetPoseScratch = DoubleArray(3)
+    private val scratchPathPoint = com.areslib.pathing.MutablePathPoint()
 
     // Simulation timing
     private var lastSimTime = 0.0
@@ -200,8 +202,8 @@ class ARESRobot : TimedRobot() {
             // Log Marvin state
             telemetry.putNumber("Superstructure/Flywheel/VelocityRpm", marvin.flywheel.velocityRpm)
             telemetry.putNumber("Superstructure/Flywheel/TargetVelocityRpm", marvin.flywheel.targetVelocityRpm)
-            telemetry.putNumber("Superstructure/Cowl/AngleDegrees", marvin.cowl.angleDegrees)
-            telemetry.putNumber("Superstructure/Cowl/TargetAngleDegrees", marvin.cowl.targetAngleDegrees)
+            telemetry.putNumber("Superstructure/Cowl/AngleRotations", marvin.cowl.angleRotations)
+            telemetry.putNumber("Superstructure/Cowl/TargetAngleRotations", marvin.cowl.targetAngleRotations)
             telemetry.putNumber("Superstructure/Intake/PivotAngleDegrees", marvin.intake.pivotAngleDegrees)
             telemetry.putNumber("Superstructure/Intake/TargetAngleDegrees", marvin.intake.targetAngleDegrees)
             telemetry.putBoolean("Superstructure/Intake/IsDeployed", marvin.intake.isDeployed)
@@ -234,13 +236,17 @@ class ARESRobot : TimedRobot() {
         }
     }
 
+    private var allianceCheckCounter = 0
+
     override fun robotPeriodic() {
-        val allianceOpt = DriverStation.getAlliance()
-        if (allianceOpt.isPresent) {
-            val alliance = allianceOpt.get()
-            if (alliance != cachedAlliance) {
-                cachedAlliance = alliance
-                speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
+        if (DriverStation.isDisabled() && allianceCheckCounter++ % 50 == 0) {
+            val allianceOpt = DriverStation.getAlliance()
+            if (allianceOpt.isPresent) {
+                val alliance = allianceOpt.get()
+                if (alliance != cachedAlliance) {
+                    cachedAlliance = alliance
+                    speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
+                }
             }
         }
         controller.updateState(controllerState)
@@ -263,10 +269,10 @@ class ARESRobot : TimedRobot() {
             val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
             // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
-            val cosOffset = Math.cos(driverYawOffset)
-            val sinOffset = Math.sin(driverYawOffset)
-            val forward = rawForward * cosOffset - rawStrafe * sinOffset
-            val strafe = rawForward * sinOffset + rawStrafe * cosOffset
+            val rotCos = Math.cos(driverYawOffset)
+            val rotSin = Math.sin(driverYawOffset)
+            val forward = rawForward * rotCos - rawStrafe * rotSin
+            val strafe = rawForward * rotSin + rawStrafe * rotCos
             
             var rotation = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
 
@@ -274,7 +280,7 @@ class ARESRobot : TimedRobot() {
 
             // ── Copilot Swerve Lock Override ──
             if (coPilotControllerState.x) {
-                robot.drive.joystickDrive(0.0, 0.0, 0.0)
+                robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
                 return
             }
 
@@ -291,7 +297,7 @@ class ARESRobot : TimedRobot() {
             val copilotRbPressed = coPilotControllerState.rightBumper
             var targetFlywheelActive = false
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
-            var targetCowlAngle = marvin.cowl.targetAngleDegrees
+            var targetCowlAngle = marvin.cowl.targetAngleRotations
 
             when {
                 rtPressed -> {
@@ -346,14 +352,14 @@ class ARESRobot : TimedRobot() {
                     if (marvin.flywheel.targetVelocityRpm != targetFlywheelSpeed) {
                         robot.store.dispatch(SetFlywheelSpeed(targetFlywheelSpeed))
                     }
-                    if (marvin.cowl.targetAngleDegrees != targetCowlAngle) {
+                    if (marvin.cowl.targetAngleRotations != targetCowlAngle) {
                         robot.store.dispatch(SetCowlAngle(targetCowlAngle))
                     }
                 }
             }
 
             // Apply drive command
-            robot.drive.joystickDrive(forward, strafe, rotation)
+            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = false)
 
             // ── A Button: Start Slamtake Sequence ──
             val aPressed = controllerState.a
@@ -453,12 +459,15 @@ class ARESRobot : TimedRobot() {
             // ── Beach / Traction Loss detection ──
             val beached = robot.isBeached
             robot.telemetry.putBoolean("Diagnostics/Beached", beached)
-            if (beached) {
-                controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
-                coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
-            } else {
-                controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
-                coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
+            if (beached != lastBeached) {
+                lastBeached = beached
+                if (beached) {
+                    controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
+                    coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
+                } else {
+                    controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
+                    coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
+                }
             }
         } catch (e: Throwable) {
             System.err.println("ARESRobot: Exception in teleopPeriodic: ${e.message}")
@@ -523,13 +532,19 @@ class ARESRobot : TimedRobot() {
 
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
-            val targetPoint = path.sampleAtDistance(autoDistance)
+            path.sampleAtDistance(autoDistance, scratchPathPoint)
+            
+            val targetPose = com.areslib.math.geometry.Pose2d(
+                scratchPathPoint.x, 
+                scratchPathPoint.y, 
+                com.areslib.math.geometry.Rotation2d(scratchPathPoint.headingRad)
+            )
 
             val speeds = driveController.calculate(
                 currentPose = currentPose,
-                targetPose = targetPoint.pose,
-                targetVelocityMps = targetPoint.velocityMps,
-                targetHeading = targetPoint.pose.heading,
+                targetPose = targetPose,
+                targetVelocityMps = scratchPathPoint.velocityMps,
+                targetHeading = targetPose.heading,
                 dtSeconds = dt
             )
 
@@ -544,8 +559,9 @@ class ARESRobot : TimedRobot() {
             )
 
             // Event markers
-            for (event in path.events) {
-                val nextDistance = autoDistance + targetPoint.velocityMps * dt
+            for (i in 0 until path.events.size) {
+                val event = path.events[i]
+                val nextDistance = autoDistance + scratchPathPoint.velocityMps * dt
                 if (event.triggerDistanceMeters in autoDistance..nextDistance) {
                     println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
                     robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
@@ -561,15 +577,15 @@ class ARESRobot : TimedRobot() {
             }
 
             // Trajectory telemetry
-            targetPoseScratch[0] = targetPoint.pose.x
-            targetPoseScratch[1] = targetPoint.pose.y
-            targetPoseScratch[2] = targetPoint.pose.heading.radians
+            targetPoseScratch[0] = scratchPathPoint.x
+            targetPoseScratch[1] = scratchPathPoint.y
+            targetPoseScratch[2] = scratchPathPoint.headingRad
             robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
-            val dx = targetPoint.pose.x - currentPose.x
-            val dy = targetPoint.pose.y - currentPose.y
+            val dx = scratchPathPoint.x - currentPose.x
+            val dy = scratchPathPoint.y - currentPose.y
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
 
-            autoDistance += targetPoint.velocityMps * dt
+            autoDistance += scratchPathPoint.velocityMps * dt
         } catch (e: Throwable) {
             System.err.println("ARESRobot: Exception in autonomousPeriodic: ${e.message}")
             e.printStackTrace()
@@ -592,8 +608,9 @@ class ARESRobot : TimedRobot() {
             robot.store.dispatch(action)
         }
 
-        // Feed sim pose back into Store
-        robot.store.dispatch(sim.getPoseUpdate())
+        // Dispatch pose update so the state has odometry
+        val poseUpdate = sim.getPoseUpdate()
+        robot.store.dispatch(poseUpdate)
 
         // Publish 3D visualization
         sim.publishVisualization(robot.store.state, robot.telemetry)

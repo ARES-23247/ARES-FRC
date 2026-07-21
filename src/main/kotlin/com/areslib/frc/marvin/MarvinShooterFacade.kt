@@ -18,6 +18,7 @@ class MarvinShooterSubsystem(private val store: Store) {
     private var lastFeederSpeed = Double.NaN
     private var lastFloorSpeed = Double.NaN
     private var lastTransferActive: Boolean? = null
+    private val scratchSpeeds = ChassisSpeeds(0.0, 0.0, 0.0)
 
 
     val flywheelRPM: Double
@@ -26,8 +27,8 @@ class MarvinShooterSubsystem(private val store: Store) {
     val flywheelTargetRPM: Double
         get() = store.state.superstructure.marvin.flywheel.targetVelocityRpm
 
-    val cowlAngleDegrees: Double
-        get() = store.state.superstructure.marvin.cowl.angleDegrees
+    val cowlAngleRotations: Double
+        get() = store.state.superstructure.marvin.cowl.angleRotations
 
     val transferActive: Boolean
         get() = store.state.superstructure.marvin.transferActive
@@ -91,9 +92,11 @@ class MarvinShooterSubsystem(private val store: Store) {
         val fieldVx = rx * cos - ry * sin
         val fieldVy = rx * sin + ry * cos
         
-        val fieldSpeeds = ChassisSpeeds(fieldVx, fieldVy, omega)
+        scratchSpeeds.vxMetersPerSecond = fieldVx
+        scratchSpeeds.vyMetersPerSecond = fieldVy
+        scratchSpeeds.omegaRadiansPerSecond = omega
         
-        shotSetup.calculate(currentPose, fieldSpeeds, targetTranslation, shotResult)
+        shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, shotResult)
         
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         

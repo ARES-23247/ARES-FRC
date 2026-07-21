@@ -52,7 +52,7 @@ class FRCFlywheelHardwareIO(
         // Enforce exact physical configurations matching SystemConstants.java
         val config = com.ctre.phoenix6.configs.TalonFXConfiguration()
         config.Slot0.kP = 0.5
-        config.Slot0.kI = 2.0
+        config.Slot0.kI = 0.0
         config.Slot0.kD = 0.0
         config.Slot0.kV = 0.12 // 12.0 / 100.0 (Max speed: 6000 RPM / 60 = 100 RPS)
 
@@ -72,6 +72,12 @@ class FRCFlywheelHardwareIO(
         rightMaster.configurator.apply(config)
         rightFollower.configurator.apply(config)
     }
+
+    private val signals = arrayOf(
+        leftMasterVelocity, rightMasterVelocity,
+        leftMasterCurrent, leftFollowerCurrent, rightMasterCurrent, rightFollowerCurrent,
+        leftMasterTemp, rightMasterTemp
+    )
 
     override fun refresh() {
         BaseStatusSignal.refreshAll(

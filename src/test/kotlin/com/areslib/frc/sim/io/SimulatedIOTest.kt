@@ -16,7 +16,7 @@ class SimulatedIOTest {
         assertTrue(sim.simCowlVoltage != 0.0)
         cowl.setAppliedVoltage(5.0)
         assertEquals(5.0, sim.simCowlVoltage)
-        assertEquals(sim.simCowlAngle, cowl.angleDegrees)
+        assertEquals(sim.simCowlAngle, cowl.angleRotations)
         assertEquals(1.0, cowl.currentAmps)
 
         // 2. Climber

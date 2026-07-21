@@ -249,6 +249,6 @@ class Dyn4jSimulationTest {
         
         // The simulated cowl angle should settle near 32.0 degrees (1.0 rotations * 32.0)
         // And angleDegrees (feedback) should return 1.0 mechanism rotations.
-        assertEquals(1.0, sim.cowlIO.angleDegrees, 0.05, "Cowl feedback should match commanded rotations")
+        assertEquals(1.0, sim.cowlIO.angleRotations, 0.05, "Cowl feedback should match commanded rotations")
     }
 }

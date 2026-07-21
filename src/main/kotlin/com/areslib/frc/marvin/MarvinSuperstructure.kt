@@ -29,7 +29,7 @@ class MarvinSuperstructure(
     override fun readSensors(store: Store, timestampMs: Long) {
         store.dispatch(SuperstructureSensorUpdate(
             flywheelRpm = flywheelIO.velocityRpm,
-            cowlAngle = cowlIO.angleDegrees,
+            cowlAngleRotations = cowlIO.angleRotations,
             intakeAngle = intakeIO.pivotAngleDegrees,
             pieceDetected = feederIO.isBeamBroken,
             floorVelocityRps = floorIO.velocityRps,
@@ -41,7 +41,7 @@ class MarvinSuperstructure(
     override fun writeOutputs(state: RobotState, scale: Double) {
         val marvin = state.superstructure.marvin
         flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
-        cowlIO.setTargetAngle(marvin.cowl.targetAngleDegrees)
+        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations)
 
         val pivotAngle = marvin.intake.targetAngleDegrees
         intakeIO.setPivotAngle(pivotAngle)

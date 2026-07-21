@@ -52,7 +52,7 @@ class MarvinReducerTest {
             statePivotStowed,
             SuperstructureSensorUpdate(
                 flywheelRpm = 0.0,
-                cowlAngle = 0.0,
+                cowlAngleRotations = 0.0,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 climberExtensionMeters = 0.03,
@@ -95,7 +95,7 @@ class MarvinReducerTest {
 
         // SetCowlAngle
         val stateCowl = MarvinReducer.reduce(initialState, SetCowlAngle(15.0, 1000L))
-        assertEquals(15.0, stateCowl.superstructure.marvin.cowl.targetAngleDegrees)
+        assertEquals(15.0, stateCowl.superstructure.marvin.cowl.targetAngleRotations)
 
         // SetIntakePivot
         val stateIntakePivot = MarvinReducer.reduce(initialState, SetIntakePivot(true, 1000L))
@@ -135,7 +135,7 @@ class MarvinReducerTest {
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
                 flywheelRpm = 0.0,
-                cowlAngle = 0.0,
+                cowlAngleRotations = 0.0,
                 intakeAngle = 90.0,
                 pieceDetected = false,
                 climberExtensionMeters = 0.0,
@@ -154,7 +154,7 @@ class MarvinReducerTest {
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
                 flywheelRpm = 0.0,
-                cowlAngle = 0.0,
+                cowlAngleRotations = 0.0,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 climberExtensionMeters = 0.0,
@@ -172,7 +172,7 @@ class MarvinReducerTest {
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
                 flywheelRpm = 0.0,
-                cowlAngle = 0.0,
+                cowlAngleRotations = 0.0,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 climberExtensionMeters = 0.0,

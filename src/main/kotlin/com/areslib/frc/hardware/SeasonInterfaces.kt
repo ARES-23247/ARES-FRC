@@ -42,7 +42,7 @@ interface FlywheelIO : SubsystemIO {
  */
 interface CowlIO : SubsystemIO {
     override fun logTelemetry(telemetry: ITelemetry, prefix: String) {
-        telemetry.putNumber("$prefix/AngleDegrees", angleDegrees)
+        telemetry.putNumber("$prefix/AngleRotations", angleRotations)
         telemetry.putNumber("$prefix/CurrentAmps", currentAmps)
     }
 
@@ -50,14 +50,14 @@ interface CowlIO : SubsystemIO {
         setAppliedVoltage(0.0)
     }
 
-    /** Sets the target absolute position angle in degrees */
-    fun setTargetAngle(degrees: Double)
+    /** Sets the target absolute position angle in rotations */
+    fun setTargetAngle(rotations: Double)
 
     /** Sets the applied voltage directly (-12.0 to 12.0 volts) */
     fun setAppliedVoltage(volts: Double)
 
-    /** Gets the current absolute angle in degrees */
-    val angleDegrees: Double
+    /** Gets the current absolute angle in rotations */
+    val angleRotations: Double
         get() = 0.0
 
     /** Gets the stator current draw in Amperes */
