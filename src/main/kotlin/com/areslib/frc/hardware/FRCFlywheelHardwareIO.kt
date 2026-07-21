@@ -35,41 +35,32 @@ class FRCFlywheelHardwareIO(
         rightMaster.optimizeBusUtilization()
         rightFollower.optimizeBusUtilization()
 
-        leftMasterVelocity.setUpdateFrequency(50.0)
-        rightMasterVelocity.setUpdateFrequency(50.0)
-        leftMasterCurrent.setUpdateFrequency(20.0)
-        leftFollowerCurrent.setUpdateFrequency(20.0)
-        rightMasterCurrent.setUpdateFrequency(20.0)
-        rightFollowerCurrent.setUpdateFrequency(20.0)
-        leftMasterTemp.setUpdateFrequency(4.0)
-        rightMasterTemp.setUpdateFrequency(4.0)
+        setUpdateFrequencies(50.0, leftMasterVelocity, rightMasterVelocity)
+        setUpdateFrequencies(20.0, leftMasterCurrent, leftFollowerCurrent, rightMasterCurrent, rightFollowerCurrent)
+        setUpdateFrequencies(4.0, leftMasterTemp, rightMasterTemp)
 
         // Configure followers as opposed to their respective masters
         leftFollower.setControl(Follower(leftMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed))
         rightFollower.setControl(Follower(rightMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed))
 
         // Enforce exact physical configurations matching SystemConstants.java
-        val config = com.ctre.phoenix6.configs.TalonFXConfiguration()
-        config.Slot0.kP = 0.5
-        config.Slot0.kI = 0.0
-        config.Slot0.kD = 0.0
-        config.Slot0.kV = 0.12 // 12.0 / 100.0 (Max speed: 6000 RPM / 60 = 100 RPS)
+        listOf(leftMaster, leftFollower, rightMaster, rightFollower).applyConfig {
+            Slot0.kP = 0.5
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kV = 0.12 // 12.0 / 100.0 (Max speed: 6000 RPM / 60 = 100 RPS)
 
-        config.MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
-        config.MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive
+            MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
+            MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive
 
-        config.Feedback.SensorToMechanismRatio = 1.0
+            Feedback.SensorToMechanismRatio = 1.0
 
-        config.Voltage.PeakReverseVoltage = 0.0 // Software lock reversal of flywheel
-        config.CurrentLimits.SupplyCurrentLimitEnable = true
-        config.CurrentLimits.SupplyCurrentLimit = 70.0
-        config.CurrentLimits.StatorCurrentLimitEnable = true
-        config.CurrentLimits.StatorCurrentLimit = 120.0
-
-        leftMaster.configurator.apply(config)
-        leftFollower.configurator.apply(config)
-        rightMaster.configurator.apply(config)
-        rightFollower.configurator.apply(config)
+            Voltage.PeakReverseVoltage = 0.0 // Software lock reversal of flywheel
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.SupplyCurrentLimit = 70.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 120.0
+        }
     }
 
 

@@ -27,37 +27,35 @@ class FRCCowlHardwareIO(
 
     init {
         motor.optimizeBusUtilization()
-        cowlPosition.setUpdateFrequency(50.0)
-        cowlCurrent.setUpdateFrequency(10.0)
+        setUpdateFrequencies(50.0, cowlPosition)
+        setUpdateFrequencies(10.0, cowlCurrent)
 
-        val config = TalonFXConfiguration()
-        
-        // Neutral mode and inversions
-        config.MotorOutput.NeutralMode = NeutralModeValue.Brake
-        config.MotorOutput.Inverted = InvertedValue.Clockwise_Positive
+        listOf(motor).applyConfig {
+            // Neutral mode and inversions
+            MotorOutput.NeutralMode = NeutralModeValue.Brake
+            MotorOutput.Inverted = InvertedValue.Clockwise_Positive
 
-        // Gearing and sensor ratio
-        config.Feedback.SensorToMechanismRatio = 1.0
+            // Gearing and sensor ratio
+            Feedback.SensorToMechanismRatio = 1.0
 
-        // Software soft limits
-        config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true
-        config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.80
-        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true
-        config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
+            // Software soft limits
+            SoftwareLimitSwitch.ForwardSoftLimitEnable = true
+            SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.80
+            SoftwareLimitSwitch.ReverseSoftLimitEnable = true
+            SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
 
-        // Position closed-loop PID gains
-        config.Slot0.kP = 20.0
-        config.Slot0.kI = 0.0
-        config.Slot0.kD = 0.0
-        config.Slot0.kS = 2.0
+            // Position closed-loop PID gains
+            Slot0.kP = 20.0
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kS = 2.0
 
-        // Current limits
-        config.CurrentLimits.SupplyCurrentLimit = 30.0
-        config.CurrentLimits.SupplyCurrentLimitEnable = true
-        config.CurrentLimits.StatorCurrentLimit = 50.0
-        config.CurrentLimits.StatorCurrentLimitEnable = true
-
-        motor.configurator.apply(config)
+            // Current limits
+            CurrentLimits.SupplyCurrentLimit = 30.0
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 50.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+        }
     }
 
     override fun refresh() {

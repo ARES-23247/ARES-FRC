@@ -41,6 +41,13 @@ import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.Timer
 import edu.wpi.first.wpilibj.DriverStation
 
+val aresAlliance: com.areslib.state.Alliance
+    get() = if (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red) {
+        com.areslib.state.Alliance.RED
+    } else {
+        com.areslib.state.Alliance.BLUE
+    }
+
 /**
  * Main Robot lifecycle for the FRC CTRE Swerve Integration.
  *
@@ -487,8 +494,6 @@ class ARESRobot : TimedRobot() {
     override fun autonomousInit() {
         try {
             var path = PathLoader.loadPath("SimPath")
-            val alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)
-            val aresAlliance = if (alliance == DriverStation.Alliance.Red) com.areslib.state.Alliance.RED else com.areslib.state.Alliance.BLUE
             
             path = com.areslib.math.coordinate.AllianceMirroring.mirror(
                 path,
