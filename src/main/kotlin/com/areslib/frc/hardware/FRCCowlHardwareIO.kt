@@ -43,8 +43,8 @@ class FRCCowlHardwareIO(
         // Software soft limits
         config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true
         config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.80
-        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = false
-        config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = -0.1
+        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true
+        config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
 
         // Position closed-loop PID gains
         config.Slot0.kP = 20.0
