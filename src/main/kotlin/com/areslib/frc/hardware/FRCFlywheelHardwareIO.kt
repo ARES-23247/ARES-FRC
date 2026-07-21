@@ -1,6 +1,5 @@
 package com.areslib.frc.hardware
 
-import com.areslib.frc.hardware.FlywheelIO
 import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.Follower
 import com.ctre.phoenix6.controls.VelocityVoltage
@@ -73,11 +72,7 @@ class FRCFlywheelHardwareIO(
         rightFollower.configurator.apply(config)
     }
 
-    private val signals = arrayOf(
-        leftMasterVelocity, rightMasterVelocity,
-        leftMasterCurrent, leftFollowerCurrent, rightMasterCurrent, rightFollowerCurrent,
-        leftMasterTemp, rightMasterTemp
-    )
+
 
     override fun refresh() {
         BaseStatusSignal.refreshAll(

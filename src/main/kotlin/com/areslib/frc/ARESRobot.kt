@@ -29,6 +29,8 @@ import com.areslib.frc.hardware.FRCFloorHardwareIO
 import com.areslib.frc.hardware.FRCFlywheelHardwareIO
 import com.areslib.frc.hardware.FRCIntakeHardwareIO
 
+import edu.wpi.first.math.MathUtil
+
 import com.areslib.hardware.SubsystemIO
 import com.areslib.hardware.drive.SwerveHardwareIO
 import com.areslib.hardware.vision.VisionIO
@@ -265,8 +267,8 @@ class ARESRobot : TimedRobot() {
         try {
             val marvin = robot.store.state.superstructure.marvin
 
-            val rawForward = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) * 4.5
-            val rawStrafe = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
+            val rawForward = MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) * 4.5
+            val rawStrafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
             // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
             val rotCos = Math.cos(driverYawOffset)
@@ -274,7 +276,7 @@ class ARESRobot : TimedRobot() {
             val forward = rawForward * rotCos - rawStrafe * rotSin
             val strafe = rawForward * rotSin + rawStrafe * rotCos
             
-            var rotation = edu.wpi.first.math.MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
+            var rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
 
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
@@ -299,10 +301,10 @@ class ARESRobot : TimedRobot() {
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleRotations
 
-            when {
+            rotation = when {
                 rtPressed -> {
                     // Shoot-on-the-Move (SOTM) Speaker Aiming
-                    rotation = marvinShooter.updateShootOnTheMove(
+                    marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
                         targetTranslation = speakerTranslation,
                         shotResult = shotResult
@@ -313,7 +315,7 @@ class ARESRobot : TimedRobot() {
                     val isRed = cachedAlliance == DriverStation.Alliance.Red
                     val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
 
-                    rotation = marvinShooter.updateShootOnTheMove(
+                    marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
                         targetTranslation = shuttleTarget,
                         shotResult = shotResult,
@@ -322,11 +324,15 @@ class ARESRobot : TimedRobot() {
                 }
                 bPressed -> {
                     // Static Shoot (Speaker Aiming)
-                    rotation = marvinShooter.updateStaticShoot(
+                    marvinShooter.updateStaticShoot(
                         currentPose = currentPose,
                         targetTranslation = speakerTranslation
                     )
                 }
+                else -> rotation
+            }
+
+            when {
                 copilotRtPressed -> {
                     targetFlywheelActive = true
                     targetFlywheelSpeed = 3350.0

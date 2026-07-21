@@ -1,6 +1,5 @@
 package com.areslib.frc.hardware
 
-import com.areslib.frc.hardware.CowlIO
 import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
