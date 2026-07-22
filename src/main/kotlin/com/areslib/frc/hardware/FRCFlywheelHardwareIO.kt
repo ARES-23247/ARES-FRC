@@ -74,6 +74,9 @@ class FRCFlywheelHardwareIO(
     }
 
     override fun setVelocityRpm(rpm: Double) {
+        /**
+         * Documentation for rps
+         */
         val rps = rpm / 60.0
         leftMaster.setControl(velocityRequest.withVelocity(rps))
         rightMaster.setControl(velocityRequest.withVelocity(rps))

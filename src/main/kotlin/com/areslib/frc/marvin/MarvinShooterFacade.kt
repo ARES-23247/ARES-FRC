@@ -34,31 +34,55 @@ class MarvinShooterSubsystem(private val store: Store) {
     private val feederController = MarvinFeederController(store)
     
     private val scratchSpeeds = ChassisSpeeds(0.0, 0.0, 0.0)
+    /**
+     * Documentation for flywheelRPM
+     */
 
     val flywheelRPM: Double
         get() = flywheelController.flywheelRPM
+    /**
+     * Documentation for flywheelTargetRPM
+     */
 
     val flywheelTargetRPM: Double
         get() = flywheelController.flywheelTargetRPM
+    /**
+     * Documentation for cowlAngleRotations
+     */
 
     val cowlAngleRotations: Double
         get() = cowlController.cowlAngleRotations
+    /**
+     * Documentation for transferActive
+     */
 
     val transferActive: Boolean
         get() = feederController.transferActive
+    /**
+     * Documentation for spinUp
+     */
 
     fun spinUp(targetRpm: Double) {
         flywheelController.spinUp(targetRpm)
     }
+    /**
+     * Documentation for shoot
+     */
 
     fun shoot() {
         feederController.shoot()
     }
+    /**
+     * Documentation for stop
+     */
 
     fun stop() {
         flywheelController.stop()
         feederController.stop()
     }
+    /**
+     * Documentation for setCowlAngle
+     */
 
     fun setCowlAngle(degrees: Double) {
         cowlController.setCowlAngle(degrees)
@@ -73,14 +97,38 @@ class MarvinShooterSubsystem(private val store: Store) {
         shotResult: ShotResult,
         runFloorRollers: Boolean = false
     ): Double {
+        /**
+         * Documentation for driveState
+         */
         val driveState = store.state.drive
+        /**
+         * Documentation for rx
+         */
         val rx = driveState.xVelocityMetersPerSecond
+        /**
+         * Documentation for ry
+         */
         val ry = driveState.yVelocityMetersPerSecond
+        /**
+         * Documentation for omega
+         */
         val omega = driveState.angularVelocityRadiansPerSecond
+        /**
+         * Documentation for cos
+         */
         
         val cos = currentPose.heading.cos
+        /**
+         * Documentation for sin
+         */
         val sin = currentPose.heading.sin
+        /**
+         * Documentation for fieldVx
+         */
         val fieldVx = rx * cos - ry * sin
+        /**
+         * Documentation for fieldVy
+         */
         val fieldVy = rx * sin + ry * cos
         
         scratchSpeeds.vxMetersPerSecond = fieldVx
@@ -88,19 +136,43 @@ class MarvinShooterSubsystem(private val store: Store) {
         scratchSpeeds.omegaRadiansPerSecond = omega
         
         shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, shotResult)
+        /**
+         * Documentation for targetRpm
+         */
         
         val targetRpm = shotResult.targetFlywheelRpm
         flywheelController.spinUp(targetRpm)
+        /**
+         * Documentation for targetCowl
+         */
         
         val targetCowl = shotResult.targetCowlAngleDegrees
         cowlController.setCowlAngle(targetCowl)
+        /**
+         * Documentation for headingError
+         */
         
         val headingError = shotResult.robotTargetHeadingRad - currentPose.heading.radians
+        /**
+         * Documentation for wrappedError
+         */
         val wrappedError = com.areslib.math.wrapAngle(headingError)
+        /**
+         * Documentation for kp
+         */
         val kp = 4.0
+        /**
+         * Documentation for rotation
+         */
         val rotation = wrappedError * kp + shotResult.angularVelocityFeedforwardRadPerSec
+        /**
+         * Documentation for headingAligned
+         */
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
+        /**
+         * Documentation for rpmAligned
+         */
         val rpmAligned = flywheelController.isRpmAligned(shotResult.targetFlywheelRpm)
         
         feederController.updateFeeders(rpmAligned, headingAligned, runFloorRollers)
@@ -115,19 +187,46 @@ class MarvinShooterSubsystem(private val store: Store) {
         currentPose: Pose2d,
         targetTranslation: Translation2d
     ): Double {
+        /**
+         * Documentation for dist
+         */
         val dist = kotlin.math.hypot(currentPose.x - targetTranslation.x, currentPose.y - targetTranslation.y)
+        /**
+         * Documentation for targetRpm
+         */
         val targetRpm = shotSetup.interpolateRpm(dist)
+        /**
+         * Documentation for targetCowl
+         */
         val targetCowl = shotSetup.interpolateCowl(dist)
         
         flywheelController.spinUp(targetRpm)
         cowlController.setCowlAngle(targetCowl)
+        /**
+         * Documentation for headingError
+         */
         
         val headingError = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x) - currentPose.heading.radians + Math.PI
+        /**
+         * Documentation for wrappedError
+         */
         val wrappedError = com.areslib.math.wrapAngle(headingError)
+        /**
+         * Documentation for kp
+         */
         val kp = 4.0
+        /**
+         * Documentation for rotation
+         */
         val rotation = wrappedError * kp
+        /**
+         * Documentation for headingAligned
+         */
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
+        /**
+         * Documentation for rpmAligned
+         */
         val rpmAligned = flywheelController.isRpmAligned(targetRpm)
         
         feederController.updateFeeders(rpmAligned, headingAligned, false)
@@ -137,44 +236,89 @@ class MarvinShooterSubsystem(private val store: Store) {
 }
 
 class MarvinIntakeSubsystem(private val store: Store) {
+    /**
+     * Documentation for isDeployed
+     */
     val isDeployed: Boolean
         get() = store.state.superstructure.marvin.intake.isDeployed
+    /**
+     * Documentation for pivotAngleDegrees
+     */
 
     val pivotAngleDegrees: Double
         get() = store.state.superstructure.marvin.intake.pivotAngleDegrees
+    /**
+     * Documentation for rollerSpeedRps
+     */
 
     val rollerSpeedRps: Double
         get() = store.state.superstructure.marvin.intake.rollerVelocityRps
+    /**
+     * Documentation for deploy
+     */
 
     fun deploy() {
+        /**
+         * Documentation for timestamp
+         */
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         store.dispatch(SetIntakePivot(deployed = true, timestampMs = timestamp))
     }
+    /**
+     * Documentation for retract
+     */
 
     fun retract() {
+        /**
+         * Documentation for timestamp
+         */
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         store.dispatch(SetIntakePivot(deployed = false, timestampMs = timestamp))
     }
+    /**
+     * Documentation for setRollerSpeed
+     */
 
     fun setRollerSpeed(rps: Double) {
+        /**
+         * Documentation for timestamp
+         */
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         store.dispatch(SetIntakeRollers(speedRps = rps, timestampMs = timestamp))
     }
 }
 
 class MarvinClimberSubsystem(private val store: Store) {
+    /**
+     * Documentation for extensionMeters
+     */
     val extensionMeters: Double
         get() = store.state.superstructure.marvin.climber.extensionMeters
+    /**
+     * Documentation for targetExtensionMeters
+     */
 
     val targetExtensionMeters: Double
         get() = store.state.superstructure.marvin.climber.targetExtensionMeters
+    /**
+     * Documentation for setTargetExtension
+     */
 
     fun setTargetExtension(meters: Double) {
+        /**
+         * Documentation for timestamp
+         */
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         store.dispatch(SetClimberExtension(meters, timestamp))
     }
+    /**
+     * Documentation for setVoltage
+     */
 
     fun setVoltage(volts: Double) {
+        /**
+         * Documentation for timestamp
+         */
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
         store.dispatch(SetClimberVoltage(volts, timestamp))
     }

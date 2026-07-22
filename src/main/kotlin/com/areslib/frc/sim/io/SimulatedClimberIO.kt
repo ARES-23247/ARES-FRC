@@ -5,6 +5,9 @@ import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedClimberIO(private val sim: Dyn4jSimulation) : ClimberIO {
     override fun setTargetExtension(meters: Double) {
+        /**
+         * Documentation for error
+         */
         val error = meters - sim.simClimberExtensionMeters
         sim.simClimberVoltage = (error * 10.0).coerceIn(-12.0, 12.0)
     }

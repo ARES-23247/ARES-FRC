@@ -6,21 +6,45 @@ import com.areslib.telemetry.ITelemetry
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.dyn4j.dynamics.Body
+/**
+ * Documentation for Dyn4jSimulationTest
+ */
 
 class Dyn4jSimulationTest {
+    /**
+     * Documentation for testHighCapacityInventoryLimit
+     */
 
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testHighCapacityInventoryLimit() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation(seed = 42L)
+        /**
+         * Documentation for state
+         */
         val state = RobotState(superstructure = SuperstructureState(custom = com.areslib.frc.marvin.MarvinState(inventoryCount = 39)))
 
         // Get private 'balls' field via reflection from physicsWorld
+        /**
+         * Documentation for physicsWorldField
+         */
         val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
         physicsWorldField.isAccessible = true
+        /**
+         * Documentation for physicsWorld
+         */
         val physicsWorld = physicsWorldField.get(sim)
+        /**
+         * Documentation for ballsField
+         */
         val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
+        /**
+         * Documentation for ballsList
+         */
         val ballsList = ballsField.get(physicsWorld) as MutableList<Body>
 
         // Assert that we have spawned balls
@@ -35,9 +59,18 @@ class Dyn4jSimulationTest {
 
         // Run step with intake deployed and active.
         // First run a few steps to let the pivot simulator update past 45 degrees
+        /**
+         * Documentation for pivotDegrees
+         */
         var pivotDegrees = 0.0
+        /**
+         * Documentation for allActions
+         */
         val allActions = mutableListOf<RobotAction>()
         for (i in 0..50) {
+            /**
+             * Documentation for stepActions
+             */
             val stepActions = sim.step(state, 0.02)
             allActions.addAll(stepActions)
             pivotDegrees = sim.intakeIO.pivotAngleDegrees
@@ -46,17 +79,29 @@ class Dyn4jSimulationTest {
         assertTrue(pivotDegrees > 45.0, "Intake pivot should have deployed beyond 45 degrees")
 
         // Verify that ingestion was successful and we got SetInventoryCount action for 40
+        /**
+         * Documentation for inventoryAction
+         */
         val inventoryAction = allActions.find { it is com.areslib.frc.marvin.SetInventoryCount } as? com.areslib.frc.marvin.SetInventoryCount
         assertNotNull(inventoryAction, "Should have triggered ball ingestion action")
         assertEquals(40, inventoryAction!!.count, "Ingestion should successfully reach 40 balls")
     }
+    /**
+     * Documentation for testShootingAnd2_5DProjectileMotion
+     */
 
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testShootingAnd2_5DProjectileMotion() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation(seed = 42L)
         
         // Setup state with active flywheel ready at 4000 RPM, and cowl angle
+        /**
+         * Documentation for superstructure
+         */
         val superstructure = SuperstructureState(
             custom = com.areslib.frc.marvin.MarvinState(
                 flywheelActive = true,
@@ -64,17 +109,32 @@ class Dyn4jSimulationTest {
                 inventoryCount = 10
             )
         )
+        /**
+         * Documentation for state
+         */
         val state = RobotState(superstructure = superstructure)
 
         // Set flywheel RPM instantly using reflection
+        /**
+         * Documentation for flywheelSimField
+         */
         val flywheelSimField = Dyn4jSimulation::class.java.getDeclaredField("flywheelSim")
         flywheelSimField.isAccessible = true
+        /**
+         * Documentation for flywheelSimInstance
+         */
         val flywheelSimInstance = flywheelSimField.get(sim) as com.areslib.sim.model.FlywheelSim
+        /**
+         * Documentation for angularVelField
+         */
         val angularVelField = com.areslib.sim.model.FlywheelSim::class.java.getDeclaredField("angularVelocityRadPerSec")
         angularVelField.isAccessible = true
         angularVelField.set(flywheelSimInstance, 4000.0 * 2.0 * Math.PI / 60.0)
 
         // Set cowl angle instantly to 30.0 degrees using reflection
+        /**
+         * Documentation for cowlAngleField
+         */
         val cowlAngleField = Dyn4jSimulation::class.java.getDeclaredField("simCowlAngle")
         cowlAngleField.isAccessible = true
         cowlAngleField.set(sim, 30.0)
@@ -83,6 +143,9 @@ class Dyn4jSimulationTest {
         sim.feederIO.setAppliedVoltage(12.0)
 
         // Run step forward to let cowl angle update and trigger shoot
+        /**
+         * Documentation for actions
+         */
         var actions: List<RobotAction> = emptyList()
         for (i in 0..20) {
             actions = sim.step(state, 0.02)
@@ -90,47 +153,98 @@ class Dyn4jSimulationTest {
         }
 
         // Verify shoot action dispatched decrement
+        /**
+         * Documentation for shootAction
+         */
         val shootAction = actions.find { it is com.areslib.frc.marvin.SetInventoryCount } as? com.areslib.frc.marvin.SetInventoryCount
         assertNotNull(shootAction, "Should have triggered a shooting action")
         assertEquals(9, shootAction!!.count)
 
         // Check private 'flyingBalls' list via reflection from physicsWorld
+        /**
+         * Documentation for physicsWorldField
+         */
         val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
         physicsWorldField.isAccessible = true
+        /**
+         * Documentation for physicsWorld
+         */
         val physicsWorld = physicsWorldField.get(sim)
+        /**
+         * Documentation for flyingField
+         */
         val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
+        /**
+         * Documentation for flyingList
+         */
         val flyingList = flyingField.get(physicsWorld) as List<FlyingBall>
 
         assertEquals(1, flyingList.size, "Exactly one ball should be flying in 2.5D space")
+        /**
+         * Documentation for fb
+         */
         val fb = flyingList[0]
         assertEquals(0.7164096, fb.z, 1e-4, "Initial launch height should be exactly 0.7164096 meters after one step")
         assertTrue(fb.vx > 0.0 || fb.vy > 0.0, "Horizontal velocities should be non-zero")
         assertTrue(fb.vz > 0.0, "Vertical velocity should be positive due to cowl angle")
     }
+    /**
+     * Documentation for testHubScoringAndCenterEjection
+     */
 
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testHubScoringAndCenterEjection() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation(seed = 42L)
+        /**
+         * Documentation for state
+         */
         val state = RobotState()
 
         // Get private 'flyingBalls' list via reflection from physicsWorld
+        /**
+         * Documentation for physicsWorldField
+         */
         val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
         physicsWorldField.isAccessible = true
+        /**
+         * Documentation for physicsWorld
+         */
         val physicsWorld = physicsWorldField.get(sim)
+        /**
+         * Documentation for flyingField
+         */
         val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
+        /**
+         * Documentation for flyingList
+         */
         val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
 
         // Get private 'balls' field via reflection
+        /**
+         * Documentation for ballsField
+         */
         val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
+        /**
+         * Documentation for ballsList
+         */
         val ballsList = ballsField.get(physicsWorld) as MutableList<Body>
+        /**
+         * Documentation for initialGroundBalls
+         */
         val initialGroundBalls = ballsList.size
 
         // Mock a flying ball inside the Blue Hub cylindrical scoring zone (center: 4.135, 4.0345)
         // at height z = 2.0 (inside 1.6 to 2.8 meters range)
+        /**
+         * Documentation for scoredBall
+         */
         val scoredBall = FlyingBall(
             x = 4.135,
             y = 4.0345,
@@ -151,6 +265,9 @@ class Dyn4jSimulationTest {
         assertEquals(initialGroundBalls + 1, ballsList.size, "A new ground ball should be spawned")
 
         // Verify the newest ball is spawned at the center of the field (8.2705, 4.0345)
+        /**
+         * Documentation for newestBall
+         */
         val newestBall = ballsList.last()
         assertEquals(8.2705, newestBall.transform.translationX, 0.05, "Scored ball should eject to field X center")
         assertEquals(4.0345, newestBall.transform.translationY, 0.05, "Scored ball should eject to field Y center")
@@ -158,22 +275,46 @@ class Dyn4jSimulationTest {
         // Verify it has non-zero ejection velocities
         assertTrue(newestBall.linearVelocity.magnitude > 1.0, "Ejected ball should have an outward velocity")
     }
+    /**
+     * Documentation for testLandingOnGround
+     */
 
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testLandingOnGround() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation(seed = 42L)
+        /**
+         * Documentation for state
+         */
         val state = RobotState()
 
         // Get private 'flyingBalls' list via reflection from physicsWorld
+        /**
+         * Documentation for physicsWorldField
+         */
         val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
         physicsWorldField.isAccessible = true
+        /**
+         * Documentation for physicsWorld
+         */
         val physicsWorld = physicsWorldField.get(sim)
+        /**
+         * Documentation for flyingField
+         */
         val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
+        /**
+         * Documentation for flyingList
+         */
         val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
 
         // Mock a ball almost landing on the ground (z = 0.05, radius is 0.0635)
+        /**
+         * Documentation for landingBall
+         */
         val landingBall = FlyingBall(
             x = 6.0,
             y = 5.0,
@@ -191,9 +332,18 @@ class Dyn4jSimulationTest {
         assertTrue(flyingList.isEmpty(), "Landed ball should be removed from flying list")
 
         // Get balls list to verify landing body translation and velocity
+        /**
+         * Documentation for ballsField
+         */
         val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
+        /**
+         * Documentation for ballsList
+         */
         val ballsList = ballsField.get(physicsWorld) as List<Body>
+        /**
+         * Documentation for dynamicBody
+         */
 
         val dynamicBody = ballsList.last()
         assertEquals(6.0, dynamicBody.transform.translationX, 0.1, "Landed ball should match final X position")
@@ -201,29 +351,62 @@ class Dyn4jSimulationTest {
         assertEquals(3.0, dynamicBody.linearVelocity.x, 1e-3, "Residual linear velocity X should be preserved")
         assertEquals(-2.0, dynamicBody.linearVelocity.y, 1e-3, "Residual linear velocity Y should be preserved")
     }
+    /**
+     * Documentation for testTelemetryPackaging
+     */
 
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testTelemetryPackaging() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation(seed = 42L)
+        /**
+         * Documentation for state
+         */
         val state = RobotState()
 
         // Get private lists via reflection from physicsWorld
+        /**
+         * Documentation for physicsWorldField
+         */
         val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
         physicsWorldField.isAccessible = true
+        /**
+         * Documentation for physicsWorld
+         */
         val physicsWorld = physicsWorldField.get(sim)
+        /**
+         * Documentation for flyingField
+         */
         val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
+        /**
+         * Documentation for flyingList
+         */
         val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
+        /**
+         * Documentation for ballsField
+         */
 
         val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
+        /**
+         * Documentation for ballsList
+         */
         val ballsList = ballsField.get(physicsWorld) as List<Body>
 
         // Mock a flying ball
         flyingList.add(FlyingBall(3.0, 3.0, 2.5, 0.0, 0.0, 0.0))
+        /**
+         * Documentation for mockTelemetry
+         */
 
         val mockTelemetry = object : ITelemetry {
+            /**
+             * Documentation for arrays
+             */
             val arrays = mutableMapOf<String, DoubleArray>()
             override fun putDoubleArray(key: String, value: DoubleArray) {
                 arrays[key] = value
@@ -239,23 +422,38 @@ class Dyn4jSimulationTest {
         sim.publishVisualization(state, mockTelemetry)
 
         // Verify the double array exists and has correct sizing
+        /**
+         * Documentation for poseArray
+         */
         val poseArray = mockTelemetry.arrays["Robot/FuelPoses"]
         assertNotNull(poseArray)
         assertEquals((ballsList.size + 1) * 7, poseArray!!.size)
 
         // Verify the flying ball is packaged at the correct index at the end
+        /**
+         * Documentation for lastIdx
+         */
         val lastIdx = ballsList.size * 7
         assertEquals(3.0, poseArray[lastIdx])
         assertEquals(3.0, poseArray[lastIdx + 1])
         assertEquals(2.5, poseArray[lastIdx + 2], "Flying ball Z coordinate must be published correctly")
         assertEquals(1.0, poseArray[lastIdx + 3], "Identity quaternion qw must be 1.0")
     }
+    /**
+     * Documentation for testCowlAngleUnitMapping
+     */
 
     @Test
     fun testCowlAngleUnitMapping() {
+        /**
+         * Documentation for sim
+         */
         val sim = Dyn4jSimulation()
         
         // Step simulation forward for 2 seconds (100 steps of 0.02) to let closed-loop settle
+        /**
+         * Documentation for state
+         */
         val state = RobotState()
         for (i in 0 until 100) {
             sim.cowlIO.setTargetAngle(1.0)

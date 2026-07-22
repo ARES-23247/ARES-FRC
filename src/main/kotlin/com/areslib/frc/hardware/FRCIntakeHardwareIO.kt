@@ -33,6 +33,9 @@ class FRCIntakeHardwareIO(
         rollerCurrent.setUpdateFrequency(10.0)
 
         // Configure Pivot Motor with exact specs from SystemConstants.java
+        /**
+         * Documentation for pivotConfig
+         */
         val pivotConfig = com.ctre.phoenix6.configs.TalonFXConfiguration()
         pivotConfig.Slot0.kP = 1.0
         pivotConfig.Slot0.kI = 0.0
@@ -50,6 +53,9 @@ class FRCIntakeHardwareIO(
         pivotMotor.configurator.apply(pivotConfig)
 
         // Configure Roller Motor with exact specs from SystemConstants.java
+        /**
+         * Documentation for rollerConfig
+         */
         val rollerConfig = com.ctre.phoenix6.configs.TalonFXConfiguration()
         rollerConfig.Slot0.kP = 0.5
         rollerConfig.Slot0.kI = 2.0
@@ -74,6 +80,9 @@ class FRCIntakeHardwareIO(
     override fun setPivotAngle(degrees: Double) {
         // Convert degrees to mechanism rotations (1 degree = (1.0 / 360.0) rotations)
         // Feedback.SensorToMechanismRatio handles the internal 4:1 scaling in TalonFX
+        /**
+         * Documentation for rotations
+         */
         val rotations = degrees / 360.0
         pivotMotor.setControl(positionRequest.withPosition(rotations))
     }

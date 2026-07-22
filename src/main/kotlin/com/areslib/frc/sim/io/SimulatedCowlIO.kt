@@ -5,6 +5,9 @@ import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedCowlIO(private val sim: Dyn4jSimulation) : CowlIO {
     override fun setTargetAngle(rotations: Double) {
+        /**
+         * Documentation for error
+         */
         val error = rotations - sim.simCowlAngle
         sim.simCowlVoltage = (error * 0.5).coerceIn(-12.0, 12.0)
     }

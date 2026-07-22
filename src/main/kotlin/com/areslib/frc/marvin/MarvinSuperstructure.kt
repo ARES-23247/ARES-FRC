@@ -18,11 +18,29 @@ import com.areslib.frc.hardware.ClimberIO
  * with brownout power scaling applied.
  */
 class MarvinSuperstructure(
+    /**
+     * Documentation for flywheelIO
+     */
     val flywheelIO: FlywheelIO,
+    /**
+     * Documentation for cowlIO
+     */
     val cowlIO: CowlIO,
+    /**
+     * Documentation for intakeIO
+     */
     val intakeIO: IntakeIO,
+    /**
+     * Documentation for feederIO
+     */
     val feederIO: FeederIO,
+    /**
+     * Documentation for floorIO
+     */
     val floorIO: FloorIO,
+    /**
+     * Documentation for climberIO
+     */
     val climberIO: ClimberIO
 ) : Subsystem {
 
@@ -39,21 +57,39 @@ class MarvinSuperstructure(
     }
 
     override fun writeOutputs(state: RobotState, scale: Double) {
+        /**
+         * Documentation for marvin
+         */
         val marvin = state.superstructure.marvin
         flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
         cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations)
+        /**
+         * Documentation for pivotAngle
+         */
 
         val pivotAngle = marvin.intake.targetAngleDegrees
         intakeIO.setPivotAngle(pivotAngle)
+        /**
+         * Documentation for targetRollerSpeed
+         */
 
         val targetRollerSpeed = marvin.intake.targetRollerVelocityRps
         intakeIO.setRollerVoltage((targetRollerSpeed / 10.0) * 12.0 * scale)
+        /**
+         * Documentation for targetFeederSpeed
+         */
 
         val targetFeederSpeed = marvin.feeder.targetVelocityRps
         feederIO.setAppliedVoltage((targetFeederSpeed / 12.0) * 12.0 * scale)
+        /**
+         * Documentation for targetFloorSpeed
+         */
 
         val targetFloorSpeed = marvin.floor.targetVelocityRps
         floorIO.setAppliedVoltage((targetFloorSpeed / 12.0) * 12.0 * scale)
+        /**
+         * Documentation for targetClimberVoltage
+         */
 
         val targetClimberVoltage = marvin.climber.targetVoltage
         climberIO.setAppliedVoltage(targetClimberVoltage * scale)

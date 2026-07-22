@@ -5,6 +5,9 @@ import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedFlywheelIO(private val sim: Dyn4jSimulation) : FlywheelIO {
     override fun setVelocityRpm(rpm: Double) {
+        /**
+         * Documentation for error
+         */
         val error = rpm - sim.flywheelSim.velocityRpm
         sim.simFlywheelVoltage = (error * 0.003).coerceIn(-12.0, 12.0)
     }

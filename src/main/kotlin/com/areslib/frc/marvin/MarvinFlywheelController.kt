@@ -18,21 +18,36 @@ class MarvinFlywheelController(private val store: Store) {
             updateCurrent(target)
         }
     }
+    /**
+     * Documentation for flywheelRPM
+     */
 
     val flywheelRPM: Double
         get() = store.state.superstructure.marvin.flywheel.velocityRpm
+    /**
+     * Documentation for flywheelTargetRPM
+     */
 
     val flywheelTargetRPM: Double
         get() = store.state.superstructure.marvin.flywheel.targetVelocityRpm
+    /**
+     * Documentation for spinUp
+     */
 
     fun spinUp(targetRpm: Double) {
         dispatchOnChange(lastFlywheelRpm, targetRpm, ::SetFlywheelSpeed) { lastFlywheelRpm = it }
         dispatchOnChange(lastFlywheelActive, true, ::SetFlywheelActive) { lastFlywheelActive = it }
     }
+    /**
+     * Documentation for stop
+     */
 
     fun stop() {
         dispatchOnChange(lastFlywheelActive, false, ::SetFlywheelActive) { lastFlywheelActive = it }
     }
+    /**
+     * Documentation for isRpmAligned
+     */
 
     fun isRpmAligned(targetRpm: Double): Boolean {
         return kotlin.math.abs(flywheelRPM - targetRpm) < 150.0

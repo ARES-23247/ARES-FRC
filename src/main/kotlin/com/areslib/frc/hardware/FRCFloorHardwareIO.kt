@@ -22,6 +22,9 @@ class FRCFloorHardwareIO(
         motor.optimizeBusUtilization()
         floorVelocity.setUpdateFrequency(20.0)
         floorCurrent.setUpdateFrequency(10.0)
+        /**
+         * Documentation for config
+         */
 
         val config = com.ctre.phoenix6.configs.TalonFXConfiguration()
         config.Slot0.kP = 0.5

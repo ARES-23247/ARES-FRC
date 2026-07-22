@@ -9,6 +9,9 @@ import edu.wpi.first.wpilibj.RobotBase
  * change the parameter class to the startRobot call.
  */
 object Main {
+    /**
+     * Documentation for main
+     */
     @JvmStatic
     fun main(args: Array<String>) {
         RobotBase.startRobot { ARESRobot() }

@@ -28,13 +28,25 @@ object MarvinReducer {
         alpha = 5.0
     )
     private val cbfOutputThreadLocal = ThreadLocal.withInitial { CBFFilteredOutput() }
+    /**
+     * Documentation for reduce
+     */
 
     fun reduce(state: RobotState, action: RobotAction): RobotState {
         // First run standard core reducer (handles drive, vision, path, costmap, and generic FSM)
+        /**
+         * Documentation for nextState
+         */
         var nextState = rootReducer(state, action)
 
         // Then apply Marvin specific state updates
+        /**
+         * Documentation for currentMarvin
+         */
         val currentMarvin = nextState.superstructure.marvin
+        /**
+         * Documentation for nextMarvin
+         */
         val nextMarvin = when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
@@ -59,6 +71,9 @@ object MarvinReducer {
                 )
             }
             is SuperstructureSensorUpdate -> {
+                /**
+                 * Documentation for updatedMarvin
+                 */
                 var updatedMarvin = currentMarvin.copy(
                     flywheel = currentMarvin.flywheel.copy(velocityRpm = action.flywheelRpm),
                     cowl = currentMarvin.cowl.copy(angleRotations = action.cowlAngleRotations),
@@ -69,6 +84,9 @@ object MarvinReducer {
                 )
 
                 if (updatedMarvin.slamtakeActive) {
+                    /**
+                     * Documentation for elapsed
+                     */
                     val elapsed = (action.timestampMs - updatedMarvin.slamtakeStartTimeMs) / 1000.0
                     updatedMarvin = when {
                         elapsed < 0.5 -> {
@@ -112,8 +130,17 @@ object MarvinReducer {
     }
 
     private fun enforceSafetyInterlocks(state: SuperstructureState): SuperstructureState {
+        /**
+         * Documentation for marvin
+         */
         val marvin = state.marvin
+        /**
+         * Documentation for cbfOutput
+         */
         val cbfOutput = cbfOutputThreadLocal.get()
+        /**
+         * Documentation for activeC
+         */
         val activeC = if (marvin.climber.extensionMeters > 0.005 || marvin.climber.targetExtensionMeters > 0.005) 45.0 else 0.0
         cbf.filter(
             x1Target = marvin.intake.targetAngleDegrees,
@@ -124,8 +151,14 @@ object MarvinReducer {
             cOverride = activeC,
             outBuffer = cbfOutput
         )
+        /**
+         * Documentation for finalIntake
+         */
 
         var finalIntake = marvin.intake
+        /**
+         * Documentation for finalClimber
+         */
         var finalClimber = marvin.climber
 
         if (cbfOutput.x1Filtered != marvin.intake.targetAngleDegrees) {
@@ -144,6 +177,9 @@ object MarvinReducer {
         if (finalIntake === marvin.intake && finalClimber === marvin.climber) {
             return state
         }
+        /**
+         * Documentation for updatedMarvin
+         */
         val updatedMarvin = marvin.copy(intake = finalIntake, climber = finalClimber)
         return state.copy(custom = updatedMarvin)
     }

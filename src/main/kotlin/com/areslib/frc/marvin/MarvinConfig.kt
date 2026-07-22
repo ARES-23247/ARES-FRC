@@ -1,8 +1,14 @@
 package com.areslib.frc.marvin
 
 import com.areslib.control.assist.ShotConfig
+/**
+ * Documentation for MarvinConfig
+ */
 
 object MarvinConfig {
+    /**
+     * Documentation for SHOT_CONFIG
+     */
     val SHOT_CONFIG = ShotConfig(
         shooterOffsetX = -0.044704,
         shooterOffsetY = -0.055626,

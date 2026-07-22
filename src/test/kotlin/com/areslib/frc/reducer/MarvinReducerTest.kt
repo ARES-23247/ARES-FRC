@@ -5,16 +5,25 @@ import com.areslib.state.SuperstructureState
 import com.areslib.frc.marvin.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+/**
+ * Documentation for MarvinReducerTest
+ */
 
 class MarvinReducerTest {
 
     @Test
     fun `test SetClimberExtension action updates climber target`() {
+        /**
+         * Documentation for initialState
+         */
         val initialState = RobotState(
             superstructure = SuperstructureState(custom = MarvinState())
         )
         
         // 1. If intake is stowed (pivotAngleDegrees = 0.0), target extension should be clamped to 0.0
+        /**
+         * Documentation for statePivotStowed
+         */
         val statePivotStowed = MarvinReducer.reduce(
             initialState,
             SetClimberExtension(0.25, 1000L)
@@ -22,6 +31,9 @@ class MarvinReducerTest {
         assertEquals(0.0, statePivotStowed.superstructure.marvin.climber.targetExtensionMeters, "Climber extension must be clamped to 0.0 when pivot is stowed")
 
         // 2. If intake is deployed (pivotAngleDegrees = 90.0), target extension should be set correctly
+        /**
+         * Documentation for statePivotDeployed
+         */
         val statePivotDeployed = RobotState(
             superstructure = SuperstructureState().copy(
                 custom = MarvinState(
@@ -29,6 +41,9 @@ class MarvinReducerTest {
                 )
             )
         )
+        /**
+         * Documentation for statePivotDeployedUpdated
+         */
         val statePivotDeployedUpdated = MarvinReducer.reduce(
             statePivotDeployed,
             SetClimberExtension(0.25, 1000L)
@@ -39,6 +54,9 @@ class MarvinReducerTest {
     @Test
     fun `test coordinated interlocks reciprocal safety boundaries`() {
         // If climber target or physical extension > 0.02, intake pivot target angle must be >= 45.0
+        /**
+         * Documentation for statePivotStowed
+         */
         val statePivotStowed = RobotState(
             superstructure = SuperstructureState().copy(
                 custom = MarvinState(
@@ -48,6 +66,9 @@ class MarvinReducerTest {
         )
 
         // When climber is physically extended (sensor update)
+        /**
+         * Documentation for stateExtendedSensor
+         */
         val stateExtendedSensor = MarvinReducer.reduce(
             statePivotStowed,
             SuperstructureSensorUpdate(
@@ -63,6 +84,9 @@ class MarvinReducerTest {
         assertTrue(stateExtendedSensor.superstructure.marvin.intake.isDeployed)
 
         // When climber target is extended
+        /**
+         * Documentation for statePivotDeployed
+         */
         val statePivotDeployed = RobotState(
             superstructure = SuperstructureState().copy(
                 custom = MarvinState(
@@ -70,11 +94,17 @@ class MarvinReducerTest {
                 )
             )
         )
+        /**
+         * Documentation for stateClimberTargetExtended
+         */
         val stateClimberTargetExtended = MarvinReducer.reduce(
             statePivotDeployed,
             SetClimberExtension(0.1, 1000L)
         )
         // Now if we try to command intake pivot stowed (SetIntakePivot(false) -> targetAngleDegrees = 0.0)
+        /**
+         * Documentation for statePivotStowAction
+         */
         val statePivotStowAction = MarvinReducer.reduce(
             stateClimberTargetExtended,
             SetIntakePivot(deployed = false, 1100L)
@@ -85,52 +115,85 @@ class MarvinReducerTest {
 
     @Test
     fun `test all basic marvin setter actions`() {
+        /**
+         * Documentation for initialState
+         */
         val initialState = RobotState(
             superstructure = SuperstructureState(custom = MarvinState())
         )
 
         // SetFlywheelSpeed
+        /**
+         * Documentation for stateFlywheel
+         */
         val stateFlywheel = MarvinReducer.reduce(initialState, SetFlywheelSpeed(3500.0, 1000L))
         assertEquals(3500.0, stateFlywheel.superstructure.marvin.flywheel.targetVelocityRpm)
 
         // SetCowlAngle
+        /**
+         * Documentation for stateCowl
+         */
         val stateCowl = MarvinReducer.reduce(initialState, SetCowlAngle(15.0, 1000L))
         assertEquals(15.0, stateCowl.superstructure.marvin.cowl.targetAngleRotations)
 
         // SetIntakePivot
+        /**
+         * Documentation for stateIntakePivot
+         */
         val stateIntakePivot = MarvinReducer.reduce(initialState, SetIntakePivot(true, 1000L))
         assertTrue(stateIntakePivot.superstructure.marvin.intake.isDeployed)
         assertEquals(90.0, stateIntakePivot.superstructure.marvin.intake.targetAngleDegrees)
 
         // SetIntakeRollers
+        /**
+         * Documentation for stateIntakeRollers
+         */
         val stateIntakeRollers = MarvinReducer.reduce(initialState, SetIntakeRollers(12.5, 1000L))
         assertEquals(12.5, stateIntakeRollers.superstructure.marvin.intake.targetRollerVelocityRps)
 
         // SetFeederSpeed
+        /**
+         * Documentation for stateFeeder
+         */
         val stateFeeder = MarvinReducer.reduce(initialState, SetFeederSpeed(8.0, 1000L))
         assertEquals(8.0, stateFeeder.superstructure.marvin.feeder.targetVelocityRps)
 
         // SetFloorSpeed
+        /**
+         * Documentation for stateFloor
+         */
         val stateFloor = MarvinReducer.reduce(initialState, SetFloorSpeed(9.5, 1000L))
         assertEquals(9.5, stateFloor.superstructure.marvin.floor.targetVelocityRps)
 
         // SetClimberVoltage
+        /**
+         * Documentation for stateClimberVoltage
+         */
         val stateClimberVoltage = MarvinReducer.reduce(initialState, SetClimberVoltage(11.0, 1000L))
         assertEquals(11.0, stateClimberVoltage.superstructure.marvin.climber.targetVoltage)
     }
 
     @Test
     fun `test slamtake state machine transitions`() {
+        /**
+         * Documentation for initialState
+         */
         val initialState = RobotState(
             superstructure = SuperstructureState(custom = MarvinState())
         )
 
         // 1. Start Slamtake
+        /**
+         * Documentation for stateSlamtakeStart
+         */
         val stateSlamtakeStart = MarvinReducer.reduce(initialState, StartSlamtake(1000L))
         assertTrue(stateSlamtakeStart.superstructure.marvin.slamtakeActive)
         assertEquals(1000L, stateSlamtakeStart.superstructure.marvin.slamtakeStartTimeMs)
 
         // 2. Sensor update: elapsed < 0.5s (e.g. 200ms -> 1200ms)
+        /**
+         * Documentation for stateElapsed0_2
+         */
         val stateElapsed0_2 = MarvinReducer.reduce(
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
@@ -150,6 +213,9 @@ class MarvinReducerTest {
         assertEquals(0.0, stateElapsed0_2.superstructure.marvin.feeder.targetVelocityRps)
 
         // 3. Sensor update: elapsed < 1.5s (e.g. 1.0s -> 2000ms)
+        /**
+         * Documentation for stateElapsed1_0
+         */
         val stateElapsed1_0 = MarvinReducer.reduce(
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
@@ -168,6 +234,9 @@ class MarvinReducerTest {
         assertEquals(10.0, stateElapsed1_0.superstructure.marvin.floor.targetVelocityRps)
 
         // 4. Sensor update: elapsed >= 1.5s (e.g. 2.0s -> 3000ms)
+        /**
+         * Documentation for stateElapsed2_0
+         */
         val stateElapsed2_0 = MarvinReducer.reduce(
             stateSlamtakeStart,
             SuperstructureSensorUpdate(
@@ -184,6 +253,9 @@ class MarvinReducerTest {
         assertEquals(0.0, stateElapsed2_0.superstructure.marvin.floor.targetVelocityRps)
 
         // 5. Stop Slamtake action
+        /**
+         * Documentation for stateSlamtakeStop
+         */
         val stateSlamtakeStop = MarvinReducer.reduce(stateSlamtakeStart, StopSlamtake(1500L))
         assertFalse(stateSlamtakeStop.superstructure.marvin.slamtakeActive)
     }

@@ -5,6 +5,9 @@ import com.areslib.frc.Dyn4jSimulation
 
 class SimulatedIntakeIO(private val sim: Dyn4jSimulation) : IntakeIO {
     override fun setPivotAngle(degrees: Double) {
+        /**
+         * Documentation for error
+         */
         val error = degrees - sim.intakePivotSim.angleDegrees
         sim.simIntakePivotVoltage = (error * 0.4).coerceIn(-12.0, 12.0)
     }

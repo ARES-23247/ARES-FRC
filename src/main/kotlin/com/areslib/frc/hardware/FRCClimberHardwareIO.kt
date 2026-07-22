@@ -30,6 +30,9 @@ class FRCClimberHardwareIO(
         motor.optimizeBusUtilization()
         climberPosition.setUpdateFrequency(50.0)
         climberCurrent.setUpdateFrequency(10.0)
+        /**
+         * Documentation for config
+         */
 
         val config = TalonFXConfiguration()
         
@@ -66,6 +69,9 @@ class FRCClimberHardwareIO(
     }
 
     override fun setTargetExtension(meters: Double) {
+        /**
+         * Documentation for targetRotations
+         */
         val targetRotations = meters * rotationsPerMeter
         motor.setControl(positionRequest.withPosition(targetRotations))
     }

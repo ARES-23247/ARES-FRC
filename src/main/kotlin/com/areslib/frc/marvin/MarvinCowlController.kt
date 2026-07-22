@@ -17,9 +17,15 @@ class MarvinCowlController(private val store: Store) {
             updateCurrent(target)
         }
     }
+    /**
+     * Documentation for cowlAngleRotations
+     */
 
     val cowlAngleRotations: Double
         get() = store.state.superstructure.marvin.cowl.angleRotations
+    /**
+     * Documentation for setCowlAngle
+     */
 
     fun setCowlAngle(degrees: Double) {
         dispatchOnChange(lastCowlAngle, degrees, ::SetCowlAngle) { lastCowlAngle = it }

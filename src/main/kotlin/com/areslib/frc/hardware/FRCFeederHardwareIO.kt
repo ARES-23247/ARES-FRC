@@ -20,6 +20,9 @@ class FRCFeederHardwareIO(
     init {
         motor.optimizeBusUtilization()
         feederCurrent.setUpdateFrequency(10.0)
+        /**
+         * Documentation for config
+         */
 
         val config = com.ctre.phoenix6.configs.TalonFXConfiguration()
         config.Slot0.kP = 1.0

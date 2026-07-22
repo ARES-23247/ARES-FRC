@@ -10,6 +10,9 @@ import com.areslib.frc.marvin.MarvinShooterSubsystem
 import com.areslib.pathing.Path
 import com.areslib.pathing.MutablePathPoint
 import com.areslib.frc.aresAlliance
+/**
+ * Documentation for FRCAutoOrchestrator
+ */
 
 class FRCAutoOrchestrator(
     private val robot: FrcSwerveRobot,
@@ -29,9 +32,15 @@ class FRCAutoOrchestrator(
 
     private val targetPoseScratch = DoubleArray(3)
     private val scratchPathPoint = MutablePathPoint()
+    /**
+     * Documentation for autonomousInit
+     */
 
     fun autonomousInit() {
         try {
+            /**
+             * Documentation for path
+             */
             var path = com.areslib.frc.PathLoader.loadPath("SimPath")
             
             path = com.areslib.math.coordinate.AllianceMirroring.mirror(
@@ -42,6 +51,9 @@ class FRCAutoOrchestrator(
                 fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
             )
             activePath = path
+            /**
+             * Documentation for startPoint
+             */
 
             val startPoint = activePath?.points?.firstOrNull()
             if (startPoint != null) {
@@ -71,21 +83,39 @@ class FRCAutoOrchestrator(
         autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         autoDistance = 0.0
     }
+    /**
+     * Documentation for autonomousPeriodic
+     */
 
     fun autonomousPeriodic() {
         try {
+            /**
+             * Documentation for path
+             */
             val path = activePath ?: return
+            /**
+             * Documentation for dt
+             */
             val dt = 0.02
+            /**
+             * Documentation for currentPose
+             */
 
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
             path.sampleAtDistance(autoDistance, scratchPathPoint)
+            /**
+             * Documentation for targetPose
+             */
             
             val targetPose = com.areslib.math.geometry.Pose2d(
                 scratchPathPoint.x, 
                 scratchPathPoint.y, 
                 com.areslib.math.geometry.Rotation2d(scratchPathPoint.headingRad)
             )
+            /**
+             * Documentation for speeds
+             */
 
             val speeds = driveController.calculate(
                 currentPose = currentPose,
@@ -105,7 +135,13 @@ class FRCAutoOrchestrator(
 
             // Event markers
             for (i in 0 until path.events.size) {
+                /**
+                 * Documentation for event
+                 */
                 val event = path.events[i]
+                /**
+                 * Documentation for nextDistance
+                 */
                 val nextDistance = autoDistance + scratchPathPoint.velocityMps * dt
                 if (event.triggerDistanceMeters in autoDistance..nextDistance) {
                     println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
@@ -126,7 +162,13 @@ class FRCAutoOrchestrator(
             targetPoseScratch[1] = scratchPathPoint.y
             targetPoseScratch[2] = scratchPathPoint.headingRad
             robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
+            /**
+             * Documentation for dx
+             */
             val dx = scratchPathPoint.x - currentPose.x
+            /**
+             * Documentation for dy
+             */
             val dy = scratchPathPoint.y - currentPose.y
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
 
