@@ -7,6 +7,20 @@ import com.areslib.reducer.rootReducer
 import com.areslib.control.safety.ControlBarrierFunction
 import com.areslib.control.safety.CBFFilteredOutput
 
+/**
+ * Redux Reducer responsible for managing the Marvin superstructure state transitions.
+ *
+ * It processes actions dispatched by controllers to update the `SuperstructureState`
+ * and strictly enforces physical bounds using Control Barrier Functions (CBFs).
+ *
+ * **Physical Units & Conventions:**
+ * - Angles: Degrees ($^\circ$) for intake and cowl.
+ * - Distances: Meters ($m$) for climber extension.
+ * - Velocities: RPM for flywheel, RPS for rollers/feeders.
+ *
+ * **Performance Guarantees:**
+ * - Zero-GC Allocations. Avoids new object creations by copying existing states only when modified and utilizing thread-local buffers.
+ */
 object MarvinReducer {
     private val cbf = ControlBarrierFunction(
         m = 180.0, // 180 degrees per meter of extension (90 deg / 0.25 m max extension coerced to slope + clearance)

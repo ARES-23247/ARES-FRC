@@ -9,6 +9,23 @@ import com.areslib.math.geometry.ChassisSpeeds
 import com.areslib.control.assist.ShotResult
 import com.areslib.control.assist.ShotSetup
 
+/**
+ * Facade providing high-level operational commands for the shooter superstructure.
+ *
+ * This subsystem controller orchestrates multiple underlying controllers (flywheel,
+ * cowl, feeder) to deliver a single-responsibility interface for aiming and firing.
+ * 
+ * **Physical Units & Conventions:**
+ * - Translational velocities: Meters per second ($m/s$).
+ * - Angular velocities: Radians per second ($rad/s$).
+ * - Heading: CCW-positive radians ($rad$).
+ * - Angles/Rotations: Rotations or Degrees as specifically named.
+ *
+ * **Performance Guarantees:**
+ * - Zero-GC Allocations in hot teleop and auto periodic update loops.
+ *
+ * @param store The central Redux-style store containing global robot state.
+ */
 class MarvinShooterSubsystem(private val store: Store) {
     private val shotSetup = ShotSetup(MarvinConfig.SHOT_CONFIG)
     
