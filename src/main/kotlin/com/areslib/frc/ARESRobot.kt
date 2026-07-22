@@ -41,6 +41,9 @@ import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.Timer
 import edu.wpi.first.wpilibj.DriverStation
 
+import com.areslib.frc.robot.FRCAutoOrchestrator
+import com.areslib.frc.robot.FRCTeleOpDriveController
+
 val aresAlliance: com.areslib.state.Alliance
     get() = if (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red) {
         com.areslib.state.Alliance.RED
@@ -67,36 +70,17 @@ class ARESRobot : TimedRobot() {
     private val coPilotController = XboxController(1)
     private val controllerState = GamepadState()
     private val coPilotControllerState = GamepadState()
+
+    private lateinit var teleOpController: FRCTeleOpDriveController
+    private lateinit var autoOrchestrator: FRCAutoOrchestrator
+
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
-    private var lastBeached = false
-
-    private var intakeDeployed = false
-    private var driverYawOffset = 0.0
-
-    // Pre-allocated speaker constants
     private val RED_SPEAKER = Translation2d(11.915, 4.035)
     private val BLUE_SPEAKER = Translation2d(4.625, 4.035)
-    private var speakerTranslation = BLUE_SPEAKER
-    private val shotResult = ShotResult()
-
-    // Pre-allocated objects
-    private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
-    private val targetPosesBlue = arrayOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
-    private val targetPoseScratch = DoubleArray(3)
-    private val scratchPathPoint = com.areslib.pathing.MutablePathPoint()
 
     // Simulation timing
     private var lastSimTime = 0.0
 
-    // Autonomous
-    private var activePath: Path? = null
-    private var autoStartTime = 0.0
-    private var autoDistance = 0.0
-    private val driveController = HolonomicDriveController(
-        PIDController(4.0, 0.0, 0.1),
-        PIDController(4.0, 0.0, 0.1),
-        PIDController(3.0, 0.0, 0.0)
-    )
 
     override fun robotInit() {
         sim = Dyn4jSimulation(seed = 42L)
@@ -243,6 +227,14 @@ class ARESRobot : TimedRobot() {
                 12.6 // Fallback for simulation environments
             }
         }
+
+        teleOpController = FRCTeleOpDriveController(
+            robot, marvinShooter, marvinIntake, marvinClimber,
+            controller, coPilotController, controllerState, coPilotControllerState
+        )
+        autoOrchestrator = FRCAutoOrchestrator(
+            robot, sim, marvinShooter, marvinIntake
+        )
     }
 
     private var allianceCheckCounter = 0
@@ -254,7 +246,8 @@ class ARESRobot : TimedRobot() {
                 val alliance = allianceOpt.get()
                 if (alliance != cachedAlliance) {
                     cachedAlliance = alliance
-                    speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
+                    teleOpController.cachedAlliance = alliance
+                    teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
                 }
             }
         }
@@ -267,341 +260,21 @@ class ARESRobot : TimedRobot() {
     // ── Teleop ──
 
     override fun teleopInit() {
-        driverYawOffset = 0.0
+        teleOpController.teleopInit()
     }
 
     override fun teleopPeriodic() {
-        try {
-            val marvin = robot.store.state.superstructure.marvin
-
-            val rawForward = MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) * 4.5
-            val rawStrafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
-            
-            // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
-            val rotCos = Math.cos(driverYawOffset)
-            val rotSin = Math.sin(driverYawOffset)
-            val forward = rawForward * rotCos - rawStrafe * rotSin
-            val strafe = rawForward * rotSin + rawStrafe * rotCos
-            
-            var rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
-
-            val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
-
-            // ── Copilot Swerve Lock Override ──
-            if (coPilotControllerState.x) {
-                robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
-                return
-            }
-
-            // ── Gyro Reset (Driver Coordinate Alignment) ──
-            if (controllerState.back || coPilotControllerState.back) {
-                driverYawOffset = robot.store.state.drive.odometryHeading
-            }
-
-            // ── Driver / Copilot Shooting Triggers ──
-            val rtPressed = controllerState.rightTrigger > 0.5f
-            val rbPressed = controllerState.rightBumper
-            val bPressed = controllerState.b
-            val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
-            val copilotRbPressed = coPilotControllerState.rightBumper
-            var targetFlywheelActive = false
-            var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
-            var targetCowlAngle = marvin.cowl.targetAngleRotations
-
-            rotation = when {
-                rtPressed -> {
-                    // Shoot-on-the-Move (SOTM) Speaker Aiming
-                    marvinShooter.updateShootOnTheMove(
-                        currentPose = currentPose,
-                        targetTranslation = speakerTranslation,
-                        shotResult = shotResult
-                    )
-                }
-                rbPressed -> {
-                    // Aim and Shuttle
-                    val isRed = cachedAlliance == DriverStation.Alliance.Red
-                    val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
-
-                    marvinShooter.updateShootOnTheMove(
-                        currentPose = currentPose,
-                        targetTranslation = shuttleTarget,
-                        shotResult = shotResult,
-                        runFloorRollers = true
-                    )
-                }
-                bPressed -> {
-                    // Static Shoot (Speaker Aiming)
-                    marvinShooter.updateStaticShoot(
-                        currentPose = currentPose,
-                        targetTranslation = speakerTranslation
-                    )
-                }
-                else -> rotation
-            }
-
-            when {
-                copilotRtPressed -> {
-                    targetFlywheelActive = true
-                    targetFlywheelSpeed = 3350.0
-                    targetCowlAngle = 0.5
-                }
-                copilotRbPressed -> {
-                    targetFlywheelActive = true
-                    targetFlywheelSpeed = 3650.0
-                    targetCowlAngle = 1.1
-                }
-                else -> {
-                    targetFlywheelActive = false
-                }
-            }
-
-            // Dispatch flywheel & cowl changes only
-            if (!rtPressed && !rbPressed && !bPressed) {
-                val currentFlywheelActive = robot.store.state.superstructure.marvin.flywheelActive
-                if (currentFlywheelActive != targetFlywheelActive) {
-                    robot.store.dispatch(SetFlywheelActive(targetFlywheelActive, com.areslib.util.RobotClock.currentTimeMillis()))
-                }
-                if (targetFlywheelActive) {
-                    if (marvin.flywheel.targetVelocityRpm != targetFlywheelSpeed) {
-                        robot.store.dispatch(SetFlywheelSpeed(targetFlywheelSpeed))
-                    }
-                    if (marvin.cowl.targetAngleRotations != targetCowlAngle) {
-                        robot.store.dispatch(SetCowlAngle(targetCowlAngle))
-                    }
-                }
-            }
-
-            // Apply drive command
-            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
-
-            // ── A Button: Start Slamtake Sequence ──
-            val aPressed = controllerState.a
-            val isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
-            if (aPressed && !isSlamtakeActive) {
-                robot.store.dispatch(StartSlamtake())
-            }
-
-            // ── Left Bumper: Unjam ──
-            val lbPressed = controllerState.leftBumper
-
-            // ── Left Trigger: Intake/Feeder active run ──
-            val ltPressed = controllerState.leftTrigger > 0.5f
-            val copilotLtPressed = coPilotControllerState.leftTrigger > 0.5f
-
-            // ── POV Left/Right: Manual Intake Deploy Override ──
-            when {
-                controllerState.dpadRight -> intakeDeployed = true
-                controllerState.dpadLeft -> intakeDeployed = false
-            }
-
-            // Dispatch states according to pilot control priorities
-            var targetPivot = intakeDeployed
-            var targetIntakeRollers = 0.0
-            var targetFloorSpeed = 0.0
-            var targetFeederSpeed = 0.0
-
-            when {
-                lbPressed -> {
-                    // Unjam sequence takes top priority
-                    if (isSlamtakeActive) {
-                        robot.store.dispatch(StopSlamtake())
-                    }
-                    targetPivot = true
-                    targetIntakeRollers = -5.0
-                    targetFloorSpeed = -5.0
-                    targetFeederSpeed = -5.0
-                }
-                isSlamtakeActive -> {
-                    // Handled inside MarvinReducer! We do not mutate targets manually here
-                }
-                ltPressed -> {
-                    // Active manual intake
-                    targetPivot = true
-                    targetIntakeRollers = 10.0
-                    targetFloorSpeed = 10.0
-                    targetFeederSpeed = 10.0
-                }
-                copilotLtPressed -> {
-                    // Copilot manual feed override
-                    targetPivot = intakeDeployed
-                    targetIntakeRollers = 10.0
-                    targetFloorSpeed = 10.0
-                    targetFeederSpeed = 10.0
-                }
-                else -> {
-                    // Default stop everything
-                    targetPivot = intakeDeployed
-                    targetIntakeRollers = 0.0
-                    targetFloorSpeed = 0.0
-                    if (!rtPressed && !rbPressed && !bPressed) {
-                        targetFeederSpeed = 0.0
-                    } else {
-                        targetFeederSpeed = marvin.feeder.targetVelocityRps
-                    }
-                }
-            }
-
-            // Only dispatch changes to avoid hot-path Redux allocations
-            if (!isSlamtakeActive) {
-                if (marvin.intake.isDeployed != targetPivot) {
-                    robot.store.dispatch(SetIntakePivot(deployed = targetPivot))
-                }
-                if (marvin.intake.targetRollerVelocityRps != targetIntakeRollers) {
-                    robot.store.dispatch(SetIntakeRollers(targetIntakeRollers))
-                }
-                if (marvin.floor.targetVelocityRps != targetFloorSpeed) {
-                    robot.store.dispatch(SetFloorSpeed(targetFloorSpeed))
-                }
-                if (marvin.feeder.targetVelocityRps != targetFeederSpeed) {
-                    robot.store.dispatch(SetFeederSpeed(targetFeederSpeed))
-                }
-            }
-
-            // ── POV Up/Down: Climber Voltage (Driver or Copilot) ──
-            val povUp = controllerState.dpadUp || coPilotControllerState.dpadUp
-            val povDown = controllerState.dpadDown || coPilotControllerState.dpadDown
-            val targetClimberVoltage = when {
-                povUp -> 6.0
-                povDown -> -6.0
-                else -> 0.0
-            }
-            if (marvin.climber.targetVoltage != targetClimberVoltage) {
-                robot.store.dispatch(SetClimberVoltage(targetClimberVoltage))
-            }
-
-            // ── Beach / Traction Loss detection ──
-            val beached = robot.isBeached
-            robot.telemetry.putBoolean("Diagnostics/Beached", beached)
-            if (beached != lastBeached) {
-                lastBeached = beached
-                if (beached) {
-                    controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
-                    coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 1.0)
-                } else {
-                    controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
-                    coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
-                }
-            }
-        } catch (e: Throwable) {
-            System.err.println("ARESRobot: Exception in teleopPeriodic: ${e.message}")
-            e.printStackTrace()
-            robot.safeHardware()
-        }
+        teleOpController.teleopPeriodic()
     }
 
     // ── Autonomous ──
 
     override fun autonomousInit() {
-        try {
-            var path = PathLoader.loadPath("SimPath")
-            
-            path = com.areslib.math.coordinate.AllianceMirroring.mirror(
-                path,
-                aresAlliance,
-                com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
-                fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
-                fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
-            )
-            activePath = path
-
-            val startPoint = activePath?.points?.firstOrNull()
-            if (startPoint != null) {
-                sim.resetPose(startPoint.pose.x, startPoint.pose.y, startPoint.pose.heading.radians)
-                
-                // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
-                robot.swerveDrivetrainIO?.seedPose(
-                    com.areslib.math.geometry.Pose2d(
-                        startPoint.pose.x,
-                        startPoint.pose.y,
-                        com.areslib.math.geometry.Rotation2d(startPoint.pose.heading.radians)
-                    )
-                )
-
-                robot.store.dispatch(RobotAction.PoseUpdate(
-                    xMeters = startPoint.pose.x,
-                    yMeters = startPoint.pose.y,
-                    headingRadians = startPoint.pose.heading.radians,
-                    timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
-                    isReset = true
-                ))
-            }
-        } catch (e: Exception) {
-            println("ERROR: Failed to load autonomous path SimPath: ${e.message}")
-            activePath = null
-        }
-        autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-        autoDistance = 0.0
+        autoOrchestrator.autonomousInit()
     }
 
     override fun autonomousPeriodic() {
-        try {
-            // speakerTranslation is already kept in sync with cachedAlliance in robotPeriodic().
-            // No per-frame DriverStation.getAlliance() Optional or Translation2d allocation needed.
-
-            val path = activePath ?: return
-            val dt = 0.02
-
-            val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
-
-            path.sampleAtDistance(autoDistance, scratchPathPoint)
-            
-            val targetPose = com.areslib.math.geometry.Pose2d(
-                scratchPathPoint.x, 
-                scratchPathPoint.y, 
-                com.areslib.math.geometry.Rotation2d(scratchPathPoint.headingRad)
-            )
-
-            val speeds = driveController.calculate(
-                currentPose = currentPose,
-                targetPose = targetPose,
-                targetVelocityMps = scratchPathPoint.velocityMps,
-                targetHeading = targetPose.heading,
-                dtSeconds = dt
-            )
-
-            // HolonomicDriveController.calculate() already returns robot-relative speeds
-            // (via ChassisSpeeds.fromFieldRelativeSpeeds). Pass them directly with
-            // isFieldCentric = false to avoid a double rotation.
-            robot.drive.joystickDrive(
-                speeds.vxMetersPerSecond,
-                speeds.vyMetersPerSecond,
-                speeds.omegaRadiansPerSecond,
-                isFieldCentric = false
-            )
-
-            // Event markers
-            for (i in 0 until path.events.size) {
-                val event = path.events[i]
-                val nextDistance = autoDistance + scratchPathPoint.velocityMps * dt
-                if (event.triggerDistanceMeters in autoDistance..nextDistance) {
-                    println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
-                    robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
-                    when (event.eventName) {
-                        "FlywheelOn" -> marvinShooter.spinUp(4000.0)
-                        "IntakeDeploy" -> {
-                            marvinIntake.deploy()
-                            marvinIntake.setRollerSpeed(15.0)
-                        }
-                        "FeederShoot" -> marvinShooter.shoot()
-                    }
-                }
-            }
-
-            // Trajectory telemetry
-            targetPoseScratch[0] = scratchPathPoint.x
-            targetPoseScratch[1] = scratchPathPoint.y
-            targetPoseScratch[2] = scratchPathPoint.headingRad
-            robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
-            val dx = scratchPathPoint.x - currentPose.x
-            val dy = scratchPathPoint.y - currentPose.y
-            robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
-
-            autoDistance += scratchPathPoint.velocityMps * dt
-        } catch (e: Throwable) {
-            System.err.println("ARESRobot: Exception in autonomousPeriodic: ${e.message}")
-            e.printStackTrace()
-            robot.safeHardware()
-        }
+        autoOrchestrator.autonomousPeriodic()
     }
 
     // ── Simulation ──
