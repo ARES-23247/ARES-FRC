@@ -19,26 +19,23 @@ class FRCFeederHardwareIO(
 
     init {
         motor.optimizeBusUtilization()
-        feederCurrent.setUpdateFrequency(10.0)
-        /**
-         * Documentation for config
-         */
+        setUpdateFrequencies(10.0, feederCurrent)
 
-        val config = com.ctre.phoenix6.configs.TalonFXConfiguration()
-        config.Slot0.kP = 1.0
-        config.Slot0.kI = 0.0
-        config.Slot0.kD = 0.0
-        config.Slot0.kV = 0.48 // 12.0 / 25.0 (Max speed: 6000 RPM / 4 = 1500 RPM = 25 RPS)
+        listOf(motor).applyConfig {
+            Slot0.kP = 1.0
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kV = 0.48 // 12.0 / 25.0 (Max speed: 6000 RPM / 4 = 1500 RPM = 25 RPS)
 
-        config.MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
-        config.MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
-        config.Feedback.SensorToMechanismRatio = 4.0 // 4:1 feeder gear reduction
+            MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
+            MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
+            Feedback.SensorToMechanismRatio = 4.0 // 4:1 feeder gear reduction
 
-        config.CurrentLimits.SupplyCurrentLimitEnable = true
-        config.CurrentLimits.SupplyCurrentLimit = 60.0
-        config.CurrentLimits.StatorCurrentLimitEnable = true
-        config.CurrentLimits.StatorCurrentLimit = 100.0
-        motor.configurator.apply(config)
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.SupplyCurrentLimit = 60.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 100.0
+        }
     }
 
     override fun refresh() {

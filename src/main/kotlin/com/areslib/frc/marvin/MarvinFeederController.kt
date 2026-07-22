@@ -3,22 +3,10 @@ package com.areslib.frc.marvin
 import com.areslib.Store
 import com.areslib.action.RobotAction
 
-class MarvinFeederController(private val store: Store) {
+class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
     private var lastFeederSpeed = Double.NaN
     private var lastFloorSpeed = Double.NaN
     private var lastTransferActive: Boolean? = null
-
-    private inline fun <T> dispatchOnChange(
-        current: T?,
-        target: T,
-        actionFactory: (T, Long) -> RobotAction,
-        updateCurrent: (T) -> Unit
-    ) {
-        if (current != target) {
-            store.dispatch(actionFactory(target, com.areslib.util.RobotClock.currentTimeMillis()))
-            updateCurrent(target)
-        }
-    }
     /**
      * Documentation for transferActive
      */

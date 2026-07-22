@@ -49,73 +49,26 @@ class Dyn4jSimTelemetryPublisher {
          */
         val robotQZ = Math.sin(halfHeading)
 
+        fun publishSubsystemPose(key: String, dx: Double, dz: Double, pitchRad: Double) {
+            val halfPitch = pitchRad / 2.0
+            val pCos = Math.cos(halfPitch)
+            val pSin = Math.sin(halfPitch)
+            telemetry.putDoubleArray(key, doubleArrayOf(
+                robotX + dx * Math.cos(robotHeading),
+                robotY + dx * Math.sin(robotHeading),
+                dz,
+                robotQW * pCos, -robotQZ * pSin, robotQW * pSin, robotQZ * pCos
+            ))
+        }
+
         // ── Intake 3D Pose ──
-        /**
-         * Documentation for intakeAngleRad
-         */
-        val intakeAngleRad = Math.toRadians(intakeAngleDegrees)
-        /**
-         * Documentation for halfIntake
-         */
-        val halfIntake = intakeAngleRad / 2.0
-        /**
-         * Documentation for intCosY
-         */
-        val intCosY = Math.cos(halfIntake)
-        /**
-         * Documentation for intSinY
-         */
-        val intSinY = Math.sin(halfIntake)
-        telemetry.putDoubleArray("Robot/Superstructure/3D/Intake", doubleArrayOf(
-            robotX + 0.35 * Math.cos(robotHeading),
-            robotY + 0.35 * Math.sin(robotHeading),
-            0.2,
-            robotQW * intCosY, -robotQZ * intSinY, robotQW * intSinY, robotQZ * intCosY
-        ))
+        publishSubsystemPose("Robot/Superstructure/3D/Intake", 0.35, 0.2, Math.toRadians(intakeAngleDegrees))
 
         // ── Cowl 3D Pose ──
-        /**
-         * Documentation for cowlAngleRad
-         */
-        val cowlAngleRad = Math.toRadians(simCowlAngle)
-        /**
-         * Documentation for halfCowl
-         */
-        val halfCowl = cowlAngleRad / 2.0
-        /**
-         * Documentation for cowlCosY
-         */
-        val cowlCosY = Math.cos(halfCowl)
-        /**
-         * Documentation for cowlSinY
-         */
-        val cowlSinY = Math.sin(halfCowl)
-        telemetry.putDoubleArray("Robot/Superstructure/3D/Cowl", doubleArrayOf(
-            robotX - 0.2 * Math.cos(robotHeading),
-            robotY - 0.2 * Math.sin(robotHeading),
-            0.6,
-            robotQW * cowlCosY, -robotQZ * cowlSinY, robotQW * cowlSinY, robotQZ * cowlCosY
-        ))
+        publishSubsystemPose("Robot/Superstructure/3D/Cowl", -0.2, 0.6, Math.toRadians(simCowlAngle))
 
         // ── Flywheel 3D Pose ──
-        /**
-         * Documentation for halfFlywheel
-         */
-        val halfFlywheel = flywheelRotationAngle / 2.0
-        /**
-         * Documentation for flyCosY
-         */
-        val flyCosY = Math.cos(halfFlywheel)
-        /**
-         * Documentation for flySinY
-         */
-        val flySinY = Math.sin(halfFlywheel)
-        telemetry.putDoubleArray("Robot/Superstructure/3D/Flywheel", doubleArrayOf(
-            robotX - 0.1 * Math.cos(robotHeading),
-            robotY - 0.1 * Math.sin(robotHeading),
-            0.6,
-            robotQW * flyCosY, -robotQZ * flySinY, robotQW * flySinY, robotQZ * flyCosY
-        ))
+        publishSubsystemPose("Robot/Superstructure/3D/Flywheel", -0.1, 0.6, flywheelRotationAngle)
 
         // ── Fuel 3D Poses ──
         /**

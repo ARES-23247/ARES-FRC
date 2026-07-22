@@ -3,21 +3,9 @@ package com.areslib.frc.marvin
 import com.areslib.Store
 import com.areslib.action.RobotAction
 
-class MarvinFlywheelController(private val store: Store) {
+class MarvinFlywheelController(store: Store) : MarvinControllerBase(store) {
     private var lastFlywheelRpm = Double.NaN
     private var lastFlywheelActive: Boolean? = null
-
-    private inline fun <T> dispatchOnChange(
-        current: T?,
-        target: T,
-        actionFactory: (T, Long) -> RobotAction,
-        updateCurrent: (T) -> Unit
-    ) {
-        if (current != target) {
-            store.dispatch(actionFactory(target, com.areslib.util.RobotClock.currentTimeMillis()))
-            updateCurrent(target)
-        }
-    }
     /**
      * Documentation for flywheelRPM
      */

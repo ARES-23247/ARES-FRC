@@ -32,45 +32,37 @@ class FRCIntakeHardwareIO(
         pivotCurrent.setUpdateFrequency(10.0)
         rollerCurrent.setUpdateFrequency(10.0)
 
-        // Configure Pivot Motor with exact specs from SystemConstants.java
-        /**
-         * Documentation for pivotConfig
-         */
-        val pivotConfig = com.ctre.phoenix6.configs.TalonFXConfiguration()
-        pivotConfig.Slot0.kP = 1.0
-        pivotConfig.Slot0.kI = 0.0
-        pivotConfig.Slot0.kD = 0.0
-        pivotConfig.Slot0.kV = 0.38247 // 12.0 / 31.375 (Max speed: 7530 RPM / 4 = 1882.5 RPM = 31.375 RPS)
+        listOf(pivotMotor).applyConfig {
+            Slot0.kP = 1.0
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kV = 0.38247 // 12.0 / 31.375 (Max speed: 7530 RPM / 4 = 1882.5 RPM = 31.375 RPS)
 
-        pivotConfig.MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Brake
-        pivotConfig.MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
-        pivotConfig.Feedback.SensorToMechanismRatio = 4.0 // 4:1 pivot gear reduction
+            MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Brake
+            MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
+            Feedback.SensorToMechanismRatio = 4.0 // 4:1 pivot gear reduction
 
-        pivotConfig.CurrentLimits.SupplyCurrentLimitEnable = true
-        pivotConfig.CurrentLimits.SupplyCurrentLimit = 40.0
-        pivotConfig.CurrentLimits.StatorCurrentLimitEnable = true
-        pivotConfig.CurrentLimits.StatorCurrentLimit = 80.0
-        pivotMotor.configurator.apply(pivotConfig)
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.SupplyCurrentLimit = 40.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 80.0
+        }
 
-        // Configure Roller Motor with exact specs from SystemConstants.java
-        /**
-         * Documentation for rollerConfig
-         */
-        val rollerConfig = com.ctre.phoenix6.configs.TalonFXConfiguration()
-        rollerConfig.Slot0.kP = 0.5
-        rollerConfig.Slot0.kI = 2.0
-        rollerConfig.Slot0.kD = 0.0
-        rollerConfig.Slot0.kV = 0.0956 // 12.0 / 125.5 (Max speed: 7530 RPM = 125.5 RPS)
+        listOf(rollerMotor).applyConfig {
+            Slot0.kP = 0.5
+            Slot0.kI = 2.0
+            Slot0.kD = 0.0
+            Slot0.kV = 0.0956 // 12.0 / 125.5 (Max speed: 7530 RPM = 125.5 RPS)
 
-        rollerConfig.MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
-        rollerConfig.MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
-        rollerConfig.Feedback.SensorToMechanismRatio = 1.0
+            MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
+            MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
+            Feedback.SensorToMechanismRatio = 1.0
 
-        rollerConfig.CurrentLimits.SupplyCurrentLimitEnable = true
-        rollerConfig.CurrentLimits.SupplyCurrentLimit = 60.0
-        rollerConfig.CurrentLimits.StatorCurrentLimitEnable = true
-        rollerConfig.CurrentLimits.StatorCurrentLimit = 100.0
-        rollerMotor.configurator.apply(rollerConfig)
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.SupplyCurrentLimit = 60.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 100.0
+        }
     }
 
     override fun refresh() {

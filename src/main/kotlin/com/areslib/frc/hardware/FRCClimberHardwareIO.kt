@@ -28,40 +28,35 @@ class FRCClimberHardwareIO(
 
     init {
         motor.optimizeBusUtilization()
-        climberPosition.setUpdateFrequency(50.0)
-        climberCurrent.setUpdateFrequency(10.0)
-        /**
-         * Documentation for config
-         */
+        setUpdateFrequencies(50.0, climberPosition)
+        setUpdateFrequencies(10.0, climberCurrent)
 
-        val config = TalonFXConfiguration()
-        
-        // Neutral mode and inversions
-        config.MotorOutput.NeutralMode = NeutralModeValue.Brake
-        config.MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive
-        
-        // Gearing / Sensor scaling
-        config.Feedback.SensorToMechanismRatio = 80.0
+        listOf(motor).applyConfig {
+            // Neutral mode and inversions
+            MotorOutput.NeutralMode = NeutralModeValue.Brake
+            MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive
+            
+            // Gearing / Sensor scaling
+            Feedback.SensorToMechanismRatio = 80.0
 
-        // Supply and Stator current limits matching SystemConstants.java
-        config.CurrentLimits.SupplyCurrentLimit = 70.0
-        config.CurrentLimits.SupplyCurrentLimitEnable = true
-        config.CurrentLimits.StatorCurrentLimit = 120.0
-        config.CurrentLimits.StatorCurrentLimitEnable = true
+            // Supply and Stator current limits matching SystemConstants.java
+            CurrentLimits.SupplyCurrentLimit = 70.0
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 120.0
+            CurrentLimits.StatorCurrentLimitEnable = true
 
-        // Position closed-loop PID/feedforward gains
-        config.Slot0.kP = 1.0
-        config.Slot0.kI = 0.0
-        config.Slot0.kD = 0.0
-        config.Slot0.kV = 9.6 // 12.0 / 1.25 RPS (Max speed: 6000 RPM / 80 = 75 RPM = 1.25 RPS)
+            // Position closed-loop PID/feedforward gains
+            Slot0.kP = 1.0
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kV = 9.6 // 12.0 / 1.25 RPS (Max speed: 6000 RPM / 80 = 75 RPM = 1.25 RPS)
 
-        // Software soft limits
-        config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.73
-        config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true
-        config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
-        config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true
-
-        motor.configurator.apply(config)
+            // Software soft limits
+            SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.73
+            SoftwareLimitSwitch.ForwardSoftLimitEnable = true
+            SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
+            SoftwareLimitSwitch.ReverseSoftLimitEnable = true
+        }
     }
 
     override fun refresh() {
