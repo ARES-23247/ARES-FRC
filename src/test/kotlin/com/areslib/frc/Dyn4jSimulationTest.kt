@@ -15,10 +15,13 @@ class Dyn4jSimulationTest {
         val sim = Dyn4jSimulation(seed = 42L)
         val state = RobotState(superstructure = SuperstructureState(custom = com.areslib.frc.marvin.MarvinState(inventoryCount = 39)))
 
-        // Get private 'balls' field via reflection
-        val ballsField = Dyn4jSimulation::class.java.getDeclaredField("balls")
+        // Get private 'balls' field via reflection from physicsWorld
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
-        val ballsList = ballsField.get(sim) as MutableList<Body>
+        val ballsList = ballsField.get(physicsWorld) as MutableList<Body>
 
         // Assert that we have spawned balls
         assertTrue(ballsList.isNotEmpty())
@@ -91,10 +94,13 @@ class Dyn4jSimulationTest {
         assertNotNull(shootAction, "Should have triggered a shooting action")
         assertEquals(9, shootAction!!.count)
 
-        // Check private 'flyingBalls' list via reflection
-        val flyingField = Dyn4jSimulation::class.java.getDeclaredField("flyingBalls")
+        // Check private 'flyingBalls' list via reflection from physicsWorld
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
-        val flyingList = flyingField.get(sim) as List<FlyingBall>
+        val flyingList = flyingField.get(physicsWorld) as List<FlyingBall>
 
         assertEquals(1, flyingList.size, "Exactly one ball should be flying in 2.5D space")
         val fb = flyingList[0]
@@ -109,15 +115,18 @@ class Dyn4jSimulationTest {
         val sim = Dyn4jSimulation(seed = 42L)
         val state = RobotState()
 
-        // Get private 'flyingBalls' list via reflection
-        val flyingField = Dyn4jSimulation::class.java.getDeclaredField("flyingBalls")
+        // Get private 'flyingBalls' list via reflection from physicsWorld
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
-        val flyingList = flyingField.get(sim) as MutableList<FlyingBall>
+        val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
 
-        // Get private 'balls' field via reflection to count ground balls before scoring
-        val ballsField = Dyn4jSimulation::class.java.getDeclaredField("balls")
+        // Get private 'balls' field via reflection
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
-        val ballsList = ballsField.get(sim) as MutableList<Body>
+        val ballsList = ballsField.get(physicsWorld) as MutableList<Body>
         val initialGroundBalls = ballsList.size
 
         // Mock a flying ball inside the Blue Hub cylindrical scoring zone (center: 4.135, 4.0345)
@@ -156,10 +165,13 @@ class Dyn4jSimulationTest {
         val sim = Dyn4jSimulation(seed = 42L)
         val state = RobotState()
 
-        // Get private 'flyingBalls' list via reflection
-        val flyingField = Dyn4jSimulation::class.java.getDeclaredField("flyingBalls")
+        // Get private 'flyingBalls' list via reflection from physicsWorld
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
-        val flyingList = flyingField.get(sim) as MutableList<FlyingBall>
+        val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
 
         // Mock a ball almost landing on the ground (z = 0.05, radius is 0.0635)
         val landingBall = FlyingBall(
@@ -179,9 +191,9 @@ class Dyn4jSimulationTest {
         assertTrue(flyingList.isEmpty(), "Landed ball should be removed from flying list")
 
         // Get balls list to verify landing body translation and velocity
-        val ballsField = Dyn4jSimulation::class.java.getDeclaredField("balls")
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
-        val ballsList = ballsField.get(sim) as List<Body>
+        val ballsList = ballsField.get(physicsWorld) as List<Body>
 
         val dynamicBody = ballsList.last()
         assertEquals(6.0, dynamicBody.transform.translationX, 0.1, "Landed ball should match final X position")
@@ -196,14 +208,17 @@ class Dyn4jSimulationTest {
         val sim = Dyn4jSimulation(seed = 42L)
         val state = RobotState()
 
-        // Get private lists via reflection
-        val flyingField = Dyn4jSimulation::class.java.getDeclaredField("flyingBalls")
+        // Get private lists via reflection from physicsWorld
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val flyingField = physicsWorld::class.java.getDeclaredField("flyingBalls")
         flyingField.isAccessible = true
-        val flyingList = flyingField.get(sim) as MutableList<FlyingBall>
+        val flyingList = flyingField.get(physicsWorld) as MutableList<FlyingBall>
 
-        val ballsField = Dyn4jSimulation::class.java.getDeclaredField("balls")
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
         ballsField.isAccessible = true
-        val ballsList = ballsField.get(sim) as List<Body>
+        val ballsList = ballsField.get(physicsWorld) as List<Body>
 
         // Mock a flying ball
         flyingList.add(FlyingBall(3.0, 3.0, 2.5, 0.0, 0.0, 0.0))
