@@ -65,12 +65,16 @@ class FRCFlywheelHardwareIO(
 
 
 
-    override fun refresh() {
-        BaseStatusSignal.refreshAll(
+    private val signalsToRefresh by lazy {
+        arrayOf(
             leftMasterVelocity, rightMasterVelocity,
             leftMasterCurrent, leftFollowerCurrent, rightMasterCurrent, rightFollowerCurrent,
             leftMasterTemp, rightMasterTemp
         )
+    }
+
+    override fun refresh() {
+        BaseStatusSignal.refreshAll(*signalsToRefresh)
     }
 
     override fun setVelocityRpm(rpm: Double) {

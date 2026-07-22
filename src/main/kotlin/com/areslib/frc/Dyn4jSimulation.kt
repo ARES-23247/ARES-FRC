@@ -112,7 +112,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
     private val scratchActions = mutableListOf<RobotAction>()
     private val hubCenters = listOf(Vector2(4.135, 4.0345), Vector2(12.406, 4.0345))
-    private val random = java.util.Random()
+    private val random = java.util.Random(42L)
     /**
      * Documentation for step
      */

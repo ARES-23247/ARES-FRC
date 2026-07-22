@@ -101,31 +101,22 @@ class FRCAutoOrchestrator(
              * Documentation for currentPose
              */
 
-            val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
+            val estimator = robot.store.state.drive.poseEstimator
 
             path.sampleAtDistance(autoDistance, scratchPathPoint)
-            /**
-             * Documentation for targetPose
-             */
-            
-            val targetPose = com.areslib.math.geometry.Pose2d(
-                scratchPathPoint.x, 
-                scratchPathPoint.y, 
-                com.areslib.math.geometry.Rotation2d(scratchPathPoint.headingRad)
-            )
-            /**
-             * Documentation for speeds
-             */
 
-            val speeds = driveController.calculate(
-                currentPose = currentPose,
-                targetPose = targetPose,
+            val speeds = driveController.calculateDirect(
+                currentX = estimator.estimatedPoseX,
+                currentY = estimator.estimatedPoseY,
+                currentHeadingRad = estimator.estimatedPoseHeading,
+                targetX = scratchPathPoint.x,
+                targetY = scratchPathPoint.y,
+                targetHeadingRad = scratchPathPoint.headingRad,
                 targetVelocityMps = scratchPathPoint.velocityMps,
-                targetHeading = targetPose.heading,
                 dtSeconds = dt
             )
 
-            // HolonomicDriveController.calculate() already returns robot-relative speeds
+            // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
             robot.drive.joystickDrive(
                 speeds.vxMetersPerSecond,
                 speeds.vyMetersPerSecond,
@@ -165,11 +156,8 @@ class FRCAutoOrchestrator(
             /**
              * Documentation for dx
              */
-            val dx = scratchPathPoint.x - currentPose.x
-            /**
-             * Documentation for dy
-             */
-            val dy = scratchPathPoint.y - currentPose.y
+            val dx = scratchPathPoint.x - estimator.estimatedPoseX
+            val dy = scratchPathPoint.y - estimator.estimatedPoseY
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
 
             autoDistance += scratchPathPoint.velocityMps * dt
