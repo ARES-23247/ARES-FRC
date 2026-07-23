@@ -66,7 +66,9 @@ class FRCIntakeHardwareIO(
     }
 
     override fun refresh() {
-        BaseStatusSignal.refreshAll(pivotPosition, pivotCurrent, rollerCurrent)
+        pivotPosition.refresh()
+        pivotCurrent.refresh()
+        rollerCurrent.refresh()
     }
 
     override fun setPivotAngle(degrees: Double) {

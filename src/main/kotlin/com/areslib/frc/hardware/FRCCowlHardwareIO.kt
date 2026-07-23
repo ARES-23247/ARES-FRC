@@ -59,7 +59,8 @@ class FRCCowlHardwareIO(
     }
 
     override fun refresh() {
-        BaseStatusSignal.refreshAll(cowlPosition, cowlCurrent)
+        cowlPosition.refresh()
+        cowlCurrent.refresh()
     }
 
     override fun setTargetAngle(rotations: Double) {

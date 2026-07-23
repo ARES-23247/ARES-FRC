@@ -41,7 +41,8 @@ class FRCFloorHardwareIO(
     }
 
     override fun refresh() {
-        BaseStatusSignal.refreshAll(floorVelocity, floorCurrent)
+        floorVelocity.refresh()
+        floorCurrent.refresh()
     }
 
     override fun setAppliedVoltage(volts: Double) {

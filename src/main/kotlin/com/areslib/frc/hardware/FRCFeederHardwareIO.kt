@@ -39,7 +39,7 @@ class FRCFeederHardwareIO(
     }
 
     override fun refresh() {
-        BaseStatusSignal.refreshAll(feederCurrent)
+        feederCurrent.refresh()
     }
 
     override fun setAppliedVoltage(volts: Double) {

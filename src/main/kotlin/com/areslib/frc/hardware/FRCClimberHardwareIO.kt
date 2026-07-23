@@ -60,7 +60,8 @@ class FRCClimberHardwareIO(
     }
 
     override fun refresh() {
-        BaseStatusSignal.refreshAll(climberPosition, climberCurrent)
+        climberPosition.refresh()
+        climberCurrent.refresh()
     }
 
     override fun setTargetExtension(meters: Double) {
