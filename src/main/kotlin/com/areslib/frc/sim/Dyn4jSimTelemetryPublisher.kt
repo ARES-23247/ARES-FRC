@@ -10,9 +10,8 @@ import com.areslib.frc.FlyingBall
 
 class Dyn4jSimTelemetryPublisher {
     private var gamePieceData = DoubleArray(100 * 7)
-    /**
-     * Documentation for publishVisualization
-     */
+    private var activeFuelData = DoubleArray(100 * 7)
+    private val subsystemPoseBuf = DoubleArray(7)
 
     fun publishVisualization(
         state: RobotState,
@@ -23,42 +22,26 @@ class Dyn4jSimTelemetryPublisher {
         balls: List<Body>,
         flyingBalls: List<FlyingBall>
     ) {
-        /**
-         * Documentation for robotX
-         */
         val robotX = state.drive.odometryX
-        /**
-         * Documentation for robotY
-         */
         val robotY = state.drive.odometryY
-        /**
-         * Documentation for robotHeading
-         */
         val robotHeading = state.drive.odometryHeading
-        /**
-         * Documentation for halfHeading
-         */
 
         val halfHeading = robotHeading / 2.0
-        /**
-         * Documentation for robotQW
-         */
         val robotQW = Math.cos(halfHeading)
-        /**
-         * Documentation for robotQZ
-         */
         val robotQZ = Math.sin(halfHeading)
 
         fun publishSubsystemPose(key: String, dx: Double, dz: Double, pitchRad: Double) {
             val halfPitch = pitchRad / 2.0
             val pCos = Math.cos(halfPitch)
             val pSin = Math.sin(halfPitch)
-            telemetry.putDoubleArray(key, doubleArrayOf(
-                robotX + dx * Math.cos(robotHeading),
-                robotY + dx * Math.sin(robotHeading),
-                dz,
-                robotQW * pCos, -robotQZ * pSin, robotQW * pSin, robotQZ * pCos
-            ))
+            subsystemPoseBuf[0] = robotX + dx * Math.cos(robotHeading)
+            subsystemPoseBuf[1] = robotY + dx * Math.sin(robotHeading)
+            subsystemPoseBuf[2] = dz
+            subsystemPoseBuf[3] = robotQW * pCos
+            subsystemPoseBuf[4] = -robotQZ * pSin
+            subsystemPoseBuf[5] = robotQW * pSin
+            subsystemPoseBuf[6] = robotQZ * pCos
+            telemetry.putDoubleArray(key, subsystemPoseBuf)
         }
 
         // ── Intake 3D Pose ──
@@ -71,51 +54,34 @@ class Dyn4jSimTelemetryPublisher {
         publishSubsystemPose("Robot/Superstructure/3D/Flywheel", -0.1, 0.6, flywheelRotationAngle)
 
         // ── Fuel 3D Poses ──
-        /**
-         * Documentation for totalBallsCount
-         */
         val totalBallsCount = balls.size + flyingBalls.size
-        if (gamePieceData.size < totalBallsCount * 7) {
-            gamePieceData = DoubleArray(totalBallsCount * 7 * 2)
+        val neededSize = totalBallsCount * 7
+        if (activeFuelData.size != neededSize) {
+            activeFuelData = DoubleArray(neededSize)
         }
         for (i in balls.indices) {
-            /**
-             * Documentation for idx
-             */
             val idx = i * 7
-            gamePieceData[idx] = balls[i].transform.translationX
-            gamePieceData[idx + 1] = balls[i].transform.translationY
-            gamePieceData[idx + 2] = 0.0635
-            /**
-             * Documentation for theta
-             */
+            activeFuelData[idx] = balls[i].transform.translationX
+            activeFuelData[idx + 1] = balls[i].transform.translationY
+            activeFuelData[idx + 2] = 0.0635
             val theta = balls[i].transform.rotationAngle
-            gamePieceData[idx + 3] = kotlin.math.cos(theta / 2.0)
-            gamePieceData[idx + 4] = 0.0
-            gamePieceData[idx + 5] = 0.0
-            gamePieceData[idx + 6] = kotlin.math.sin(theta / 2.0)
+            activeFuelData[idx + 3] = kotlin.math.cos(theta / 2.0)
+            activeFuelData[idx + 4] = 0.0
+            activeFuelData[idx + 5] = 0.0
+            activeFuelData[idx + 6] = kotlin.math.sin(theta / 2.0)
         }
-        /**
-         * Documentation for groundOffset
-         */
         val groundOffset = balls.size * 7
         for (i in flyingBalls.indices) {
-            /**
-             * Documentation for fb
-             */
             val fb = flyingBalls[i]
-            /**
-             * Documentation for idx
-             */
             val idx = groundOffset + i * 7
-            gamePieceData[idx] = fb.x
-            gamePieceData[idx + 1] = fb.y
-            gamePieceData[idx + 2] = fb.z
-            gamePieceData[idx + 3] = 1.0 // qw
-            gamePieceData[idx + 4] = 0.0 // qx
-            gamePieceData[idx + 5] = 0.0 // qy
-            gamePieceData[idx + 6] = 0.0 // qz
+            activeFuelData[idx] = fb.x
+            activeFuelData[idx + 1] = fb.y
+            activeFuelData[idx + 2] = fb.z
+            activeFuelData[idx + 3] = 1.0 // qw
+            activeFuelData[idx + 4] = 0.0 // qx
+            activeFuelData[idx + 5] = 0.0 // qy
+            activeFuelData[idx + 6] = 0.0 // qz
         }
-        telemetry.putDoubleArray("Robot/FuelPoses", gamePieceData.copyOfRange(0, totalBallsCount * 7))
+        telemetry.putDoubleArray("Robot/FuelPoses", activeFuelData)
     }
 }
