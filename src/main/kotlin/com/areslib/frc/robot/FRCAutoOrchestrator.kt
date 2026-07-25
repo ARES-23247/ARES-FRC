@@ -23,6 +23,7 @@ class FRCAutoOrchestrator(
     private var activePath: Path? = null
     private var autoStartTime = 0.0
     private var autoDistance = 0.0
+    private var lastLoopTime = 0.0
     
     private val driveController = HolonomicDriveController(
         PIDController(4.0, 0.0, 0.1),
@@ -82,6 +83,7 @@ class FRCAutoOrchestrator(
         }
         autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         autoDistance = 0.0
+        lastLoopTime = autoStartTime
     }
     /**
      * Documentation for autonomousPeriodic
@@ -96,7 +98,9 @@ class FRCAutoOrchestrator(
             /**
              * Documentation for dt
              */
-            val dt = 0.02
+            val currentTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
+            val dt = currentTime - lastLoopTime
+            lastLoopTime = currentTime
             /**
              * Documentation for currentPose
              */

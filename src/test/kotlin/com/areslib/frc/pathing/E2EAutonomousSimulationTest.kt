@@ -158,7 +158,7 @@ class E2EAutonomousSimulationTest {
                     /**
                      * Documentation for timeNow
                      */
-                    val timeNow = System.currentTimeMillis()
+                    val timeNow = com.areslib.util.RobotClock.currentTimeMillis()
                     when (event.eventName) {
                         "FlywheelOn" -> {
                             flywheelOnTriggered = true

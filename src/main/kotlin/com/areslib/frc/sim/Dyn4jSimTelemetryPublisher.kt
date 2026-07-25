@@ -56,8 +56,8 @@ class Dyn4jSimTelemetryPublisher {
         // ── Fuel 3D Poses ──
         val totalBallsCount = balls.size + flyingBalls.size
         val neededSize = totalBallsCount * 7
-        if (activeFuelData.size != neededSize) {
-            activeFuelData = DoubleArray(neededSize)
+        if (neededSize > activeFuelData.size) {
+            activeFuelData = DoubleArray(neededSize + 70)
         }
         for (i in balls.indices) {
             val idx = i * 7
