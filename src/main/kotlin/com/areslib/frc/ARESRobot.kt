@@ -176,12 +176,15 @@ class ARESRobot : TimedRobot() {
              * Documentation for ctreDrivetrain
              */
 
+            val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
+            val activeOffsets = com.areslib.frc.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
+
             val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
                 frc.robot.generated.TunerConstants.DrivetrainConstants,
-                frc.robot.generated.TunerConstants.FrontLeft,
-                frc.robot.generated.TunerConstants.FrontRight,
-                frc.robot.generated.TunerConstants.BackLeft,
-                frc.robot.generated.TunerConstants.BackRight
+                frc.robot.generated.TunerConstants.createFrontLeft(edu.wpi.first.units.Units.Rotations.of(activeOffsets.frontLeft)),
+                frc.robot.generated.TunerConstants.createFrontRight(edu.wpi.first.units.Units.Rotations.of(activeOffsets.frontRight)),
+                frc.robot.generated.TunerConstants.createBackLeft(edu.wpi.first.units.Units.Rotations.of(activeOffsets.backLeft)),
+                frc.robot.generated.TunerConstants.createBackRight(edu.wpi.first.units.Units.Rotations.of(activeOffsets.backRight))
             )
             swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
             /**
@@ -250,6 +253,23 @@ class ARESRobot : TimedRobot() {
             initialState = initialState,
             reducer = ::composedReducer
         )
+
+        robot.store.actionListener = { action ->
+            if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
+                val encPositions = DoubleArray(4)
+                swerveIO?.getEncoderPositions(encPositions)
+                val newOffsets = com.areslib.frc.drivetrain.SwerveOffsetData(
+                    frontLeft = -encPositions[0],
+                    frontRight = -encPositions[1],
+                    backLeft = -encPositions[2],
+                    backRight = -encPositions[3]
+                )
+                com.areslib.frc.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
+                    newOffsets,
+                    robot.telemetryManager.dataLoggingTelemetry
+                )
+            }
+        }
 
         // 5. Create and register the MarvinSuperstructure subsystem
         /**

@@ -228,6 +228,43 @@ public class TunerConstants {
             kBackRightXPos, kBackRightYPos, kInvertRightSide, kBackRightSteerMotorInverted, kBackRightEncoderInverted
         );
 
+    public static com.areslib.frc.drivetrain.SwerveOffsetData getDefaultOffsets() {
+        return new com.areslib.frc.drivetrain.SwerveOffsetData(
+            kFrontLeftEncoderOffset.in(Rotations),
+            kFrontRightEncoderOffset.in(Rotations),
+            kBackLeftEncoderOffset.in(Rotations),
+            kBackRightEncoderOffset.in(Rotations)
+        );
+    }
+
+    public static SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> createFrontLeft(Angle offset) {
+        return ConstantCreator.createModuleConstants(
+            kFrontLeftSteerMotorId, kFrontLeftDriveMotorId, kFrontLeftEncoderId, offset,
+            kFrontLeftXPos, kFrontLeftYPos, kInvertLeftSide, kFrontLeftSteerMotorInverted, kFrontLeftEncoderInverted
+        );
+    }
+
+    public static SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> createFrontRight(Angle offset) {
+        return ConstantCreator.createModuleConstants(
+            kFrontRightSteerMotorId, kFrontRightDriveMotorId, kFrontRightEncoderId, offset,
+            kFrontRightXPos, kFrontRightYPos, kInvertRightSide, kFrontRightSteerMotorInverted, kFrontRightEncoderInverted
+        );
+    }
+
+    public static SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> createBackLeft(Angle offset) {
+        return ConstantCreator.createModuleConstants(
+            kBackLeftSteerMotorId, kBackLeftDriveMotorId, kBackLeftEncoderId, offset,
+            kBackLeftXPos, kBackLeftYPos, kInvertLeftSide, kBackLeftSteerMotorInverted, kBackLeftEncoderInverted
+        );
+    }
+
+    public static SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> createBackRight(Angle offset) {
+        return ConstantCreator.createModuleConstants(
+            kBackRightSteerMotorId, kBackRightDriveMotorId, kBackRightEncoderId, offset,
+            kBackRightXPos, kBackRightYPos, kInvertRightSide, kBackRightSteerMotorInverted, kBackRightEncoderInverted
+        );
+    }
+
 
 
 
