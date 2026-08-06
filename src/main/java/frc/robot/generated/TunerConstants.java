@@ -228,8 +228,8 @@ public class TunerConstants {
             kBackRightXPos, kBackRightYPos, kInvertRightSide, kBackRightSteerMotorInverted, kBackRightEncoderInverted
         );
 
-    public static com.areslib.frc.drivetrain.SwerveOffsetData getDefaultOffsets() {
-        return new com.areslib.frc.drivetrain.SwerveOffsetData(
+    public static com.areslib.drivetrain.SwerveOffsetData getDefaultOffsets() {
+        return new com.areslib.drivetrain.SwerveOffsetData(
             kFrontLeftEncoderOffset.in(Rotations),
             kFrontRightEncoderOffset.in(Rotations),
             kBackLeftEncoderOffset.in(Rotations),

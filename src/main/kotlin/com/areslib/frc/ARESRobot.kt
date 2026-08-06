@@ -177,7 +177,7 @@ class ARESRobot : TimedRobot() {
              */
 
             val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
-            val activeOffsets = com.areslib.frc.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
+            val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
 
             val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
                 frc.robot.generated.TunerConstants.DrivetrainConstants,
@@ -258,13 +258,13 @@ class ARESRobot : TimedRobot() {
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
                 val encPositions = DoubleArray(4)
                 swerveIO?.getEncoderPositions(encPositions)
-                val newOffsets = com.areslib.frc.drivetrain.SwerveOffsetData(
+                val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
                     frontLeft = -encPositions[0],
                     frontRight = -encPositions[1],
                     backLeft = -encPositions[2],
                     backRight = -encPositions[3]
                 )
-                com.areslib.frc.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
+                com.areslib.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
                     newOffsets,
                     robot.telemetryManager.dataLoggingTelemetry
                 )
