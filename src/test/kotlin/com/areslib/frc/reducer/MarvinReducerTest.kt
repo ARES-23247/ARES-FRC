@@ -80,8 +80,8 @@ class MarvinReducerTest {
                 timestampMs = 1000L
             )
         )
-        assertEquals(45.0, stateExtendedSensor.superstructure.marvin.intake.targetAngleDegrees, "Intake pivot target must be forced to 45.0 when climber is physically extended")
-        assertTrue(stateExtendedSensor.superstructure.marvin.intake.isDeployed)
+        assertEquals(10.8, stateExtendedSensor.superstructure.marvin.intake.targetAngleDegrees, 1e-5, "Intake pivot target must be bounded by continuous CBF when climber is physically extended")
+        assertFalse(stateExtendedSensor.superstructure.marvin.intake.isDeployed)
 
         // When climber target is extended
         /**
@@ -109,8 +109,8 @@ class MarvinReducerTest {
             stateClimberTargetExtended,
             SetIntakePivot(deployed = false, 1100L)
         )
-        assertEquals(45.0, statePivotStowAction.superstructure.marvin.intake.targetAngleDegrees, "Intake pivot target must be clamped to 45.0 when climber is commanded extended")
-        assertTrue(statePivotStowAction.superstructure.marvin.intake.isDeployed)
+        assertEquals(36.0, statePivotStowAction.superstructure.marvin.intake.targetAngleDegrees, 1e-5, "Intake pivot target must be clamped to 36.0 when climber is commanded extended to 0.1m")
+        assertFalse(statePivotStowAction.superstructure.marvin.intake.isDeployed)
     }
 
     @Test

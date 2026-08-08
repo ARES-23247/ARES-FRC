@@ -38,6 +38,6 @@ class MarvinFlywheelController(store: Store) : MarvinControllerBase(store) {
      */
 
     fun isRpmAligned(targetRpm: Double): Boolean {
-        return kotlin.math.abs(flywheelRPM - targetRpm) < 150.0
+        return targetRpm > 100.0 && kotlin.math.abs(flywheelRPM - targetRpm) < 150.0
     }
 }

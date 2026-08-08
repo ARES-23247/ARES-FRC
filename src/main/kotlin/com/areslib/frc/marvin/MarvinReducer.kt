@@ -74,21 +74,42 @@ object MarvinReducer {
                 /**
                  * Documentation for updatedMarvin
                  */
-                var updatedMarvin = currentMarvin.copy(
-                    flywheel = currentMarvin.flywheel.copy(velocityRpm = action.flywheelRpm),
-                    cowl = currentMarvin.cowl.copy(angleRotations = action.cowlAngleRotations),
-                    intake = currentMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle),
-                    feeder = currentMarvin.feeder.copy(gamePieceDetected = action.pieceDetected),
-                    floor = currentMarvin.floor.copy(velocityRps = action.floorVelocityRps),
-                    climber = currentMarvin.climber.copy(extensionMeters = action.climberExtensionMeters)
-                )
+                var updatedMarvin = currentMarvin
+                val eps = 1e-4
+
+                if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0) {
+                    updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(velocityRpm = action.flywheelRpm))
+                }
+                if (Math.abs(updatedMarvin.cowl.angleRotations - action.cowlAngleRotations) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(angleRotations = action.cowlAngleRotations))
+                }
+                if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - action.intakeAngle) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle))
+                }
+                if (updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
+                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected))
+                }
+                if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = action.floorVelocityRps))
+                }
+                if (Math.abs(updatedMarvin.climber.extensionMeters - action.climberExtensionMeters) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
+                }
 
                 if (updatedMarvin.slamtakeActive) {
+                    // TODO: Extract Slamtake sequence to MarvinSlamtakeController for Redux purity
                     /**
                      * Documentation for elapsed
                      */
                     val elapsed = (action.timestampMs - updatedMarvin.slamtakeStartTimeMs) / 1000.0
                     updatedMarvin = when {
+                        action.pieceDetected -> {
+                            updatedMarvin.copy(
+                                slamtakeActive = false,
+                                intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                                floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
+                            )
+                        }
                         elapsed < 0.5 -> {
                             updatedMarvin.copy(
                                 intake = updatedMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
@@ -124,9 +145,11 @@ object MarvinReducer {
         }
 
         // Finally, enforce Marvin specific safety interlocks (Control Barrier Function)
-        return nextState.copy(
-            superstructure = enforceSafetyInterlocks(nextState.superstructure)
-        )
+        val enforcedSuperstructure = enforceSafetyInterlocks(nextState.superstructure)
+        if (enforcedSuperstructure === nextState.superstructure) {
+            return nextState
+        }
+        return nextState.copy(superstructure = enforcedSuperstructure)
     }
 
     private fun enforceSafetyInterlocks(state: SuperstructureState): SuperstructureState {
@@ -141,7 +164,8 @@ object MarvinReducer {
         /**
          * Documentation for activeC
          */
-        val activeC = if (marvin.climber.extensionMeters > 0.005 || marvin.climber.targetExtensionMeters > 0.005) 45.0 else 0.0
+        val extension = kotlin.math.max(marvin.climber.extensionMeters, marvin.climber.targetExtensionMeters)
+        val activeC = (extension * 360.0).coerceIn(0.0, 45.0)  // Linear from 0° to 45° over 0.125 rotations
         cbf.filter(
             x1Target = marvin.intake.targetAngleDegrees,
             x2Target = marvin.climber.targetExtensionMeters,

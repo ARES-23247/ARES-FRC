@@ -115,6 +115,7 @@ data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
      * Documentation for climberExtensionMeters
      */
     val climberExtensionMeters: Double = 0.0,
+    val floorCurrentAmps: Double = 0.0,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 

@@ -39,6 +39,8 @@ class FRCTeleOpDriveController(
     private var driverYawOffset = 0.0
     private var intakeDeployed = false
     private var lastBeached = false
+    private var isEStopped = false
+    private var rumbleStartTimestampMs: Long = 0
     private val shotResult = ShotResult()
 
     // Pre-allocated objects
@@ -65,6 +67,7 @@ class FRCTeleOpDriveController(
      */
 
     fun teleopPeriodic() {
+        if (isEStopped) return
         try {
             /**
              * Documentation for marvin
@@ -313,10 +316,11 @@ class FRCTeleOpDriveController(
                     // Default stop everything
                     targetPivot = intakeDeployed
                     targetIntakeRollers = 0.0
-                    targetFloorSpeed = 0.0
                     if (!rtPressed && !rbPressed && !bPressed) {
+                        targetFloorSpeed = 0.0
                         targetFeederSpeed = 0.0
                     } else {
+                        targetFloorSpeed = marvin.floor.targetVelocityRps
                         targetFeederSpeed = marvin.feeder.targetVelocityRps
                     }
                 }
@@ -370,14 +374,19 @@ class FRCTeleOpDriveController(
                 if (beached) {
                     controller.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
                     coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
+                    rumbleStartTimestampMs = com.areslib.util.RobotClock.currentTimeMillis()
                 } else {
                     controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                     coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                 }
+            } else if (beached && com.areslib.util.RobotClock.currentTimeMillis() - rumbleStartTimestampMs > 1000) {
+                controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
+                coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
             }
         } catch (e: Throwable) {
             System.err.println("ARESRobot: Exception in teleopPeriodic: ${e.message}")
             e.printStackTrace()
+            isEStopped = true
             robot.safeHardware()
         }
     }

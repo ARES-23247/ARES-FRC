@@ -40,6 +40,8 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
         
         if (runFloorRollers) {
             dispatchOnChange(lastFloorSpeed, speed, ::SetFloorSpeed) { lastFloorSpeed = it }
+        } else {
+            dispatchOnChange(lastFloorSpeed, 0.0, ::SetFloorSpeed) { lastFloorSpeed = it }
         }
     }
 }

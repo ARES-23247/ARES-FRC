@@ -16,6 +16,7 @@ class MarvinCowlController(store: Store) : MarvinControllerBase(store) {
      */
 
     fun setCowlAngle(degrees: Double) {
-        dispatchOnChange(lastCowlAngle, degrees, ::SetCowlAngle) { lastCowlAngle = it }
+        val rotations = degrees / 360.0
+        dispatchOnChange(lastCowlAngle, rotations, ::SetCowlAngle) { lastCowlAngle = it }
     }
 }

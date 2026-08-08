@@ -311,14 +311,9 @@ class ARESRobot : TimedRobot() {
             telemetry.putNumber("Superstructure/Climber/ExtensionMeters", marvin.climber.extensionMeters)
             telemetry.putNumber("Superstructure/Climber/TargetVoltage", marvin.climber.targetVoltage)
             telemetry.putBoolean("Superstructure/SlamtakeActive", marvin.slamtakeActive)
-
-            // Log individual hardware devices via logTelemetry
-            flywheelIO.logTelemetry(telemetry, "Hardware/Motors/Flywheel")
-            cowlIO.logTelemetry(telemetry, "Hardware/Motors/Cowl")
-            intakeIO.logTelemetry(telemetry, "Hardware/Motors/Intake")
-            feederIO.logTelemetry(telemetry, "Hardware/Motors/Feeder")
-            floorIO.logTelemetry(telemetry, "Hardware/Motors/Floor")
-            climberIO.logTelemetry(telemetry, "Hardware/Motors/Climber")
+            if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
+                telemetry.putNumber("CAN2/BusUtilization", com.ctre.phoenix6.CANBus("CAN2").status.BusUtilization.toDouble())
+            }
         }
 
         lastSimTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
@@ -339,6 +334,8 @@ class ARESRobot : TimedRobot() {
         autoOrchestrator = FRCAutoOrchestrator(
             robot, sim, marvinShooter, marvinIntake
         )
+
+        addPeriodic({ robot.update(controllerState, coPilotControllerState) }, 0.02, 0.005)
     }
 
     private var allianceCheckCounter = 0
@@ -363,8 +360,14 @@ class ARESRobot : TimedRobot() {
         }
         controller.updateState(controllerState)
         coPilotController.updateState(coPilotControllerState)
-        // Unified update: reads sensors, writes outputs, publishes telemetry + CSV
-        robot.update(controllerState, coPilotControllerState)
+    }
+
+    override fun disabledInit() {
+        controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
+        coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
+    }
+
+    override fun disabledPeriodic() {
     }
 
     // ── Teleop ──

@@ -113,26 +113,8 @@ class MarvinShooterSubsystem(private val store: Store) {
          * Documentation for omega
          */
         val omega = driveState.angularVelocityRadiansPerSecond
-        /**
-         * Documentation for cos
-         */
-        
-        val cos = currentPose.heading.cos
-        /**
-         * Documentation for sin
-         */
-        val sin = currentPose.heading.sin
-        /**
-         * Documentation for fieldVx
-         */
-        val fieldVx = rx * cos - ry * sin
-        /**
-         * Documentation for fieldVy
-         */
-        val fieldVy = rx * sin + ry * cos
-        
-        scratchSpeeds.vxMetersPerSecond = fieldVx
-        scratchSpeeds.vyMetersPerSecond = fieldVy
+        scratchSpeeds.vxMetersPerSecond = rx
+        scratchSpeeds.vyMetersPerSecond = ry
         scratchSpeeds.omegaRadiansPerSecond = omega
         
         shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, shotResult)

@@ -66,14 +66,12 @@ class FRCFlywheelHardwareIO(
 
 
     override fun refresh() {
-        leftMasterVelocity.refresh()
-        rightMasterVelocity.refresh()
-        leftMasterCurrent.refresh()
-        leftFollowerCurrent.refresh()
-        rightMasterCurrent.refresh()
-        rightFollowerCurrent.refresh()
-        leftMasterTemp.refresh()
-        rightMasterTemp.refresh()
+        BaseStatusSignal.refreshAll(
+            leftMasterVelocity, rightMasterVelocity,
+            leftMasterCurrent, leftFollowerCurrent,
+            rightMasterCurrent, rightFollowerCurrent,
+            leftMasterTemp, rightMasterTemp
+        )
     }
 
     override fun setVelocityRpm(rpm: Double) {

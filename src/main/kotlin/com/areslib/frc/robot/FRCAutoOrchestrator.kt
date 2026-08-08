@@ -10,6 +10,7 @@ import com.areslib.frc.marvin.MarvinShooterSubsystem
 import com.areslib.pathing.Path
 import com.areslib.pathing.MutablePathPoint
 import com.areslib.frc.aresAlliance
+import com.areslib.frc.marvin.marvin
 /**
  * Documentation for FRCAutoOrchestrator
  */
@@ -24,10 +25,16 @@ class FRCAutoOrchestrator(
     private var autoStartTime = 0.0
     private var autoDistance = 0.0
     private var lastLoopTime = 0.0
+    private var lastOdomX = 0.0
+    private var lastOdomY = 0.0
+    
+    private val triggeredEvents = mutableSetOf<Int>()
+    private var isWaitingForCommand = false
+    private var isFirstPath = true
     
     private val driveController = HolonomicDriveController(
-        PIDController(4.0, 0.0, 0.1),
-        PIDController(4.0, 0.0, 0.1),
+        PIDController(4.0, 0.0, 0.0),
+        PIDController(4.0, 0.0, 0.0),
         PIDController(3.0, 0.0, 0.0)
     )
 
@@ -57,7 +64,7 @@ class FRCAutoOrchestrator(
              */
 
             val startPoint = activePath?.points?.firstOrNull()
-            if (startPoint != null) {
+            if (startPoint != null && isFirstPath) {
                 sim.resetPose(startPoint.pose.x, startPoint.pose.y, startPoint.pose.heading.radians)
                 
                 // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
@@ -76,12 +83,18 @@ class FRCAutoOrchestrator(
                     timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
                     isReset = true
                 ))
+                isFirstPath = false
             }
         } catch (e: Exception) {
             println("ERROR: Failed to load autonomous path SimPath: ${e.message}")
             activePath = null
         }
+        triggeredEvents.clear()
+        isWaitingForCommand = false
         autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
+        val estimator = robot.store.state.drive.poseEstimator
+        lastOdomX = estimator.estimatedPoseX
+        lastOdomY = estimator.estimatedPoseY
         autoDistance = 0.0
         lastLoopTime = autoStartTime
     }
@@ -117,14 +130,23 @@ class FRCAutoOrchestrator(
                 targetY = scratchPathPoint.y,
                 targetHeadingRad = scratchPathPoint.headingRad,
                 targetVelocityMps = scratchPathPoint.velocityMps,
+                pathTangentRadians = scratchPathPoint.tangentRadians,
                 dtSeconds = dt
             )
 
             // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
+            val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
+                edu.wpi.first.math.kinematics.ChassisSpeeds(
+                    speeds.vxMetersPerSecond,
+                    speeds.vyMetersPerSecond,
+                    speeds.omegaRadiansPerSecond
+                ),
+                dt
+            )
             robot.drive.joystickDrive(
-                speeds.vxMetersPerSecond,
-                speeds.vyMetersPerSecond,
-                speeds.omegaRadiansPerSecond,
+                discretizedSpeeds.vxMetersPerSecond,
+                discretizedSpeeds.vyMetersPerSecond,
+                discretizedSpeeds.omegaRadiansPerSecond,
                 isFieldCentric = false
             )
 
@@ -134,20 +156,31 @@ class FRCAutoOrchestrator(
                  * Documentation for event
                  */
                 val event = path.events[i]
-                /**
-                 * Documentation for nextDistance
-                 */
-                val nextDistance = autoDistance + scratchPathPoint.velocityMps * dt
-                if (event.triggerDistanceMeters in autoDistance..nextDistance) {
-                    println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
-                    robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
+                
+                if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
+                    var eventCompleted = true
                     when (event.eventName) {
                         "FlywheelOn" -> marvinShooter.spinUp(4000.0)
                         "IntakeDeploy" -> {
                             marvinIntake.deploy()
                             marvinIntake.setRollerSpeed(15.0)
                         }
-                        "FeederShoot" -> marvinShooter.shoot()
+                        "FeederShoot" -> {
+                            val marvinState = robot.store.state.superstructure.marvin
+                            val isRpmAligned = marvinState.flywheel.targetVelocityRpm > 100.0 && kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
+                            if (isRpmAligned) {
+                                marvinShooter.shoot()
+                                isWaitingForCommand = false
+                            } else {
+                                isWaitingForCommand = true
+                                eventCompleted = false
+                            }
+                        }
+                    }
+                    if (eventCompleted) {
+                        println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
+                        robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
+                        triggeredEvents.add(i)
                     }
                 }
             }
@@ -164,7 +197,13 @@ class FRCAutoOrchestrator(
             val dy = scratchPathPoint.y - estimator.estimatedPoseY
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
 
-            autoDistance += scratchPathPoint.velocityMps * dt
+            val actualDx = estimator.estimatedPoseX - lastOdomX
+            val actualDy = estimator.estimatedPoseY - lastOdomY
+            lastOdomX = estimator.estimatedPoseX
+            lastOdomY = estimator.estimatedPoseY
+            if (!isWaitingForCommand) {
+                autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, autoDistance)
+            }
         } catch (e: Throwable) {
             System.err.println("ARESRobot: Exception in autonomousPeriodic: ${e.message}")
             e.printStackTrace()

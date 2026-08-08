@@ -28,7 +28,7 @@ class FRCIntakeHardwareIO(
         pivotMotor.optimizeBusUtilization()
         rollerMotor.optimizeBusUtilization()
 
-        pivotPosition.setUpdateFrequency(50.0)
+        pivotPosition.setUpdateFrequency(100.0)
         pivotCurrent.setUpdateFrequency(10.0)
         rollerCurrent.setUpdateFrequency(10.0)
 

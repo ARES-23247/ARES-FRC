@@ -52,6 +52,7 @@ class MarvinSuperstructure(
             pieceDetected = feederIO.isBeamBroken,
             floorVelocityRps = floorIO.velocityRps,
             climberExtensionMeters = climberIO.extensionMeters,
+            floorCurrentAmps = floorIO.currentAmps,
             timestampMs = timestampMs
         ))
     }
@@ -61,7 +62,7 @@ class MarvinSuperstructure(
          * Documentation for marvin
          */
         val marvin = state.superstructure.marvin
-        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
+        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm)
         cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations)
         /**
          * Documentation for pivotAngle

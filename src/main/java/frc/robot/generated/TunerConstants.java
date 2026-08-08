@@ -49,7 +49,7 @@ public class TunerConstants {
     public static double DRIVE_KA = 0.0;
 
     public static double SPEED_AT_12_VOLTS = 5.85;
-    public static double SLIP_CURRENT_AMPS = 120.0;
+    public static double SLIP_CURRENT_AMPS = 60.0;
 
     private static final Slot0Configs steerGains = new Slot0Configs()
     .withKP(STEER_KP).withKI(STEER_KI).withKD(STEER_KD)
@@ -100,6 +100,8 @@ public class TunerConstants {
                 // stator current limit to help avoid brownouts without impacting performance.
                 .withStatorCurrentLimit(Amps.of(60))
                 .withStatorCurrentLimitEnable(true)
+                .withSupplyCurrentLimit(40)
+                .withSupplyCurrentLimitEnable(true)
         );
     private static final CANcoderConfiguration encoderInitialConfigs = new CANcoderConfiguration();
     // Configs for the Pigeon 2; leave this null to skip applying Pigeon 2 configs
@@ -119,7 +121,7 @@ public class TunerConstants {
 
     private static final double kDriveGearRatio = 5.2734375;
     private static final double kSteerGearRatio = 26.09090909090909;
-    private static final Distance kWheelRadius = Inches.of(2);
+    private static final Distance kWheelRadius = Inches.of(1.95);
 
     private static final boolean kInvertLeftSide = true;
     private static final boolean kInvertRightSide = false;
