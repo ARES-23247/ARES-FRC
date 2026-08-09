@@ -60,7 +60,7 @@ class FRCTeleOpDriveController(
      */
 
     fun teleopInit() {
-        driverYawOffset = 0.0
+        driverYawOffset = if (cachedAlliance == DriverStation.Alliance.Red) Math.PI else 0.0
     }
     /**
      * Documentation for teleopPeriodic

@@ -34,6 +34,10 @@ class MarvinShooterSubsystem(private val store: Store) {
     private val feederController = MarvinFeederController(store)
     
     private val scratchSpeeds = ChassisSpeeds(0.0, 0.0, 0.0)
+    
+    private var lastVx = 0.0
+    private var lastVy = 0.0
+    private var lastVTime = 0.0
     /**
      * Documentation for flywheelRPM
      */
@@ -113,8 +117,20 @@ class MarvinShooterSubsystem(private val store: Store) {
          * Documentation for omega
          */
         val omega = driveState.angularVelocityRadiansPerSecond
-        scratchSpeeds.vxMetersPerSecond = rx
-        scratchSpeeds.vyMetersPerSecond = ry
+        
+        val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
+        val dt = if (lastVTime > 0.0) now - lastVTime else 0.02
+        val ax = if (dt > 0.0) (rx - lastVx) / dt else 0.0
+        val ay = if (dt > 0.0) (ry - lastVy) / dt else 0.0
+        
+        lastVx = rx
+        lastVy = ry
+        lastVTime = now
+        
+        // Approximate delay of 0.2s for SOTM calculation
+        val dtDelay = 0.2
+        scratchSpeeds.vxMetersPerSecond = rx + ax * dtDelay
+        scratchSpeeds.vyMetersPerSecond = ry + ay * dtDelay
         scratchSpeeds.omegaRadiansPerSecond = omega
         
         shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, shotResult)

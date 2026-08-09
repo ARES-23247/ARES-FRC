@@ -22,12 +22,6 @@ import com.areslib.control.safety.CBFFilteredOutput
  * - Zero-GC Allocations. Avoids new object creations by copying existing states only when modified and utilizing thread-local buffers.
  */
 object MarvinReducer {
-    private val cbf = ControlBarrierFunction(
-        m = 180.0, // 180 degrees per meter of extension (90 deg / 0.25 m max extension coerced to slope + clearance)
-        c = 45.0,  // Minimum 45.0 deg deployment for any climber extension
-        alpha = 5.0
-    )
-    private val cbfOutputThreadLocal = ThreadLocal.withInitial { CBFFilteredOutput() }
     /**
      * Documentation for reduce
      */
@@ -92,6 +86,9 @@ object MarvinReducer {
                 if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
                     updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = action.floorVelocityRps))
                 }
+                if (Math.abs(updatedMarvin.floor.currentAmps - action.floorCurrentAmps) > 0.05) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = action.floorCurrentAmps))
+                }
                 if (Math.abs(updatedMarvin.climber.extensionMeters - action.climberExtensionMeters) > 0.005) {
                     updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
                 }
@@ -144,67 +141,6 @@ object MarvinReducer {
             )
         }
 
-        // Finally, enforce Marvin specific safety interlocks (Control Barrier Function)
-        val enforcedSuperstructure = enforceSafetyInterlocks(nextState.superstructure)
-        if (enforcedSuperstructure === nextState.superstructure) {
-            return nextState
-        }
-        return nextState.copy(superstructure = enforcedSuperstructure)
-    }
-
-    private fun enforceSafetyInterlocks(state: SuperstructureState): SuperstructureState {
-        /**
-         * Documentation for marvin
-         */
-        val marvin = state.marvin
-        /**
-         * Documentation for cbfOutput
-         */
-        val cbfOutput = cbfOutputThreadLocal.get()
-        /**
-         * Documentation for activeC
-         */
-        val extension = kotlin.math.max(marvin.climber.extensionMeters, marvin.climber.targetExtensionMeters)
-        val activeC = (extension * 360.0).coerceIn(0.0, 45.0)  // Linear from 0° to 45° over 0.125 rotations
-        cbf.filter(
-            x1Target = marvin.intake.targetAngleDegrees,
-            x2Target = marvin.climber.targetExtensionMeters,
-            x1Current = marvin.intake.pivotAngleDegrees,
-            x2Current = marvin.climber.extensionMeters,
-            dtSeconds = 1.0 / cbf.alpha, // Bypass velocity-rate-limiting for static setpoint actions while strictly maintaining safe invariant set boundaries
-            cOverride = activeC,
-            outBuffer = cbfOutput
-        )
-        /**
-         * Documentation for finalIntake
-         */
-
-        var finalIntake = marvin.intake
-        /**
-         * Documentation for finalClimber
-         */
-        var finalClimber = marvin.climber
-
-        if (cbfOutput.x1Filtered != marvin.intake.targetAngleDegrees) {
-            finalIntake = finalIntake.copy(
-                targetAngleDegrees = cbfOutput.x1Filtered,
-                isDeployed = cbfOutput.x1Filtered >= 45.0
-            )
-        }
-
-        if (cbfOutput.x2Filtered != marvin.climber.targetExtensionMeters) {
-            finalClimber = finalClimber.copy(
-                targetExtensionMeters = cbfOutput.x2Filtered
-            )
-        }
-
-        if (finalIntake === marvin.intake && finalClimber === marvin.climber) {
-            return state
-        }
-        /**
-         * Documentation for updatedMarvin
-         */
-        val updatedMarvin = marvin.copy(intake = finalIntake, climber = finalClimber)
-        return state.copy(custom = updatedMarvin)
+        return nextState
     }
 }

@@ -30,9 +30,7 @@ class FRCFlywheelHardwareIO(
     private val rightMasterTemp = rightMaster.deviceTemp
 
     init {
-        leftMaster.optimizeBusUtilization()
         leftFollower.optimizeBusUtilization()
-        rightMaster.optimizeBusUtilization()
         rightFollower.optimizeBusUtilization()
 
         setUpdateFrequencies(50.0, leftMasterVelocity, rightMasterVelocity)
@@ -49,6 +47,7 @@ class FRCFlywheelHardwareIO(
             Slot0.kI = 0.0
             Slot0.kD = 0.0
             Slot0.kV = 0.12 // 12.0 / 100.0 (Max speed: 6000 RPM / 60 = 100 RPS)
+            Slot0.kS = 0.15 // Conservative static friction compensation, should be tuned via sysid
 
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive

@@ -31,11 +31,13 @@ class FRCAutoOrchestrator(
     private val triggeredEvents = mutableSetOf<Int>()
     private var isWaitingForCommand = false
     private var isFirstPath = true
+    private var commandWaitStartTime = 0.0
+    private var previousDistance = 0.0
     
     private val driveController = HolonomicDriveController(
         PIDController(4.0, 0.0, 0.0),
         PIDController(4.0, 0.0, 0.0),
-        PIDController(3.0, 0.0, 0.0)
+        PIDController(3.0, 0.0, 0.0).apply { enableContinuousInput(-Math.PI, Math.PI) }
     )
 
     private val targetPoseScratch = DoubleArray(3)
@@ -46,10 +48,8 @@ class FRCAutoOrchestrator(
 
     fun autonomousInit() {
         try {
-            /**
-             * Documentation for path
-             */
-            var path = com.areslib.frc.PathLoader.loadPath("SimPath")
+            val selectedPath = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
+            var path = com.areslib.frc.PathLoader.loadPath(selectedPath)
             
             path = com.areslib.math.coordinate.AllianceMirroring.mirror(
                 path,
@@ -59,43 +59,46 @@ class FRCAutoOrchestrator(
                 fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
             )
             activePath = path
-            /**
-             * Documentation for startPoint
-             */
 
             val startPoint = activePath?.points?.firstOrNull()
             if (startPoint != null && isFirstPath) {
-                sim.resetPose(startPoint.pose.x, startPoint.pose.y, startPoint.pose.heading.radians)
+                val autoTable = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("Auto")
+                val startX = autoTable.getEntry("InitialPoseX").getDouble(startPoint.pose.x)
+                val startY = autoTable.getEntry("InitialPoseY").getDouble(startPoint.pose.y)
+                val startHeading = autoTable.getEntry("InitialPoseHeading").getDouble(startPoint.pose.heading.radians)
+                sim.resetPose(startX, startY, startHeading)
                 
                 // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
                 robot.swerveDrivetrainIO?.seedPose(
                     com.areslib.math.geometry.Pose2d(
-                        startPoint.pose.x,
-                        startPoint.pose.y,
-                        com.areslib.math.geometry.Rotation2d(startPoint.pose.heading.radians)
+                        startX,
+                        startY,
+                        com.areslib.math.geometry.Rotation2d(startHeading)
                     )
                 )
 
                 robot.store.dispatch(RobotAction.PoseUpdate(
-                    xMeters = startPoint.pose.x,
-                    yMeters = startPoint.pose.y,
-                    headingRadians = startPoint.pose.heading.radians,
+                    xMeters = startX,
+                    yMeters = startY,
+                    headingRadians = startHeading,
                     timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
                     isReset = true
                 ))
                 isFirstPath = false
             }
         } catch (e: Exception) {
-            println("ERROR: Failed to load autonomous path SimPath: ${e.message}")
+            println("ERROR: Failed to load autonomous path: ${e.message}")
             activePath = null
         }
         triggeredEvents.clear()
         isWaitingForCommand = false
+        commandWaitStartTime = 0.0
         autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         val estimator = robot.store.state.drive.poseEstimator
         lastOdomX = estimator.estimatedPoseX
         lastOdomY = estimator.estimatedPoseY
         autoDistance = 0.0
+        previousDistance = 0.0
         lastLoopTime = autoStartTime
     }
     /**
@@ -120,35 +123,42 @@ class FRCAutoOrchestrator(
 
             val estimator = robot.store.state.drive.poseEstimator
 
+            val totalLength = path.points.lastOrNull()?.distanceMeters ?: 0.0
+            autoDistance = kotlin.math.min(autoDistance, totalLength)
+
             path.sampleAtDistance(autoDistance, scratchPathPoint)
 
-            val speeds = driveController.calculateDirect(
-                currentX = estimator.estimatedPoseX,
-                currentY = estimator.estimatedPoseY,
-                currentHeadingRad = estimator.estimatedPoseHeading,
-                targetX = scratchPathPoint.x,
-                targetY = scratchPathPoint.y,
-                targetHeadingRad = scratchPathPoint.headingRad,
-                targetVelocityMps = scratchPathPoint.velocityMps,
-                pathTangentRadians = scratchPathPoint.tangentRadians,
-                dtSeconds = dt
-            )
+            if (autoDistance >= totalLength) {
+                robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+            } else {
+                val speeds = driveController.calculateDirect(
+                    currentX = estimator.estimatedPoseX,
+                    currentY = estimator.estimatedPoseY,
+                    currentHeadingRad = estimator.estimatedPoseHeading,
+                    targetX = scratchPathPoint.x,
+                    targetY = scratchPathPoint.y,
+                    targetHeadingRad = scratchPathPoint.headingRad,
+                    targetVelocityMps = scratchPathPoint.velocityMps,
+                    pathTangentRadians = scratchPathPoint.tangentRadians,
+                    dtSeconds = dt
+                )
 
-            // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
-            val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
-                edu.wpi.first.math.kinematics.ChassisSpeeds(
-                    speeds.vxMetersPerSecond,
-                    speeds.vyMetersPerSecond,
-                    speeds.omegaRadiansPerSecond
-                ),
-                dt
-            )
-            robot.drive.joystickDrive(
-                discretizedSpeeds.vxMetersPerSecond,
-                discretizedSpeeds.vyMetersPerSecond,
-                discretizedSpeeds.omegaRadiansPerSecond,
-                isFieldCentric = false
-            )
+                // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
+                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
+                    edu.wpi.first.math.kinematics.ChassisSpeeds(
+                        speeds.vxMetersPerSecond,
+                        speeds.vyMetersPerSecond,
+                        speeds.omegaRadiansPerSecond
+                    ),
+                    dt
+                )
+                robot.drive.joystickDrive(
+                    discretizedSpeeds.vxMetersPerSecond,
+                    discretizedSpeeds.vyMetersPerSecond,
+                    discretizedSpeeds.omegaRadiansPerSecond,
+                    isFieldCentric = false
+                )
+            }
 
             // Event markers
             for (i in 0 until path.events.size) {
@@ -157,7 +167,7 @@ class FRCAutoOrchestrator(
                  */
                 val event = path.events[i]
                 
-                if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
+                if (event.triggerDistanceMeters in previousDistance..autoDistance && i !in triggeredEvents) {
                     var eventCompleted = true
                     when (event.eventName) {
                         "FlywheelOn" -> marvinShooter.spinUp(4000.0)
@@ -171,9 +181,19 @@ class FRCAutoOrchestrator(
                             if (isRpmAligned) {
                                 marvinShooter.shoot()
                                 isWaitingForCommand = false
+                                commandWaitStartTime = 0.0
                             } else {
-                                isWaitingForCommand = true
-                                eventCompleted = false
+                                if (!isWaitingForCommand) {
+                                    commandWaitStartTime = currentTime
+                                }
+                                if (currentTime - commandWaitStartTime > 2.0) {
+                                    isWaitingForCommand = false
+                                    eventCompleted = true
+                                    commandWaitStartTime = 0.0
+                                } else {
+                                    isWaitingForCommand = true
+                                    eventCompleted = false
+                                }
                             }
                         }
                     }
@@ -184,6 +204,7 @@ class FRCAutoOrchestrator(
                     }
                 }
             }
+            previousDistance = autoDistance
 
             // Trajectory telemetry
             targetPoseScratch[0] = scratchPathPoint.x

@@ -30,6 +30,7 @@ import com.areslib.frc.hardware.FRCFlywheelHardwareIO
 import com.areslib.frc.hardware.FRCIntakeHardwareIO
 
 import edu.wpi.first.math.MathUtil
+import edu.wpi.first.math.VecBuilder
 
 import com.areslib.hardware.SubsystemIO
 import com.areslib.hardware.drive.SwerveHardwareIO
@@ -86,6 +87,7 @@ class ARESRobot : TimedRobot() {
 
 
     override fun robotInit() {
+        edu.wpi.first.wpilibj.Threads.setCurrentThreadPriority(true, 10)
         sim = Dyn4jSimulation(seed = 42L)
         /**
          * Documentation for isReal
@@ -181,6 +183,9 @@ class ARESRobot : TimedRobot() {
 
             val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
                 frc.robot.generated.TunerConstants.DrivetrainConstants,
+                0.0,
+                VecBuilder.fill(0.1, 0.1, 0.1),
+                VecBuilder.fill(0.9, 0.9, 0.9),
                 frc.robot.generated.TunerConstants.createFrontLeft(edu.wpi.first.units.Units.Rotations.of(activeOffsets.frontLeft)),
                 frc.robot.generated.TunerConstants.createFrontRight(edu.wpi.first.units.Units.Rotations.of(activeOffsets.frontRight)),
                 frc.robot.generated.TunerConstants.createBackLeft(edu.wpi.first.units.Units.Rotations.of(activeOffsets.backLeft)),
@@ -297,20 +302,23 @@ class ARESRobot : TimedRobot() {
              */
             val marvin = state.superstructure.marvin
             // Log Marvin state
-            telemetry.putNumber("Superstructure/Flywheel/VelocityRpm", marvin.flywheel.velocityRpm)
-            telemetry.putNumber("Superstructure/Flywheel/TargetVelocityRpm", marvin.flywheel.targetVelocityRpm)
-            telemetry.putNumber("Superstructure/Cowl/AngleRotations", marvin.cowl.angleRotations)
-            telemetry.putNumber("Superstructure/Cowl/TargetAngleRotations", marvin.cowl.targetAngleRotations)
-            telemetry.putNumber("Superstructure/Intake/PivotAngleDegrees", marvin.intake.pivotAngleDegrees)
-            telemetry.putNumber("Superstructure/Intake/TargetAngleDegrees", marvin.intake.targetAngleDegrees)
-            telemetry.putBoolean("Superstructure/Intake/IsDeployed", marvin.intake.isDeployed)
-            telemetry.putNumber("Superstructure/Intake/RollerVelocityRps", marvin.intake.rollerVelocityRps)
-            telemetry.putNumber("Superstructure/Feeder/VelocityRps", marvin.feeder.velocityRps)
-            telemetry.putBoolean("Superstructure/Feeder/PieceDetected", marvin.feeder.gamePieceDetected)
-            telemetry.putNumber("Superstructure/Floor/VelocityRps", marvin.floor.velocityRps)
-            telemetry.putNumber("Superstructure/Climber/ExtensionMeters", marvin.climber.extensionMeters)
-            telemetry.putNumber("Superstructure/Climber/TargetVoltage", marvin.climber.targetVoltage)
-            telemetry.putBoolean("Superstructure/SlamtakeActive", marvin.slamtakeActive)
+            val telemetryArray = doubleArrayOf(
+                marvin.flywheel.velocityRpm,
+                marvin.flywheel.targetVelocityRpm,
+                marvin.cowl.angleRotations,
+                marvin.cowl.targetAngleRotations,
+                marvin.intake.pivotAngleDegrees,
+                marvin.intake.targetAngleDegrees,
+                if (marvin.intake.isDeployed) 1.0 else 0.0,
+                marvin.intake.rollerVelocityRps,
+                marvin.feeder.velocityRps,
+                if (marvin.feeder.gamePieceDetected) 1.0 else 0.0,
+                marvin.floor.velocityRps,
+                marvin.climber.extensionMeters,
+                marvin.climber.targetVoltage,
+                if (marvin.slamtakeActive) 1.0 else 0.0
+            )
+            telemetry.putDoubleArray("Superstructure/PackedState", telemetryArray)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
                 telemetry.putNumber("CAN2/BusUtilization", com.ctre.phoenix6.CANBus("CAN2").status.BusUtilization.toDouble())
             }
@@ -335,7 +343,15 @@ class ARESRobot : TimedRobot() {
             robot, sim, marvinShooter, marvinIntake
         )
 
-        addPeriodic({ robot.update(controllerState, coPilotControllerState) }, 0.02, 0.005)
+        addPeriodic({
+            try {
+                robot.update(controllerState, coPilotControllerState)
+            } catch (e: Exception) {
+                DriverStation.reportError("Exception in periodic loop: ${e.message}", e.stackTrace)
+                robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+                robot.store.dispatch(com.areslib.frc.marvin.SetFlywheelSpeed(0.0))
+            }
+        }, 0.02, 0.005)
     }
 
     private var allianceCheckCounter = 0
