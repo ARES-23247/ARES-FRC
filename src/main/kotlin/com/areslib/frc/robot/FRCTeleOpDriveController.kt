@@ -36,7 +36,6 @@ class FRCTeleOpDriveController(
     private val controllerState: GamepadState,
     private val coPilotControllerState: GamepadState
 ) {
-    private var driverYawOffset = 0.0
     private var intakeDeployed = false
     private var lastBeached = false
     private var rumbleStartTimestampMs: Long = 0
@@ -59,7 +58,6 @@ class FRCTeleOpDriveController(
      */
 
     fun teleopInit() {
-        driverYawOffset = if (cachedAlliance == DriverStation.Alliance.Red) Math.PI else 0.0
     }
     /**
      * Documentation for teleopPeriodic
@@ -105,11 +103,6 @@ class FRCTeleOpDriveController(
             if (coPilotControllerState.x) {
                 robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
                 return
-            }
-
-            // ── Gyro Reset (Driver Coordinate Alignment) ──
-            if (controllerState.back || coPilotControllerState.back) {
-                driverYawOffset = robot.store.state.drive.odometryHeading
             }
 
             // ── Driver / Copilot Shooting Triggers ──
