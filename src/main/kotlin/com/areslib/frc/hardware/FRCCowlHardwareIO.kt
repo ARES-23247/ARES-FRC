@@ -1,5 +1,6 @@
 package com.areslib.frc.hardware
 
+import com.areslib.frc.marvin.MarvinConfig
 import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
@@ -40,7 +41,7 @@ class FRCCowlHardwareIO(
 
             // Software soft limits
             SoftwareLimitSwitch.ForwardSoftLimitEnable = true
-            SoftwareLimitSwitch.ForwardSoftLimitThreshold = 1.80
+            SoftwareLimitSwitch.ForwardSoftLimitThreshold = MarvinConfig.cowlMaxRotations
             SoftwareLimitSwitch.ReverseSoftLimitEnable = true
             SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
 

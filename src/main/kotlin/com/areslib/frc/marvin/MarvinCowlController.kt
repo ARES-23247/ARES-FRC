@@ -16,7 +16,7 @@ class MarvinCowlController(store: Store) : MarvinControllerBase(store) {
      */
 
     fun setCowlAngleRotations(rotations: Double) {
-        val clampedRotations = rotations.coerceIn(0.0, 2.0)
+        val clampedRotations = rotations.coerceIn(0.0, MarvinConfig.cowlMaxRotations)
         dispatchOnChange(lastCowlAngle, clampedRotations, ::SetCowlAngle) { lastCowlAngle = it }
     }
 }

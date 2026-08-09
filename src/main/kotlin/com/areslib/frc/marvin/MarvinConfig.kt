@@ -16,6 +16,15 @@ object MarvinConfig {
     const val FEEDER_SHOOT_SPEED_RPS = 10.0
 
     /**
+     * Maximum safe cowl/hood travel in mechanism rotations. Sourced by both the
+     * [MarvinCowlController] software clamp and the [FRCCowlHardwareIO] TalonFX forward
+     * soft limit so the controller clamp and the physical soft limit can never diverge
+     * (previously the controller allowed up to 2.0 while the soft limit stopped at 1.80,
+     * driving the motor into a sustained stall).
+     */
+    const val cowlMaxRotations = 1.80
+
+    /**
      * Documentation for SHOT_CONFIG
      */
     val SHOT_CONFIG = ShotConfig(
