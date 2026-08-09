@@ -173,14 +173,14 @@ task fetchOffsets {
     group = "ARES Swerve"
     doLast {
         def targetFile = file("src/main/deploy/swerve_offsets.json")
-        println "ARES Swerve: Fetching runtime swerve offsets from 10.23.24.2..."
+        println "ARES Swerve: Fetching runtime swerve offsets from 10.232.47.2..."
         try {
             exec {
-                commandLine "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "lvuser@10.23.24.2:/home/lvuser/swerve_offsets_runtime.json", targetFile.path
+                commandLine "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "lvuser@10.232.47.2:/home/lvuser/swerve_offsets_runtime.json", targetFile.path
             }
             println "ARES Swerve: Successfully fetched runtime swerve offsets to ${targetFile.path}!"
         } catch (Exception e) {
-            println "ARES Swerve: Failed to fetch offsets from 10.23.24.2. Deploy baseline intact. Error: ${e.message}"
+            println "ARES Swerve: Failed to fetch offsets from 10.232.47.2. Deploy baseline intact. Error: ${e.message}"
         }
     }
 }

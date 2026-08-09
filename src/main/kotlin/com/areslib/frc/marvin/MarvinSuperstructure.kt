@@ -91,13 +91,15 @@ class MarvinSuperstructure(
          */
 
         val targetFeederSpeed = marvin.feeder.targetVelocityRps
-        feederIO.setAppliedVoltage((targetFeederSpeed / 12.0) * 12.0 * scale)
+        val FEEDER_KV = 0.12
+        feederIO.setAppliedVoltage(FEEDER_KV * targetFeederSpeed * scale)
         /**
          * Documentation for targetFloorSpeed
          */
 
         val targetFloorSpeed = marvin.floor.targetVelocityRps
-        floorIO.setAppliedVoltage((targetFloorSpeed / 12.0) * 12.0 * scale)
+        val FLOOR_KV = 0.12
+        floorIO.setAppliedVoltage(FLOOR_KV * targetFloorSpeed * scale)
         /**
          * Documentation for targetClimberVoltage
          */

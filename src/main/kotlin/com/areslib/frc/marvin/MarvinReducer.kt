@@ -102,6 +102,8 @@ object MarvinReducer {
                     updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected, previousGamePieceDetected = wasDetected))
                     if (!wasDetected && action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(inventoryCount = updatedMarvin.inventoryCount + 1)
+                    } else if (wasDetected && !action.pieceDetected && updatedMarvin.transferActive) {
+                        updatedMarvin = updatedMarvin.copy(inventoryCount = (updatedMarvin.inventoryCount - 1).coerceAtLeast(0))
                     }
                 }
                 if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
@@ -121,20 +123,6 @@ object MarvinReducer {
                             intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
                             floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
                         )
-                    } else {
-                        val elapsedMs = action.timestampMs - updatedMarvin.slamtakeStartTimeMs
-                        if (elapsedMs >= 1500L) {
-                            updatedMarvin = updatedMarvin.copy(
-                                slamtakeActive = false,
-                                intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
-                            )
-                        } else if (elapsedMs >= 500L) {
-                            updatedMarvin = updatedMarvin.copy(
-                                intake = updatedMarvin.intake.copy(isDeployed = false, targetAngleDegrees = 0.0, targetRollerVelocityRps = 10.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 10.0)
-                            )
-                        }
                     }
                 }
                 updatedMarvin

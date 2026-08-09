@@ -427,7 +427,7 @@ class Dyn4jSimulationTest {
          */
         val poseArray = mockTelemetry.arrays["Robot/FuelPoses"]
         assertNotNull(poseArray)
-        assertEquals((ballsList.size + 1) * 7, poseArray!!.size)
+        assertEquals(700, poseArray!!.size, "Array should be the full pre-allocated size")
 
         // Verify the flying ball is packaged at the correct index at the end
         /**

@@ -82,10 +82,9 @@ class Dyn4jSimTelemetryPublisher {
             activeFuelData[idx + 5] = 0.0 // qy
             activeFuelData[idx + 6] = 0.0 // qz
         }
-        if (neededSize < activeFuelData.size) {
-            telemetry.putDoubleArray("Robot/FuelPoses", activeFuelData.copyOfRange(0, neededSize))
-        } else {
-            telemetry.putDoubleArray("Robot/FuelPoses", activeFuelData)
+        for (i in neededSize until activeFuelData.size) {
+            activeFuelData[i] = 0.0
         }
+        telemetry.putDoubleArray("Robot/FuelPoses", activeFuelData)
     }
 }

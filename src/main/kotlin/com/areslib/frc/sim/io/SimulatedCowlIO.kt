@@ -8,12 +8,13 @@ class SimulatedCowlIO(private val sim: Dyn4jSimulation) : CowlIO {
         /**
          * Documentation for error
          */
-        val error = rotations - sim.simCowlAngle
+        val targetDegrees = rotations * 32.0
+        val error = targetDegrees - sim.simCowlAngle
         sim.simCowlVoltage = (error * 0.5).coerceIn(-12.0, 12.0)
     }
     override fun setAppliedVoltage(volts: Double) {
         sim.simCowlVoltage = volts.coerceIn(-12.0, 12.0)
     }
-    override val angleRotations: Double get() = sim.simCowlAngle
+    override val angleRotations: Double get() = sim.simCowlAngle / 32.0
     override val currentAmps: Double get() = Math.abs(sim.simCowlVoltage) * 0.2
 }

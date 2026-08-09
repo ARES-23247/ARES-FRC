@@ -34,7 +34,7 @@ class FRCIntakeHardwareIO(
         rollerCurrent.setUpdateFrequency(10.0)
 
         listOf(pivotMotor).applyConfig {
-            Slot0.kP = 1.0
+            Slot0.kP = 24.0
             Slot0.kI = 0.0
             Slot0.kD = 0.0
             Slot0.kV = 0.38247 // 12.0 / 31.375 (Max speed: 7530 RPM / 4 = 1882.5 RPM = 31.375 RPS)

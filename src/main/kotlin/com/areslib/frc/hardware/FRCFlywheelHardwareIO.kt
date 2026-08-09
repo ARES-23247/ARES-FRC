@@ -42,7 +42,7 @@ class FRCFlywheelHardwareIO(
         rightFollower.setControl(Follower(rightMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed))
 
         // Enforce exact physical configurations matching SystemConstants.java
-        listOf(leftMaster, leftFollower, rightMaster, rightFollower).applyConfig {
+        listOf(leftMaster, leftFollower).applyConfig {
             Slot0.kP = 0.5
             Slot0.kI = 0.0
             Slot0.kD = 0.0
@@ -60,6 +60,27 @@ class FRCFlywheelHardwareIO(
             CurrentLimits.StatorCurrentLimitEnable = true
             CurrentLimits.StatorCurrentLimit = 120.0
         }
+        
+        listOf(rightMaster, rightFollower).applyConfig {
+            Slot0.kP = 0.5
+            Slot0.kI = 0.0
+            Slot0.kD = 0.0
+            Slot0.kV = 0.12 // 12.0 / 100.0 (Max speed: 6000 RPM / 60 = 100 RPS)
+            Slot0.kS = 0.15 // Conservative static friction compensation, should be tuned via sysid
+
+            MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
+            MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
+
+            Feedback.SensorToMechanismRatio = 1.0
+
+            Voltage.PeakReverseVoltage = 0.0 // Software lock reversal of flywheel
+            CurrentLimits.SupplyCurrentLimitEnable = true
+            CurrentLimits.SupplyCurrentLimit = 70.0
+            CurrentLimits.StatorCurrentLimitEnable = true
+            CurrentLimits.StatorCurrentLimit = 120.0
+        }
+
+
     }
 
 

@@ -184,7 +184,7 @@ data class MarvinState(
      * Documentation for isFlywheelAtSpeed
      */
     val isFlywheelAtSpeed: Boolean
-        get() = flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
+        get() = flywheel.targetVelocityRpm > 100.0 && flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
     /**
      * Documentation for withFlywheelSpeed
      */

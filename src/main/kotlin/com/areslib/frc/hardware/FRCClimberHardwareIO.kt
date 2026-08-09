@@ -46,7 +46,7 @@ class FRCClimberHardwareIO(
             CurrentLimits.StatorCurrentLimitEnable = true
 
             // Position closed-loop PID/feedforward gains
-            Slot0.kP = 1.0
+            Slot0.kP = 12.0
             Slot0.kI = 0.0
             Slot0.kD = 0.0
             Slot0.kV = 9.6 // 12.0 / 1.25 RPS (Max speed: 6000 RPM / 80 = 75 RPM = 1.25 RPS)

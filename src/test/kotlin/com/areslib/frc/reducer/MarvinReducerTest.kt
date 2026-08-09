@@ -221,14 +221,7 @@ class MarvinReducerTest {
          */
         val stateElapsed1_0 = MarvinReducer.reduce(
             stateSlamtakeStart,
-            SuperstructureSensorUpdate(
-                flywheelRpm = 0.0,
-                cowlAngleRotations = 0.0,
-                intakeAngle = 0.0,
-                pieceDetected = false,
-                climberExtensionMeters = 0.0,
-                timestampMs = 2000L
-            )
+            SlamtakeTimerExpired(1, 2000L)
         )
         assertTrue(stateElapsed1_0.superstructure.marvin.slamtakeActive)
         assertFalse(stateElapsed1_0.superstructure.marvin.intake.isDeployed)
@@ -242,14 +235,7 @@ class MarvinReducerTest {
          */
         val stateElapsed2_0 = MarvinReducer.reduce(
             stateSlamtakeStart,
-            SuperstructureSensorUpdate(
-                flywheelRpm = 0.0,
-                cowlAngleRotations = 0.0,
-                intakeAngle = 0.0,
-                pieceDetected = false,
-                climberExtensionMeters = 0.0,
-                timestampMs = 3000L
-            )
+            SlamtakeTimerExpired(2, 3000L)
         )
         assertFalse(stateElapsed2_0.superstructure.marvin.slamtakeActive, "Slamtake should be disabled after timeout")
         assertEquals(0.0, stateElapsed2_0.superstructure.marvin.intake.targetRollerVelocityRps)

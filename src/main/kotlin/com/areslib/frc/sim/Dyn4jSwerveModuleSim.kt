@@ -14,22 +14,26 @@ class Dyn4jSwerveModuleSim {
      */
 
     fun update(state: RobotState, robotBody: Body) {
-        /**
-         * Documentation for kpLinear
-         */
         val kpLinear = 50.0
         /**
          * Documentation for kpAngular
          */
         val kpAngular = 20.0
+        
+        val heading = robotBody.transform.rotationAngle
+        val targetVx = state.drive.xVelocityMetersPerSecond
+        val targetVy = state.drive.yVelocityMetersPerSecond
+        val worldVx = targetVx * kotlin.math.cos(heading) - targetVy * kotlin.math.sin(heading)
+        val worldVy = targetVx * kotlin.math.sin(heading) + targetVy * kotlin.math.cos(heading)
+        
         /**
          * Documentation for forceX
          */
-        val forceX = (state.drive.xVelocityMetersPerSecond - robotBody.linearVelocity.x) * kpLinear
+        val forceX = (worldVx - robotBody.linearVelocity.x) * kpLinear
         /**
          * Documentation for forceY
          */
-        val forceY = (state.drive.yVelocityMetersPerSecond - robotBody.linearVelocity.y) * kpLinear
+        val forceY = (worldVy - robotBody.linearVelocity.y) * kpLinear
         /**
          * Documentation for torque
          */
