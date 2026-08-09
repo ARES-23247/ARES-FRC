@@ -79,8 +79,8 @@ class ARESRobot : TimedRobot() {
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
 
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
-    private val RED_SPEAKER = Translation2d(11.915, 4.035)
-    private val BLUE_SPEAKER = Translation2d(4.625, 4.035)
+    private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
+    private val BLUE_SPEAKER = MarvinConfig.FieldTargets.blueSpeaker
 
     // Simulation timing
     private var lastSimTime = 0.0

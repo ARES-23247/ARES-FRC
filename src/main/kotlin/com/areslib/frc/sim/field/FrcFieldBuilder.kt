@@ -4,6 +4,7 @@ import org.dyn4j.dynamics.Body
 import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.world.World
+import com.areslib.frc.marvin.MarvinConfig
 /**
  * Documentation for FrcFieldBuilder
  */
@@ -30,8 +31,8 @@ object FrcFieldBuilder {
         addWall(world, width, height / 2.0, 0.1, height)   // Right
 
         // Hubs (Static scoring centers)
-        addWall(world, 4.135, 4.0345, 1.1938, 1.1938)      // Blue Hub
-        addWall(world, width - 4.135, 4.0345, 1.1938, 1.1938) // Red Hub
+        addWall(world, MarvinConfig.FieldTargets.blueSpeaker.x, MarvinConfig.FieldTargets.blueSpeaker.y, 1.1938, 1.1938)      // Blue Hub
+        addWall(world, MarvinConfig.FieldTargets.redSpeaker.x, MarvinConfig.FieldTargets.redSpeaker.y, 1.1938, 1.1938) // Red Hub
 
         // Towers (Climbing truss frames or shield generator columns)
         addWall(world, width / 2.0 - 1.8, height / 2.0 - 1.8, 0.3, 0.3) // bottom-left tower

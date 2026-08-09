@@ -1,6 +1,7 @@
 package com.areslib.frc.marvin
 
 import com.areslib.control.assist.ShotConfig
+import com.areslib.math.geometry.Translation2d
 /**
  * Documentation for MarvinConfig
  */
@@ -26,4 +27,15 @@ object MarvinConfig {
         delayCompensationSeconds = 0.05,
         shooterFacesRearward = true
     )
+
+    /**
+     * Single source of truth for the FRC 2024 Crescendo speaker scoring-target
+     * coordinates (meters). Referenced by teleop aiming, the dyn4j sim scoring
+     * detector, and the sim field builder so every site agrees on the target.
+     */
+    object FieldTargets {
+        // TODO: verify against WPILib 2024 Crescendo field constants
+        val redSpeaker = Translation2d(11.915, 4.035)
+        val blueSpeaker = Translation2d(4.625, 4.035)
+    }
 }

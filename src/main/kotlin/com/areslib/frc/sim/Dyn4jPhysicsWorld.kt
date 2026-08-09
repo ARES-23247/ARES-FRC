@@ -6,6 +6,7 @@ import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.geometry.Vector2
 import com.areslib.frc.FlyingBall
+import com.areslib.frc.marvin.MarvinConfig
 import com.areslib.action.RobotAction
 import com.areslib.state.RobotState
 /**
@@ -135,11 +136,11 @@ class Dyn4jPhysicsWorld(seed: Long) {
          * Documentation for blueHubX
          */
         
-        val blueHubX = 4.135
+        val blueHubX = MarvinConfig.FieldTargets.blueSpeaker.x
         /**
          * Documentation for blueHubY
          */
-        val blueHubY = 4.0345
+        val blueHubY = MarvinConfig.FieldTargets.blueSpeaker.y
         for (angle in angles) {
             spawnPoints.add(Vector2(blueHubX + rHub * Math.cos(angle), blueHubY + rHub * Math.sin(angle)))
         }
@@ -147,11 +148,11 @@ class Dyn4jPhysicsWorld(seed: Long) {
          * Documentation for redHubX
          */
 
-        val redHubX = width - 4.135
+        val redHubX = MarvinConfig.FieldTargets.redSpeaker.x
         /**
          * Documentation for redHubY
          */
-        val redHubY = 4.0345
+        val redHubY = MarvinConfig.FieldTargets.redSpeaker.y
         for (angle in angles) {
             spawnPoints.add(Vector2(redHubX + rHub * Math.cos(angle), redHubY + rHub * Math.sin(angle)))
         }
