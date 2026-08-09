@@ -118,7 +118,11 @@ class FRCAutoOrchestrator(
              * Documentation for dt
              */
             val currentTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-            val dt = currentTime - lastLoopTime
+            if (lastLoopTime <= 0.0) {
+                lastLoopTime = currentTime
+                return
+            }
+            val dt = (currentTime - lastLoopTime).coerceIn(0.005, 0.1)
             lastLoopTime = currentTime
             /**
              * Documentation for currentPose

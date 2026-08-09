@@ -204,7 +204,8 @@ class MarvinShooterSubsystem(private val store: Store) {
          * Documentation for headingError
          */
         
-        val headingError = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x) - currentPose.heading.radians + Math.PI
+        val targetHeadingRad = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x)
+        val headingError = targetHeadingRad - currentPose.heading.radians
         /**
          * Documentation for wrappedError
          */
