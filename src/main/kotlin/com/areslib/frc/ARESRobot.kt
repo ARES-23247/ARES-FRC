@@ -350,9 +350,8 @@ class ARESRobot : TimedRobot() {
             try {
                 robot.update(controllerState, coPilotControllerState)
             } catch (e: Exception) {
-                DriverStation.reportError("Exception in periodic loop: ${e.message}", e.stackTrace)
-                robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
-                robot.store.dispatch(com.areslib.frc.marvin.SetFlywheelSpeed(0.0))
+                DriverStation.reportError("Periodic loop exception", false)
+                robot.safeHardware()
             }
         }, 0.02, 0.005)
     }

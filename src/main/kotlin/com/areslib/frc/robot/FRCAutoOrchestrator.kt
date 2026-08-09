@@ -51,42 +51,47 @@ class FRCAutoOrchestrator(
         var pathName = ""
         try {
             pathName = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
-            var path = com.areslib.frc.PathLoader.loadPath(pathName)
-            
-            path = com.areslib.math.coordinate.AllianceMirroring.mirror(
-                path,
-                aresAlliance,
-                com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
-                fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
-                fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
-            )
-            activePath = path
+            if (edu.wpi.first.wpilibj.RobotBase.isReal() && pathName == "SimPath") {
+                edu.wpi.first.wpilibj.DriverStation.reportError("No auto path selected (default SimPath)", true)
+                activePath = Path(emptyList())
+            } else {
+                var path = com.areslib.frc.PathLoader.loadPath(pathName)
 
-            val startPoint = activePath?.points?.firstOrNull()
-            if (startPoint != null && isFirstPath) {
-                val autoTable = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("Auto")
-                val startX = autoTable.getEntry("InitialPoseX").getDouble(startPoint.pose.x)
-                val startY = autoTable.getEntry("InitialPoseY").getDouble(startPoint.pose.y)
-                val startHeading = autoTable.getEntry("InitialPoseHeading").getDouble(startPoint.pose.heading.radians)
-                sim.resetPose(startX, startY, startHeading)
-                
-                // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
-                robot.swerveDrivetrainIO?.seedPose(
-                    com.areslib.math.geometry.Pose2d(
-                        startX,
-                        startY,
-                        com.areslib.math.geometry.Rotation2d(startHeading)
-                    )
+                path = com.areslib.math.coordinate.AllianceMirroring.mirror(
+                    path,
+                    aresAlliance,
+                    com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
+                    fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
+                    fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
                 )
+                activePath = path
 
-                robot.store.dispatch(RobotAction.PoseUpdate(
-                    xMeters = startX,
-                    yMeters = startY,
-                    headingRadians = startHeading,
-                    timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
-                    isReset = true
-                ))
-                isFirstPath = false
+                val startPoint = activePath?.points?.firstOrNull()
+                if (startPoint != null && isFirstPath) {
+                    val autoTable = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("Auto")
+                    val startX = autoTable.getEntry("InitialPoseX").getDouble(startPoint.pose.x)
+                    val startY = autoTable.getEntry("InitialPoseY").getDouble(startPoint.pose.y)
+                    val startHeading = autoTable.getEntry("InitialPoseHeading").getDouble(startPoint.pose.heading.radians)
+                    sim.resetPose(startX, startY, startHeading)
+
+                    // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
+                    robot.swerveDrivetrainIO?.seedPose(
+                        com.areslib.math.geometry.Pose2d(
+                            startX,
+                            startY,
+                            com.areslib.math.geometry.Rotation2d(startHeading)
+                        )
+                    )
+
+                    robot.store.dispatch(RobotAction.PoseUpdate(
+                        xMeters = startX,
+                        yMeters = startY,
+                        headingRadians = startHeading,
+                        timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
+                        isReset = true
+                    ))
+                    isFirstPath = false
+                }
             }
         } catch (e: Exception) {
             println("ERROR: Failed to load autonomous path: ${e.message}")
@@ -258,9 +263,8 @@ class FRCAutoOrchestrator(
                 val maxSearch = (autoDistance + 0.5).coerceAtMost(path.points.lastOrNull()?.distanceMeters ?: 0.0)
                 autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, minSearch, maxSearch)
             }
-        } catch (e: Throwable) {
-            System.err.println("ARESRobot: Exception in autonomousPeriodic: ${e.message}")
-            e.printStackTrace()
+        } catch (e: Exception) {
+            edu.wpi.first.wpilibj.DriverStation.reportError("Exception in autonomousPeriodic: ${e.message}", false)
             robot.safeHardware()
         }
     }

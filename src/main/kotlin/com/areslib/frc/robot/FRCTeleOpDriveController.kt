@@ -39,7 +39,6 @@ class FRCTeleOpDriveController(
     private var driverYawOffset = 0.0
     private var intakeDeployed = false
     private var lastBeached = false
-    private var isEStopped = false
     private var rumbleStartTimestampMs: Long = 0
     private val shotResult = ShotResult()
 
@@ -67,15 +66,6 @@ class FRCTeleOpDriveController(
      */
 
     fun teleopPeriodic() {
-        if (isEStopped) {
-            robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
-            robot.store.dispatch(SetFlywheelSpeed(0.0))
-            robot.store.dispatch(SetIntakeRollers(0.0))
-            robot.store.dispatch(SetFeederSpeed(0.0))
-            robot.store.dispatch(SetFloorSpeed(0.0))
-            robot.store.dispatch(SetClimberVoltage(0.0))
-            return
-        }
         try {
             /**
              * Documentation for marvin
@@ -383,10 +373,8 @@ class FRCTeleOpDriveController(
                 controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                 coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
             }
-        } catch (e: Throwable) {
-            System.err.println("ARESRobot: Exception in teleopPeriodic: ${e.message}")
-            e.printStackTrace()
-            isEStopped = true
+        } catch (e: Exception) {
+            DriverStation.reportError("Exception in teleopPeriodic: ${e.message}", false)
             robot.safeHardware()
         }
     }
