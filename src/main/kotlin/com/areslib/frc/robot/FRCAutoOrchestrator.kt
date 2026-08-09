@@ -19,7 +19,7 @@ import com.areslib.frc.marvin.marvin
 
 class FRCAutoOrchestrator(
     private val robot: FrcSwerveRobot,
-    private val sim: Dyn4jSimulation,
+    private val sim: Dyn4jSimulation?,
     private val marvinShooter: MarvinShooterSubsystem,
     private val marvinIntake: MarvinIntakeSubsystem
 ) {
@@ -74,7 +74,7 @@ class FRCAutoOrchestrator(
                     val startX = autoTable.getEntry("InitialPoseX").getDouble(startPoint.pose.x)
                     val startY = autoTable.getEntry("InitialPoseY").getDouble(startPoint.pose.y)
                     val startHeading = autoTable.getEntry("InitialPoseHeading").getDouble(startPoint.pose.heading.radians)
-                    sim.resetPose(startX, startY, startHeading)
+                    sim?.resetPose(startX, startY, startHeading)
 
                     // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
                     robot.swerveDrivetrainIO?.seedPose(

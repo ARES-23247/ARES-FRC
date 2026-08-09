@@ -65,7 +65,7 @@ val aresAlliance: com.areslib.state.Alliance
 class ARESRobot : TimedRobot() {
 
     private lateinit var robot: FrcSwerveRobot
-    private lateinit var sim: Dyn4jSimulation
+    private var sim: Dyn4jSimulation? = null
     private lateinit var marvinShooter: MarvinShooterSubsystem
     private lateinit var marvinIntake: MarvinIntakeSubsystem
     private lateinit var marvinClimber: MarvinClimberSubsystem
@@ -89,7 +89,6 @@ class ARESRobot : TimedRobot() {
 
     override fun robotInit() {
         edu.wpi.first.wpilibj.Threads.setCurrentThreadPriority(true, 10)
-        sim = Dyn4jSimulation(seed = 42L)
         /**
          * Documentation for isReal
          */
@@ -209,14 +208,16 @@ class ARESRobot : TimedRobot() {
             climberIO = FRCClimberHardwareIO(climberFX)
         } else {
             // Simulation IOs
+            val simInstance = Dyn4jSimulation(seed = 42L)
+            sim = simInstance
             swerveIO = null
             visionIO = null
-            flywheelIO = sim.flywheelIO
-            cowlIO = sim.cowlIO
-            intakeIO = sim.intakeIO
-            feederIO = sim.feederIO
-            floorIO = sim.floorIO
-            climberIO = sim.climberIO
+            flywheelIO = simInstance.flywheelIO
+            cowlIO = simInstance.cowlIO
+            intakeIO = simInstance.intakeIO
+            feederIO = simInstance.feederIO
+            floorIO = simInstance.floorIO
+            climberIO = simInstance.climberIO
         }
 
         // Register subsystems to HardwareRegistry so they are refreshed/logged automatically
@@ -412,6 +413,7 @@ class ARESRobot : TimedRobot() {
 
     override fun simulationPeriodic() {
         if (!RobotBase.isSimulation()) return
+        val simInstance = sim ?: return
         /**
          * Documentation for now
          */
@@ -427,7 +429,7 @@ class ARESRobot : TimedRobot() {
         /**
          * Documentation for actions
          */
-        val actions = sim.step(robot.store.state, dt)
+        val actions = simInstance.step(robot.store.state, dt)
         for (action in actions) {
             robot.store.dispatch(action)
         }
@@ -436,10 +438,10 @@ class ARESRobot : TimedRobot() {
         /**
          * Documentation for poseUpdate
          */
-        val poseUpdate = sim.getPoseUpdate()
+        val poseUpdate = simInstance.getPoseUpdate()
         robot.store.dispatch(poseUpdate)
 
         // Publish 3D visualization
-        sim.publishVisualization(robot.store.state, robot.telemetry)
+        simInstance.publishVisualization(robot.store.state, robot.telemetry)
     }
 }
