@@ -88,8 +88,8 @@ class MarvinShooterSubsystem(private val store: Store) {
      * Documentation for setCowlAngle
      */
 
-    fun setCowlAngle(degrees: Double) {
-        cowlController.setCowlAngle(degrees)
+    fun setCowlAngleRotations(rotations: Double) {
+        cowlController.setCowlAngleRotations(rotations)
     }
 
     /**
@@ -145,7 +145,7 @@ class MarvinShooterSubsystem(private val store: Store) {
          */
         
         val targetCowl = shotResult.targetCowlAngleDegrees
-        cowlController.setCowlAngle(targetCowl)
+        cowlController.setCowlAngleRotations(targetCowl)
         /**
          * Documentation for headingError
          */
@@ -199,12 +199,15 @@ class MarvinShooterSubsystem(private val store: Store) {
         val targetCowl = shotSetup.interpolateCowl(dist)
         
         flywheelController.spinUp(targetRpm)
-        cowlController.setCowlAngle(targetCowl)
+        cowlController.setCowlAngleRotations(targetCowl)
         /**
          * Documentation for headingError
          */
         
-        val targetHeadingRad = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x)
+        var targetHeadingRad = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x)
+        if (MarvinConfig.SHOT_CONFIG.shooterFacesRearward) {
+            targetHeadingRad = com.areslib.math.wrapAngle(targetHeadingRad + Math.PI)
+        }
         val headingError = targetHeadingRad - currentPose.heading.radians
         /**
          * Documentation for wrappedError

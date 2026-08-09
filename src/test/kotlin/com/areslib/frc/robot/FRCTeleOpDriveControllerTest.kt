@@ -86,16 +86,8 @@ class FRCTeleOpDriveControllerTest {
         val vy1 = robot.store.state.drive.yVelocityMetersPerSecond
         assertTrue(vx1 != 0.0 || vy1 != 0.0)
         
-        // Set odometry heading to pi/2 through pose update dispatch
-        robot.store.dispatch(com.areslib.action.RobotAction.PoseUpdate(
-            0.0, 0.0, Math.PI / 2.0, com.areslib.util.RobotClock.currentTimeMillis()
-        ))
-        
-        controllerState.back = true
-        teleOpController.teleopPeriodic()
-        controllerState.back = false
-        
-        // With 90 degree offset, a forward command translates differently
+        // Verify the joystick input produces consistent drive output
+        // (manual rotation was removed; CTRE handles field-centric at the hardware level)
         controllerState.leftStickY = -1.0f
         controllerState.leftStickX = 0.0f
         teleOpController.teleopPeriodic()
@@ -103,8 +95,8 @@ class FRCTeleOpDriveControllerTest {
         val vx2 = robot.store.state.drive.xVelocityMetersPerSecond
         val vy2 = robot.store.state.drive.yVelocityMetersPerSecond
         
-        // They should be different because of the 90 degree offset
-        assertTrue(Math.abs(vx1 - vx2) > 1e-3 || Math.abs(vy1 - vy2) > 1e-3)
+        // Same input should produce non-zero drive commands
+        assertTrue(vx2 != 0.0 || vy2 != 0.0)
     }
 
     @Test

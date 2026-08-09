@@ -19,6 +19,7 @@ class FRCIntakeHardwareIO(
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
+    private val velocityRequest = com.ctre.phoenix6.controls.VelocityVoltage(0.0)
 
     private val pivotPosition = pivotMotor.position
     private val pivotCurrent = pivotMotor.statorCurrent
@@ -87,6 +88,10 @@ class FRCIntakeHardwareIO(
 
     override fun setRollerVoltage(volts: Double) {
         rollerMotor.setControl(voltageRequest.withOutput(volts))
+    }
+
+    override fun setRollerVelocityRps(rps: Double) {
+        rollerMotor.setControl(velocityRequest.withVelocity(rps))
     }
 
     override val pivotAngleDegrees: Double

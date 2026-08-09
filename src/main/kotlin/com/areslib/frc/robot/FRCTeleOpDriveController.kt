@@ -91,23 +91,15 @@ class FRCTeleOpDriveController(
              */
             val rawStrafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
-            // Rotate joystick translation inputs by driverYawOffset to make controls relative to the driver's reset heading
-            /**
-             * Documentation for rotCos
-             */
-            val rotCos = Math.cos(driverYawOffset)
-            /**
-             * Documentation for rotSin
-             */
-            val rotSin = Math.sin(driverYawOffset)
+            // Let the CTRE field-centric request handle alliance orientation natively
             /**
              * Documentation for forward
              */
-            val forward = rawForward * rotCos - rawStrafe * rotSin
+            val forward = rawForward
             /**
              * Documentation for strafe
              */
-            val strafe = rawForward * rotSin + rawStrafe * rotCos
+            val strafe = rawStrafe
             /**
              * Documentation for rotation
              */

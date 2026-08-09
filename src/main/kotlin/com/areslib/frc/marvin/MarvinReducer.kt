@@ -98,7 +98,11 @@ object MarvinReducer {
                     updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle))
                 }
                 if (updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
-                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected))
+                    val wasDetected = updatedMarvin.feeder.gamePieceDetected
+                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected, previousGamePieceDetected = wasDetected))
+                    if (!wasDetected && action.pieceDetected) {
+                        updatedMarvin = updatedMarvin.copy(inventoryCount = updatedMarvin.inventoryCount + 1)
+                    }
                 }
                 if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
                     updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = action.floorVelocityRps))

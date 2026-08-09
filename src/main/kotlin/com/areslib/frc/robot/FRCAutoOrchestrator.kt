@@ -254,7 +254,9 @@ class FRCAutoOrchestrator(
             lastOdomX = estimator.estimatedPoseX
             lastOdomY = estimator.estimatedPoseY
             if (!isWaitingForCommand) {
-                autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, autoDistance)
+                val minSearch = (autoDistance - 0.5).coerceAtLeast(0.0)
+                val maxSearch = (autoDistance + 0.5).coerceAtMost(path.points.lastOrNull()?.distanceMeters ?: 0.0)
+                autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, minSearch, maxSearch)
             }
         } catch (e: Throwable) {
             System.err.println("ARESRobot: Exception in autonomousPeriodic: ${e.message}")

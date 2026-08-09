@@ -243,17 +243,14 @@ class Dyn4jSimulation(seed: Long = 42L) {
              */
 
             val vLaunch = flywheelRps * 0.18
-            /**
-             * Documentation for hoodRad
-             */
             val hoodRad = Math.toRadians(simCowlAngle)
-            /**
-             * Documentation for vPlanar
-             */
+            var launchAngleRad = robotHeading
+            if (com.areslib.frc.marvin.MarvinConfig.SHOT_CONFIG.shooterFacesRearward) {
+                launchAngleRad += Math.PI
+            }
             val vPlanar = vLaunch * kotlin.math.cos(hoodRad)
-            /**
-             * Documentation for vVert
-             */
+            val launchVx = vPlanar * kotlin.math.cos(launchAngleRad)
+            val launchVy = vPlanar * kotlin.math.sin(launchAngleRad)
             val vVert = vLaunch * kotlin.math.sin(hoodRad)
             /**
              * Documentation for robotVx
@@ -277,15 +274,11 @@ class Dyn4jSimulation(seed: Long = 42L) {
              * Documentation for bz
              */
             val bz = 0.6
-            /**
-             * Documentation for vx
-             */
-
-            val vx = robotVx + kotlin.math.cos(robotHeading) * vPlanar
+            val vx = robotVx + launchVx
             /**
              * Documentation for vy
              */
-            val vy = robotVy + kotlin.math.sin(robotHeading) * vPlanar
+            val vy = robotVy + launchVy
             /**
              * Documentation for vz
              */

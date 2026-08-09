@@ -84,7 +84,11 @@ data class FeederState(
     /**
      * Documentation for gamePieceDetected
      */
-    val gamePieceDetected: Boolean = false
+    val gamePieceDetected: Boolean = false,
+    /**
+     * Documentation for previousGamePieceDetected
+     */
+    val previousGamePieceDetected: Boolean = false
 )
 
 /**

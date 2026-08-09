@@ -131,10 +131,7 @@ class ARESRobot : TimedRobot() {
         val climberIO: ClimberIO
 
         if (isReal) {
-            /**
-             * Documentation for can2Bus
-             */
-            val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
+            // can2Bus is already defined as a class property
             /**
              * Documentation for leftMasterFX
              */
@@ -323,7 +320,10 @@ class ARESRobot : TimedRobot() {
             )
             telemetry.putDoubleArray("Superstructure/PackedState", telemetryArray)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
-                telemetry.putNumber("CAN2/BusUtilization", can2Bus.status.BusUtilization.toDouble())
+                val loopCounter = (state.timestampMs / 20) // 50Hz
+                if (loopCounter % 25L == 0L) { // 2Hz
+                    telemetry.putNumber("CAN2/BusUtilization", can2Bus.status.BusUtilization.toDouble())
+                }
             }
         }
 

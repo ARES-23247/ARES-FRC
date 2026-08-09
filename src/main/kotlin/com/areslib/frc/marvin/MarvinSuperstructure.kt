@@ -85,7 +85,7 @@ class MarvinSuperstructure(
          */
 
         val targetRollerSpeed = marvin.intake.targetRollerVelocityRps
-        intakeIO.setRollerVoltage((targetRollerSpeed / 10.0) * 12.0 * scale)
+        intakeIO.setRollerVelocityRps(targetRollerSpeed)
         /**
          * Documentation for targetFeederSpeed
          */

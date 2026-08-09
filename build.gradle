@@ -171,15 +171,16 @@ koverReport {
 
 task fetchOffsets {
     group = "ARES Swerve"
-    description = "Pulls latest runtime swerve offset calibration from roboRIO to src/main/deploy/swerve_offsets.json for Git version control"
     doLast {
         def targetFile = file("src/main/deploy/swerve_offsets.json")
-        def runtimeFile = file("/home/lvuser/swerve_offsets_runtime.json")
-        if (runtimeFile.exists()) {
-            targetFile.text = runtimeFile.text
+        println "ARES Swerve: Fetching runtime swerve offsets from 10.23.24.2..."
+        try {
+            exec {
+                commandLine "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "lvuser@10.23.24.2:/home/lvuser/swerve_offsets_runtime.json", targetFile.path
+            }
             println "ARES Swerve: Successfully fetched runtime swerve offsets to ${targetFile.path}!"
-        } else {
-            println "ARES Swerve: Runtime offset file not found locally. Deploy baseline intact."
+        } catch (Exception e) {
+            println "ARES Swerve: Failed to fetch offsets from 10.23.24.2. Deploy baseline intact. Error: ${e.message}"
         }
     }
 }
