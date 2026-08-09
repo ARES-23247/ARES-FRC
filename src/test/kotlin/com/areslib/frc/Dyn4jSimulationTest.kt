@@ -63,28 +63,22 @@ class Dyn4jSimulationTest {
          * Documentation for pivotDegrees
          */
         var pivotDegrees = 0.0
-        /**
-         * Documentation for allActions
-         */
-        val allActions = mutableListOf<RobotAction>()
+        var pieceDetected = false
         for (i in 0..50) {
-            /**
-             * Documentation for stepActions
-             */
-            val stepActions = sim.step(state, 0.02)
-            allActions.addAll(stepActions)
+            sim.step(state, 0.02)
             pivotDegrees = sim.intakeIO.pivotAngleDegrees
-            if (pivotDegrees > 45.0 && stepActions.any { it is com.areslib.frc.marvin.SetInventoryCount }) break
+            pieceDetected = sim.feederIO.isBeamBroken
+            if (pivotDegrees > 45.0 && pieceDetected) break
         }
         assertTrue(pivotDegrees > 45.0, "Intake pivot should have deployed beyond 45 degrees")
 
-        // Verify that ingestion was successful and we got SetInventoryCount action for 40
-        /**
-         * Documentation for inventoryAction
-         */
-        val inventoryAction = allActions.find { it is com.areslib.frc.marvin.SetInventoryCount } as? com.areslib.frc.marvin.SetInventoryCount
-        assertNotNull(inventoryAction, "Should have triggered ball ingestion action")
-        assertEquals(40, inventoryAction!!.count, "Ingestion should successfully reach 40 balls")
+        // After Fix 1, ingestion no longer dispatches SetInventoryCount directly;
+        // it sets simFeederPieceDetected (read here via the feeder IO beam-break).
+        // The actual +1 inventory increment is applied by MarvinReducer on the
+        // false->true transition of SuperstructureSensorUpdate.pieceDetected in the
+        // full robot loop (MarvinSuperstructure.readSensors), so it is not observable
+        // from Dyn4jSimulation.step() in isolation.
+        assertTrue(pieceDetected, "Sim should signal feeder piece-detected after ball ingestion")
     }
     /**
      * Documentation for testShootingAnd2_5DProjectileMotion
