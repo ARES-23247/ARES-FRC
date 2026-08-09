@@ -86,7 +86,6 @@ object MarvinReducer {
                  * Documentation for updatedMarvin
                  */
                 var updatedMarvin = currentMarvin
-                val eps = 1e-4
 
                 if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0) {
                     updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(velocityRpm = action.flywheelRpm))

@@ -113,6 +113,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
     private val scratchActions = mutableListOf<RobotAction>()
     private val hubCenters = listOf(Vector2(4.135, 4.0345), Vector2(12.406, 4.0345))
     private val random = java.util.Random(42L)
+    private val debug = java.lang.Boolean.getBoolean("ares.debug")
     /**
      * Documentation for step
      */
@@ -210,13 +211,8 @@ class Dyn4jSimulation(seed: Long = 42L) {
                 if (dist < 0.5) {
                     physicsWorld.world.removeBody(ball)
                     physicsWorld.balls.removeAt(i)
-                    /**
-                     * Documentation for newCount
-                     */
-                    val newCount = state.superstructure.marvin.inventoryCount + 1
-                    actions.add(com.areslib.frc.marvin.SetInventoryCount(newCount, timestamp))
                     simFeederPieceDetected = true
-                    println("BALL INGESTED! Inventory: $newCount")
+                    if (debug) println("BALL INGESTED!")
                     break
                 }
             }
@@ -289,7 +285,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
 
             val flyingBall = FlyingBall(bx, by, bz, vx, vy, vz)
             physicsWorld.flyingBalls.add(flyingBall)
-            println("BALL SHOT (2.5D)! Pos: ($bx, $by, $bz), Vel: ($vx, $vy, $vz). Inventory left: $newCount")
+            if (debug) println("BALL SHOT (2.5D)! Pos: ($bx, $by, $bz), Vel: ($vx, $vy, $vz). Inventory left: $newCount")
         }
         /**
          * Documentation for g
@@ -332,7 +328,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
             when {
                 scored -> {
                     physicsWorld.flyingBalls.removeAt(i)
-                    println("BALL SCORED! Ejecting to center...")
+                    if (debug) println("BALL SCORED! Ejecting to center...")
                     /**
                      * Documentation for ejectAngle
                      */
@@ -373,7 +369,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
                 }
                 fb.z <= 0.0635 -> {
                     physicsWorld.flyingBalls.removeAt(i)
-                    println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
+                    if (debug) println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
                     /**
                      * Documentation for fieldWidth
                      */

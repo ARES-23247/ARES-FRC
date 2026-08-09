@@ -31,6 +31,8 @@ class Dyn4jPhysicsWorld(seed: Long) {
      */
     val flyingBalls = mutableListOf<FlyingBall>()
 
+    private val debug = java.lang.Boolean.getBoolean("ares.debug")
+
     init {
         world.setGravity(Vector2(0.0, 0.0))
         /**
@@ -88,7 +90,7 @@ class Dyn4jPhysicsWorld(seed: Long) {
         
         val loadedElements = com.areslib.sim.field.FieldElementLoader.loadElements(world, config.elementTypes, config.elements)
         balls.addAll(loadedElements)
-        println("[FRC Sim] Successfully built world with ${config.obstacles.size} obstacles and ${config.elements.size} elements.")
+        if (debug) println("[FRC Sim] Successfully built world with ${config.obstacles.size} obstacles and ${config.elements.size} elements.")
     }
     /**
      * Documentation for resetPose
@@ -209,6 +211,6 @@ class Dyn4jPhysicsWorld(seed: Long) {
             world.addBody(ball)
             balls.add(ball)
         }
-        println("Spawned exactly ${balls.size} structured cargo/fuel pieces.")
+        if (debug) println("Spawned exactly ${balls.size} structured cargo/fuel pieces.")
     }
 }
