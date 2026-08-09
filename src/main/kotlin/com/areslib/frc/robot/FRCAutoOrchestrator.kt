@@ -7,6 +7,8 @@ import com.areslib.frc.FrcSwerveRobot
 import com.areslib.frc.Dyn4jSimulation
 import com.areslib.frc.marvin.MarvinIntakeSubsystem
 import com.areslib.frc.marvin.MarvinShooterSubsystem
+import com.areslib.frc.marvin.MarvinConfig
+import com.areslib.frc.marvin.SetFeederSpeed
 import com.areslib.pathing.Path
 import com.areslib.pathing.MutablePathPoint
 import com.areslib.frc.aresAlliance
@@ -204,35 +206,7 @@ class FRCAutoOrchestrator(
                 val event = path.events[i]
                 
                 if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
-                    var eventCompleted = true
-                    when (event.eventName) {
-                        "FlywheelOn" -> marvinShooter.spinUp(4000.0)
-                        "IntakeDeploy" -> {
-                            marvinIntake.deploy()
-                            marvinIntake.setRollerSpeed(15.0)
-                        }
-                        "FeederShoot" -> {
-                            val marvinState = robot.store.state.superstructure.marvin
-                            val isRpmAligned = marvinState.flywheel.targetVelocityRpm > 100.0 && kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
-                            if (isRpmAligned) {
-                                marvinShooter.shoot()
-                                isWaitingForCommand = false
-                                commandWaitStartTime = 0.0
-                            } else {
-                                if (!isWaitingForCommand) {
-                                    commandWaitStartTime = currentTime
-                                }
-                                if (currentTime - commandWaitStartTime > 2.0) {
-                                    isWaitingForCommand = false
-                                    eventCompleted = true
-                                    commandWaitStartTime = 0.0
-                                } else {
-                                    isWaitingForCommand = true
-                                    eventCompleted = false
-                                }
-                            }
-                        }
-                    }
+                    val eventCompleted = handleEvent(event.eventName, currentTime)
                     if (eventCompleted) {
                         println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
                         robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
@@ -267,5 +241,47 @@ class FRCAutoOrchestrator(
             edu.wpi.first.wpilibj.DriverStation.reportError("Exception in autonomousPeriodic: ${e.message}", false)
             robot.safeHardware()
         }
+    }
+
+    /**
+     * Dispatches the actions for a single autonomous path event by name.
+     *
+     * Extracted from autonomousPeriodic so the production event-dispatch path is
+     * unit-testable without running the trajectory follower.
+     *
+     * @return true if the event completed, false if it must keep waiting.
+     */
+    internal fun handleEvent(eventName: String, currentTimeSeconds: Double): Boolean {
+        var eventCompleted = true
+        when (eventName) {
+            "FlywheelOn" -> marvinShooter.spinUp(4000.0)
+            "IntakeDeploy" -> {
+                marvinIntake.deploy()
+                marvinIntake.setRollerSpeed(15.0)
+            }
+            "FeederShoot" -> {
+                val marvinState = robot.store.state.superstructure.marvin
+                val isRpmAligned = marvinState.flywheel.targetVelocityRpm > 100.0 &&
+                    kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
+                if (isRpmAligned) {
+                    marvinShooter.shoot()
+                    robot.store.dispatch(SetFeederSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, com.areslib.util.RobotClock.currentTimeMillis()))
+                    isWaitingForCommand = false
+                    commandWaitStartTime = 0.0
+                } else {
+                    if (!isWaitingForCommand) {
+                        commandWaitStartTime = currentTimeSeconds
+                    }
+                    if (currentTimeSeconds - commandWaitStartTime > 2.0) {
+                        isWaitingForCommand = false
+                        commandWaitStartTime = 0.0
+                    } else {
+                        isWaitingForCommand = true
+                        eventCompleted = false
+                    }
+                }
+            }
+        }
+        return eventCompleted
     }
 }

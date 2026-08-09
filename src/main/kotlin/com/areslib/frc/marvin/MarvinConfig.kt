@@ -8,6 +8,14 @@ import com.areslib.math.geometry.Translation2d
 
 object MarvinConfig {
     /**
+     * Feeder transfer speed (RPS) commanded when a shot is fired. Matches the aligned
+     * run speed used by [MarvinFeederController.updateFeeders] so autonomous and teleop
+     * feed the shooter consistently. Without this, the feeder motor receives 0V and no
+     * note is launched even after transfer is enabled.
+     */
+    const val FEEDER_SHOOT_SPEED_RPS = 10.0
+
+    /**
      * Documentation for SHOT_CONFIG
      */
     val SHOT_CONFIG = ShotConfig(
