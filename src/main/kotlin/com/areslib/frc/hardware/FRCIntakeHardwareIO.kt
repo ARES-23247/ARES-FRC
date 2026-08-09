@@ -47,6 +47,14 @@ class FRCIntakeHardwareIO(
             CurrentLimits.SupplyCurrentLimit = 40.0
             CurrentLimits.StatorCurrentLimitEnable = true
             CurrentLimits.StatorCurrentLimit = 80.0
+
+            // Software soft limits. Pivot travel is 0.0 (stowed) to ~0.25 mechanism rotations
+            // (90° deploy; setPivotAngle commands degrees/360). Forward threshold of 0.30 gives
+            // a 0.05-rotation margin above the full-deploy command, mirroring the cowl/climber.
+            SoftwareLimitSwitch.ForwardSoftLimitEnable = true
+            SoftwareLimitSwitch.ForwardSoftLimitThreshold = 0.30
+            SoftwareLimitSwitch.ReverseSoftLimitEnable = true
+            SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
         }
 
         listOf(rollerMotor).applyConfig {
