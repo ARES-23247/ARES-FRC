@@ -56,7 +56,7 @@
     },
     {
       "name": "FeederShoot",
-      "waypointRelativePos": 1.3,
+      "waypointRelativePos": 0.85,
       "command": {
         "type": "named",
         "name": "FeederShoot"
