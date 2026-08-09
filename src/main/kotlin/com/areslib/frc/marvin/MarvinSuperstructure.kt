@@ -59,10 +59,13 @@ class MarvinSuperstructure(
         val marvin = store.state.superstructure.marvin
         if (marvin.slamtakeActive && !feederIO.isBeamBroken) {
             val elapsed = (timestampMs - marvin.slamtakeStartTimeMs) / 1000.0
-            if (elapsed >= 1.5 && marvin.intake.targetAngleDegrees == 0.0) {
-                store.dispatch(SlamtakeTimerExpired(2, timestampMs))
-            } else if (elapsed >= 0.5 && elapsed < 1.5 && marvin.intake.targetAngleDegrees == 90.0) {
-                store.dispatch(SlamtakeTimerExpired(1, timestampMs))
+            when (marvin.slamtakePhase) {
+                DEPLOYED_PHASE -> if (elapsed >= RETRACT_AT_SECONDS) {
+                    store.dispatch(SlamtakeTimerExpired(1, timestampMs))
+                }
+                RETRACTED_PHASE -> if (elapsed >= FINISH_AT_SECONDS) {
+                    store.dispatch(SlamtakeTimerExpired(2, timestampMs))
+                }
             }
         }
     }
@@ -108,5 +111,10 @@ class MarvinSuperstructure(
         climberIO.setAppliedVoltage(targetClimberVoltage * scale)
     }
 
-
+    companion object {
+        private const val DEPLOYED_PHASE = 1
+        private const val RETRACTED_PHASE = 2
+        private const val RETRACT_AT_SECONDS = 0.5
+        private const val FINISH_AT_SECONDS = 1.5
+    }
 }

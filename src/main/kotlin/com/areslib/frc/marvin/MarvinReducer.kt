@@ -45,7 +45,7 @@ object MarvinReducer {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
             is SetIntakePivot -> currentMarvin.withIntakePivot(action.deployed)
-            is SetIntakeRollers -> currentMarvin.withIntakeRollers(action.speedRps).copy(slamtakeActive = false)
+            is SetIntakeRollers -> currentMarvin.withIntakeRollers(action.speedRps).copy(slamtakeActive = false, slamtakePhase = 0)
             is SetFeederSpeed -> currentMarvin.withFeederSpeed(action.speedRps)
             is SetFloorSpeed -> currentMarvin.withFloorSpeed(action.speedRps)
             is SetClimberVoltage -> currentMarvin.withClimberVoltage(action.volts)
@@ -56,6 +56,7 @@ object MarvinReducer {
             is StartSlamtake -> {
                 currentMarvin.copy(
                     slamtakeActive = true,
+                    slamtakePhase = 1,
                     slamtakeStartTimeMs = action.timestampMs,
                     intake = currentMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
                     floor = currentMarvin.floor.copy(targetVelocityRps = 10.0)
@@ -63,12 +64,14 @@ object MarvinReducer {
             }
             is StopSlamtake -> {
                 currentMarvin.copy(
-                    slamtakeActive = false
+                    slamtakeActive = false,
+                    slamtakePhase = 0
                 )
             }
             is SlamtakeTimerExpired -> {
                 if (action.phase == 1) {
                     currentMarvin.copy(
+                        slamtakePhase = 2,
                         intake = currentMarvin.intake.copy(isDeployed = false, targetAngleDegrees = 0.0, targetRollerVelocityRps = 10.0),
                         floor = currentMarvin.floor.copy(targetVelocityRps = 10.0),
                         feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0)
@@ -76,6 +79,7 @@ object MarvinReducer {
                 } else {
                     currentMarvin.copy(
                         slamtakeActive = false,
+                        slamtakePhase = 0,
                         intake = currentMarvin.intake.copy(targetRollerVelocityRps = 0.0),
                         floor = currentMarvin.floor.copy(targetVelocityRps = 0.0)
                     )
@@ -119,6 +123,7 @@ object MarvinReducer {
                     if (action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(
                             slamtakeActive = false,
+                            slamtakePhase = 0,
                             intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
                             floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
                         )

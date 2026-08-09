@@ -168,6 +168,14 @@ data class MarvinState(
      */
     val slamtakeStartTimeMs: Long = 0L,
     /**
+     * Monotonic slamtake phase counter advanced by elapsed-time thresholds in
+     * MarvinSuperstructure.readSensors. Phases: 0 = inactive, 1 = deployed (intake
+     * out), 2 = retracted (intake stowed). Using a counter instead of inferring the
+     * phase from the intake pivot angle means a skipped [0.5,1.5)s window (loop stall,
+     * GC, exception) can no longer deadlock the sequence.
+     */
+    val slamtakePhase: Int = 0,
+    /**
      * Documentation for flywheelActive
      */
     val flywheelActive: Boolean = false,
