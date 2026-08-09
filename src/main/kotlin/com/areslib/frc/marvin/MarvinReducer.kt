@@ -56,7 +56,9 @@ object MarvinReducer {
             is StartSlamtake -> {
                 currentMarvin.copy(
                     slamtakeActive = true,
-                    slamtakeStartTimeMs = action.timestampMs
+                    slamtakeStartTimeMs = action.timestampMs,
+                    intake = currentMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
+                    floor = currentMarvin.floor.copy(targetVelocityRps = 10.0)
                 )
             }
             is StopSlamtake -> {
@@ -108,12 +110,28 @@ object MarvinReducer {
                     updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
                 }
 
-                if (updatedMarvin.slamtakeActive && action.pieceDetected) {
-                    updatedMarvin = updatedMarvin.copy(
-                        slamtakeActive = false,
-                        intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
-                        floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
-                    )
+                if (updatedMarvin.slamtakeActive) {
+                    if (action.pieceDetected) {
+                        updatedMarvin = updatedMarvin.copy(
+                            slamtakeActive = false,
+                            intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                            floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
+                        )
+                    } else {
+                        val elapsedMs = action.timestampMs - updatedMarvin.slamtakeStartTimeMs
+                        if (elapsedMs >= 1500L) {
+                            updatedMarvin = updatedMarvin.copy(
+                                slamtakeActive = false,
+                                intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                                floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
+                            )
+                        } else if (elapsedMs >= 500L) {
+                            updatedMarvin = updatedMarvin.copy(
+                                intake = updatedMarvin.intake.copy(isDeployed = false, targetAngleDegrees = 0.0, targetRollerVelocityRps = 10.0),
+                                floor = updatedMarvin.floor.copy(targetVelocityRps = 10.0)
+                            )
+                        }
+                    }
                 }
                 updatedMarvin
             }

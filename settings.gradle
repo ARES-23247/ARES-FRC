@@ -29,5 +29,5 @@ pluginManagement {
 Properties props = System.getProperties();
 props.setProperty("org.gradle.internal.native.headers.unresolved.dependencies.ignore", "true");
 
-includeBuild("../../ftc/ARESLib-Kotlin")
+includeBuild("../ARESLib-Kotlin")
 rootProject.name = 'ARES-FRC'
