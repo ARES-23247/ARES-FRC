@@ -4,14 +4,16 @@ import com.areslib.action.RobotAction
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
 import com.areslib.reducer.rootReducer
-import com.areslib.control.safety.ControlBarrierFunction
-import com.areslib.control.safety.CBFFilteredOutput
 
 /**
  * Redux Reducer responsible for managing the Marvin superstructure state transitions.
  *
- * It processes actions dispatched by controllers to update the `SuperstructureState`
- * and strictly enforces physical bounds using Control Barrier Functions (CBFs).
+ * Composes over the core [rootReducer] (which handles drive, vision, pathing, costmap,
+ * and the generic FSM) and then applies Marvin-specific state updates for each season
+ * action. The reducer is pure: it only records commanded targets. Physical bounds (e.g.
+ * joint travel limits) are enforced downstream by the controller facades
+ * (e.g. [MarvinCowlController]) and by TalonFX soft limits in the hardware IO layer, not
+ * here.
  *
  * **Physical Units & Conventions:**
  * - Angles: Degrees ($^\circ$) for intake and cowl.

@@ -9,7 +9,6 @@ import com.areslib.frc.FlyingBall
  */
 
 class Dyn4jSimTelemetryPublisher {
-    private var gamePieceData = DoubleArray(100 * 7)
     private var activeFuelData = DoubleArray(100 * 7)
     private val subsystemPoseBuf = DoubleArray(7)
 
