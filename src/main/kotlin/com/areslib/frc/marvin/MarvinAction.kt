@@ -126,3 +126,8 @@ data class StartSlamtake(
 data class StopSlamtake(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
+
+data class SlamtakeTimerExpired(
+    val phase: Int,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction

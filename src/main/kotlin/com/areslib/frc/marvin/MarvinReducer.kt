@@ -45,7 +45,7 @@ object MarvinReducer {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
             is SetIntakePivot -> currentMarvin.withIntakePivot(action.deployed)
-            is SetIntakeRollers -> currentMarvin.withIntakeRollers(action.speedRps)
+            is SetIntakeRollers -> currentMarvin.withIntakeRollers(action.speedRps).copy(slamtakeActive = false)
             is SetFeederSpeed -> currentMarvin.withFeederSpeed(action.speedRps)
             is SetFloorSpeed -> currentMarvin.withFloorSpeed(action.speedRps)
             is SetClimberVoltage -> currentMarvin.withClimberVoltage(action.volts)
@@ -63,6 +63,21 @@ object MarvinReducer {
                 currentMarvin.copy(
                     slamtakeActive = false
                 )
+            }
+            is SlamtakeTimerExpired -> {
+                if (action.phase == 1) {
+                    currentMarvin.copy(
+                        intake = currentMarvin.intake.copy(isDeployed = false, targetAngleDegrees = 0.0, targetRollerVelocityRps = 10.0),
+                        floor = currentMarvin.floor.copy(targetVelocityRps = 10.0),
+                        feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0)
+                    )
+                } else {
+                    currentMarvin.copy(
+                        slamtakeActive = false,
+                        intake = currentMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                        floor = currentMarvin.floor.copy(targetVelocityRps = 0.0)
+                    )
+                }
             }
             is SuperstructureSensorUpdate -> {
                 /**
@@ -93,42 +108,12 @@ object MarvinReducer {
                     updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
                 }
 
-                if (updatedMarvin.slamtakeActive) {
-                    // TODO: Extract Slamtake sequence to MarvinSlamtakeController for Redux purity
-                    /**
-                     * Documentation for elapsed
-                     */
-                    val elapsed = (action.timestampMs - updatedMarvin.slamtakeStartTimeMs) / 1000.0
-                    updatedMarvin = when {
-                        action.pieceDetected -> {
-                            updatedMarvin.copy(
-                                slamtakeActive = false,
-                                intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
-                            )
-                        }
-                        elapsed < 0.5 -> {
-                            updatedMarvin.copy(
-                                intake = updatedMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 10.0),
-                                feeder = updatedMarvin.feeder.copy(targetVelocityRps = 0.0)
-                            )
-                        }
-                        elapsed < 1.5 -> {
-                            updatedMarvin.copy(
-                                intake = updatedMarvin.intake.copy(isDeployed = false, targetAngleDegrees = 0.0, targetRollerVelocityRps = 10.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 10.0),
-                                feeder = updatedMarvin.feeder.copy(targetVelocityRps = 0.0)
-                            )
-                        }
-                        else -> {
-                            updatedMarvin.copy(
-                                slamtakeActive = false,
-                                intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
-                                floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
-                            )
-                        }
-                    }
+                if (updatedMarvin.slamtakeActive && action.pieceDetected) {
+                    updatedMarvin = updatedMarvin.copy(
+                        slamtakeActive = false,
+                        intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                        floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
+                    )
                 }
                 updatedMarvin
             }

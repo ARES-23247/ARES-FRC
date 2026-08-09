@@ -67,7 +67,15 @@ class FRCTeleOpDriveController(
      */
 
     fun teleopPeriodic() {
-        if (isEStopped) return
+        if (isEStopped) {
+            robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+            robot.store.dispatch(SetFlywheelSpeed(0.0))
+            robot.store.dispatch(SetIntakeRollers(0.0))
+            robot.store.dispatch(SetFeederSpeed(0.0))
+            robot.store.dispatch(SetFloorSpeed(0.0))
+            robot.store.dispatch(SetClimberVoltage(0.0))
+            return
+        }
         try {
             /**
              * Documentation for marvin
@@ -368,8 +376,8 @@ class FRCTeleOpDriveController(
              * Documentation for beached
              */
             val beached = robot.isBeached
-            robot.telemetry.putBoolean("Diagnostics/Beached", beached)
             if (beached != lastBeached) {
+                robot.telemetry.putBoolean("Diagnostics/Beached", beached)
                 lastBeached = beached
                 if (beached) {
                     controller.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)

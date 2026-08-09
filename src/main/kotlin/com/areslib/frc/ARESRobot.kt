@@ -84,6 +84,7 @@ class ARESRobot : TimedRobot() {
 
     // Simulation timing
     private var lastSimTime = 0.0
+    private val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
 
 
     override fun robotInit() {
@@ -263,11 +264,13 @@ class ARESRobot : TimedRobot() {
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
                 val encPositions = DoubleArray(4)
                 swerveIO?.getEncoderPositions(encPositions)
+                val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
+                val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
                 val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
-                    frontLeft = -encPositions[0],
-                    frontRight = -encPositions[1],
-                    backLeft = -encPositions[2],
-                    backRight = -encPositions[3]
+                    frontLeft = activeOffsets.frontLeft - encPositions[0],
+                    frontRight = activeOffsets.frontRight - encPositions[1],
+                    backLeft = activeOffsets.backLeft - encPositions[2],
+                    backRight = activeOffsets.backRight - encPositions[3]
                 )
                 com.areslib.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
                     newOffsets,
@@ -320,7 +323,7 @@ class ARESRobot : TimedRobot() {
             )
             telemetry.putDoubleArray("Superstructure/PackedState", telemetryArray)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
-                telemetry.putNumber("CAN2/BusUtilization", com.ctre.phoenix6.CANBus("CAN2").status.BusUtilization.toDouble())
+                telemetry.putNumber("CAN2/BusUtilization", can2Bus.status.BusUtilization.toDouble())
             }
         }
 

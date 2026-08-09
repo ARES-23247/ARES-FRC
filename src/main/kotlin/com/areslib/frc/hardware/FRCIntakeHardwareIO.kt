@@ -28,7 +28,7 @@ class FRCIntakeHardwareIO(
         pivotMotor.optimizeBusUtilization()
         rollerMotor.optimizeBusUtilization()
 
-        pivotPosition.setUpdateFrequency(100.0)
+        pivotPosition.setUpdateFrequency(50.0)
         pivotCurrent.setUpdateFrequency(10.0)
         rollerCurrent.setUpdateFrequency(10.0)
 
@@ -59,9 +59,9 @@ class FRCIntakeHardwareIO(
             Feedback.SensorToMechanismRatio = 1.0
 
             CurrentLimits.SupplyCurrentLimitEnable = true
-            CurrentLimits.SupplyCurrentLimit = 60.0
+            CurrentLimits.SupplyCurrentLimit = 30.0
             CurrentLimits.StatorCurrentLimitEnable = true
-            CurrentLimits.StatorCurrentLimit = 100.0
+            CurrentLimits.StatorCurrentLimit = 40.0
         }
     }
 

@@ -35,9 +35,9 @@ class FRCAutoOrchestrator(
     private var previousDistance = 0.0
     
     private val driveController = HolonomicDriveController(
-        PIDController(4.0, 0.0, 0.0),
-        PIDController(4.0, 0.0, 0.0),
-        PIDController(3.0, 0.0, 0.0).apply { enableContinuousInput(-Math.PI, Math.PI) }
+        PIDController(5.0, 0.0, 0.5),
+        PIDController(5.0, 0.0, 0.5),
+        PIDController(4.0, 0.0, 0.4).apply { enableContinuousInput(-Math.PI, Math.PI) }
     )
 
     private val targetPoseScratch = DoubleArray(3)
@@ -47,9 +47,11 @@ class FRCAutoOrchestrator(
      */
 
     fun autonomousInit() {
+        isFirstPath = true
+        var pathName = ""
         try {
-            val selectedPath = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
-            var path = com.areslib.frc.PathLoader.loadPath(selectedPath)
+            pathName = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
+            var path = com.areslib.frc.PathLoader.loadPath(pathName)
             
             path = com.areslib.math.coordinate.AllianceMirroring.mirror(
                 path,
@@ -88,7 +90,8 @@ class FRCAutoOrchestrator(
             }
         } catch (e: Exception) {
             println("ERROR: Failed to load autonomous path: ${e.message}")
-            activePath = null
+            activePath = Path(emptyList())
+            edu.wpi.first.wpilibj.DriverStation.reportError("Missing auto path file: $pathName", false)
         }
         triggeredEvents.clear()
         isWaitingForCommand = false
@@ -129,7 +132,31 @@ class FRCAutoOrchestrator(
             path.sampleAtDistance(autoDistance, scratchPathPoint)
 
             if (autoDistance >= totalLength) {
-                robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+                val speeds = driveController.calculateDirect(
+                    currentX = estimator.estimatedPoseX,
+                    currentY = estimator.estimatedPoseY,
+                    currentHeadingRad = estimator.estimatedPoseHeading,
+                    targetX = scratchPathPoint.x,
+                    targetY = scratchPathPoint.y,
+                    targetHeadingRad = scratchPathPoint.headingRad,
+                    targetVelocityMps = 0.0,
+                    pathTangentRadians = scratchPathPoint.tangentRadians,
+                    dtSeconds = dt
+                )
+                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
+                    edu.wpi.first.math.kinematics.ChassisSpeeds(
+                        speeds.vxMetersPerSecond,
+                        speeds.vyMetersPerSecond,
+                        speeds.omegaRadiansPerSecond
+                    ),
+                    dt
+                )
+                robot.drive.joystickDrive(
+                    discretizedSpeeds.vxMetersPerSecond,
+                    discretizedSpeeds.vyMetersPerSecond,
+                    discretizedSpeeds.omegaRadiansPerSecond,
+                    isFieldCentric = false
+                )
             } else {
                 val speeds = driveController.calculateDirect(
                     currentX = estimator.estimatedPoseX,
@@ -167,7 +194,7 @@ class FRCAutoOrchestrator(
                  */
                 val event = path.events[i]
                 
-                if (event.triggerDistanceMeters in previousDistance..autoDistance && i !in triggeredEvents) {
+                if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
                     var eventCompleted = true
                     when (event.eventName) {
                         "FlywheelOn" -> marvinShooter.spinUp(4000.0)

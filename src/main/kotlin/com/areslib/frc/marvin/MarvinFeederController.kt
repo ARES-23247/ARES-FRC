@@ -35,7 +35,7 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
         /**
          * Documentation for speed
          */
-        val speed = if (headingAligned && rpmAligned) 10.0 else 0.0
+        val speed = if ((headingAligned && rpmAligned) || transferActive == true) 10.0 else 0.0
         dispatchOnChange(lastFeederSpeed, speed, ::SetFeederSpeed) { lastFeederSpeed = it }
         
         if (runFloorRollers) {

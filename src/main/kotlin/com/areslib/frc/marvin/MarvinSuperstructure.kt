@@ -55,6 +55,16 @@ class MarvinSuperstructure(
             floorCurrentAmps = floorIO.currentAmps,
             timestampMs = timestampMs
         ))
+        
+        val marvin = store.state.superstructure.marvin
+        if (marvin.slamtakeActive && !feederIO.isBeamBroken) {
+            val elapsed = (timestampMs - marvin.slamtakeStartTimeMs) / 1000.0
+            if (elapsed >= 1.5 && marvin.intake.targetAngleDegrees == 0.0) {
+                store.dispatch(SlamtakeTimerExpired(2, timestampMs))
+            } else if (elapsed >= 0.5 && elapsed < 1.5 && marvin.intake.targetAngleDegrees == 90.0) {
+                store.dispatch(SlamtakeTimerExpired(1, timestampMs))
+            }
+        }
     }
 
     override fun writeOutputs(state: RobotState, scale: Double) {

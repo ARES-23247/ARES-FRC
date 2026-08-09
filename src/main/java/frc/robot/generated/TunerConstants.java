@@ -103,7 +103,7 @@ public class TunerConstants {
         );
     private static final CANcoderConfiguration encoderInitialConfigs = new CANcoderConfiguration();
     // Configs for the Pigeon 2; leave this null to skip applying Pigeon 2 configs
-    private static final Pigeon2Configuration pigeonConfigs = null;
+    private static final Pigeon2Configuration pigeonConfigs = new Pigeon2Configuration().withMountPose(new MountPoseConfigs()).withGyroTrimScalarZ(1.0);
 
     // CAN bus that the devices are located on;
     // All swerve devices must share the same CAN bus
@@ -119,7 +119,7 @@ public class TunerConstants {
 
     private static final double kDriveGearRatio = 5.2734375;
     private static final double kSteerGearRatio = 26.09090909090909;
-    private static final Distance kWheelRadius = Inches.of(1.95);
+    public static Distance kWheelRadius = Inches.of(1.95); // Adjustable for tread wear. Nominal: 1.95"
 
     private static final boolean kInvertLeftSide = true;
     private static final boolean kInvertRightSide = false;
