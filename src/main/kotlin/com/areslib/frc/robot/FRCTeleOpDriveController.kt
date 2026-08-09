@@ -208,6 +208,10 @@ class FRCTeleOpDriveController(
                     if (marvin.cowl.targetAngleRotations != targetCowlAngle) {
                         robot.store.dispatch(SetCowlAngle(targetCowlAngle))
                     }
+                } else if (marvin.flywheel.targetVelocityRpm != 0.0) {
+                    // Releasing the spin-up buttons must zero the target, otherwise the
+                    // flywheel keeps spinning at the last commanded RPM indefinitely.
+                    robot.store.dispatch(SetFlywheelSpeed(0.0))
                 }
             }
 
