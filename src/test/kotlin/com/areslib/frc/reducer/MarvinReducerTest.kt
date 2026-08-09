@@ -28,7 +28,7 @@ class MarvinReducerTest {
             initialState,
             SetClimberExtension(0.25, 1000L)
         )
-        assertEquals(0.0, statePivotStowed.superstructure.marvin.climber.targetExtensionMeters, "Climber extension must be clamped to 0.0 when pivot is stowed")
+        assertEquals(0.25, statePivotStowed.superstructure.marvin.climber.targetExtensionMeters, "Reducer is pure — climber extension set directly (CBF enforcement moved to facade)")
 
         // 2. If intake is deployed (pivotAngleDegrees = 90.0), target extension should be set correctly
         /**
@@ -80,7 +80,10 @@ class MarvinReducerTest {
                 timestampMs = 1000L
             )
         )
-        assertEquals(10.8, stateExtendedSensor.superstructure.marvin.intake.targetAngleDegrees, 1e-5, "Intake pivot target must be bounded by continuous CBF when climber is physically extended")
+        // After CBF extraction (fix #71), sensor updates no longer trigger CBF clamping in the reducer.
+        // CBF enforcement now lives in the facade layer (MarvinShooterFacade).
+        // The reducer simply applies sensor values without constraint checking.
+        assertEquals(0.0, stateExtendedSensor.superstructure.marvin.intake.targetAngleDegrees, "Reducer is pure — intake target unchanged by sensor update (CBF moved to facade)")
         assertFalse(stateExtendedSensor.superstructure.marvin.intake.isDeployed)
 
         // When climber target is extended
@@ -109,7 +112,7 @@ class MarvinReducerTest {
             stateClimberTargetExtended,
             SetIntakePivot(deployed = false, 1100L)
         )
-        assertEquals(36.0, statePivotStowAction.superstructure.marvin.intake.targetAngleDegrees, 1e-5, "Intake pivot target must be clamped to 36.0 when climber is commanded extended to 0.1m")
+        assertEquals(0.0, statePivotStowAction.superstructure.marvin.intake.targetAngleDegrees, "Reducer is pure — intake pivot set to 0.0 directly (CBF clamping moved to facade)")
         assertFalse(statePivotStowAction.superstructure.marvin.intake.isDeployed)
     }
 
