@@ -24,11 +24,6 @@ class FRCFloorHardwareIO(
         setUpdateFrequencies(10.0, floorCurrent)
 
         listOf(motor).applyConfig {
-            Slot0.kP = 0.5
-            Slot0.kI = 2.0
-            Slot0.kD = 0.0
-            Slot0.kV = 0.0956 // 12.0 / 125.5 (Max speed: 7530 RPM = 125.5 RPS)
-
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive
             Feedback.SensorToMechanismRatio = 1.0
@@ -45,6 +40,11 @@ class FRCFloorHardwareIO(
         floorCurrent.refresh()
     }
 
+    /**
+     * Drives the floor rollers open-loop via raw voltage. This is deliberate: the
+     * floor is a high-speed intake roller governed by voltage feed-forward only
+     * (FLOOR_KV * rps * brownoutScale), so no TalonFX Slot0 PID gains are configured.
+     */
     override fun setAppliedVoltage(volts: Double) {
         motor.setControl(voltageRequest.withOutput(volts))
     }

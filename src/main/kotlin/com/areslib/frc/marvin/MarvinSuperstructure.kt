@@ -72,19 +72,19 @@ class MarvinSuperstructure(
          * Documentation for marvin
          */
         val marvin = state.superstructure.marvin
-        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm)
-        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations)
+        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
+        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations * scale)
         /**
          * Documentation for pivotAngle
          */
 
-        val pivotAngle = marvin.intake.targetAngleDegrees
+        val pivotAngle = marvin.intake.targetAngleDegrees * scale
         intakeIO.setPivotAngle(pivotAngle)
         /**
          * Documentation for targetRollerSpeed
          */
 
-        val targetRollerSpeed = marvin.intake.targetRollerVelocityRps
+        val targetRollerSpeed = marvin.intake.targetRollerVelocityRps * scale
         intakeIO.setRollerVelocityRps(targetRollerSpeed)
         /**
          * Documentation for targetFeederSpeed

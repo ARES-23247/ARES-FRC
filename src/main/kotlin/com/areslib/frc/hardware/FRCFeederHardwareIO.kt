@@ -22,11 +22,6 @@ class FRCFeederHardwareIO(
         setUpdateFrequencies(10.0, feederCurrent)
 
         listOf(motor).applyConfig {
-            Slot0.kP = 1.0
-            Slot0.kI = 0.0
-            Slot0.kD = 0.0
-            Slot0.kV = 0.48 // 12.0 / 25.0 (Max speed: 6000 RPM / 4 = 1500 RPM = 25 RPS)
-
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
             Feedback.SensorToMechanismRatio = 4.0 // 4:1 feeder gear reduction
@@ -42,6 +37,12 @@ class FRCFeederHardwareIO(
         feederCurrent.refresh()
     }
 
+    /**
+     * Drives the feeder open-loop via raw voltage. This is deliberate: the feeder
+     * is a simple transfer roller with no closed-loop velocity requirement, so no
+     * TalonFX Slot0 PID gains are configured. Voltage scaling is applied upstream
+     * by [com.areslib.frc.marvin.MarvinSuperstructure] (FEEDER_KV * rps * brownoutScale).
+     */
     override fun setAppliedVoltage(volts: Double) {
         motor.setControl(voltageRequest.withOutput(volts))
     }
