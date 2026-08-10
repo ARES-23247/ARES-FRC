@@ -19,6 +19,8 @@ import org.dyn4j.dynamics.Body
 import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.geometry.Vector2
+import edu.wpi.first.networktables.NetworkTableInstance
+import com.areslib.state.RobotFieldDocument
 
 /** Mutable 2.5-D projectile state; positions are meters and velocities are meters per second. */
 class FlyingBall(
@@ -58,6 +60,10 @@ class Dyn4jSimulation(
     private val physicsWorld = Dyn4jPhysicsWorld(seed)
     private val swerveSim = Dyn4jSwerveModuleSim()
     private val telemetryPublisher = Dyn4jSimTelemetryPublisher()
+    private val fieldConfigSubscriber = NetworkTableInstance.getDefault()
+        .getStringTopic("ARES/Input/fieldConfig")
+        .subscribe("")
+    private var lastFieldConfigJson = ""
 
     private var shootCooldownTimer = 0.0
 
@@ -100,6 +106,16 @@ class Dyn4jSimulation(
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
 
         if (dt <= 0.0) return actions
+
+        val fieldConfigJson = fieldConfigSubscriber.get()
+        if (fieldConfigJson.isNotBlank() && fieldConfigJson != lastFieldConfigJson) {
+            lastFieldConfigJson = fieldConfigJson
+            try {
+                buildWorld(RobotFieldDocument.decode(fieldConfigJson))
+            } catch (error: Exception) {
+                System.err.println("[FRC Sim] Ignoring invalid live field document: ${error.message}")
+            }
+        }
 
         if (shootCooldownTimer > 0.0) {
             shootCooldownTimer -= dt

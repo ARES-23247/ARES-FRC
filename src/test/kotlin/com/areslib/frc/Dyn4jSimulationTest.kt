@@ -3,6 +3,7 @@ package com.areslib.frc
 import com.areslib.action.RobotAction
 import com.areslib.state.*
 import com.areslib.telemetry.ITelemetry
+import edu.wpi.first.networktables.NetworkTableInstance
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.dyn4j.dynamics.Body
@@ -270,5 +271,45 @@ class Dyn4jSimulationTest {
         
         // The internal angle settles near 32 degrees; public feedback remains rotations.
         assertEquals(1.0, sim.cowlIO.angleRotations, 0.05, "Cowl feedback should match commanded rotations")
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test
+    fun `live field document rebuilds the FRC simulator world`() {
+        val nt = NetworkTableInstance.getDefault()
+        val publisher = nt.getStringTopic("ARES/Input/fieldConfig").publish()
+        val sim = Dyn4jSimulation(seed = 42L)
+        val config = RobotFieldConfig(
+            revision = 99L,
+            id = "live-field-test",
+            fieldType = FieldType.FRC,
+            elementTypes = listOf(
+                RobotFieldElementType(id = "note", shape = "sphere", diameter = 0.35)
+            ),
+            elements = listOf(
+                RobotFieldElementInstance(id = "note-1", elementTypeId = "note", x = 3.0, y = 2.0)
+            )
+        )
+
+        try {
+            publisher.set(RobotFieldDocument.encode(config))
+            nt.flush()
+            sim.step(RobotState(), 0.02)
+
+            val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+            physicsWorldField.isAccessible = true
+            val physicsWorld = physicsWorldField.get(sim)
+            val ballsField = physicsWorld::class.java.getDeclaredField("balls")
+            ballsField.isAccessible = true
+            val balls = ballsField.get(physicsWorld) as List<Body>
+
+            assertEquals(1, balls.size)
+            assertEquals(3.0, balls.single().transform.translationX, 1e-9)
+            assertEquals(2.0, balls.single().transform.translationY, 1e-9)
+        } finally {
+            publisher.set("")
+            nt.flush()
+            publisher.close()
+        }
     }
 }
