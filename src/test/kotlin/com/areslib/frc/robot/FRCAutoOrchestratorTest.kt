@@ -50,30 +50,26 @@ class FRCAutoOrchestratorTest {
     }
 
     @Test
-    fun testEmptyAutoSequenceHandlesGracefully() {
-        // Empty auto sequence / PathLoader failing to load should not crash
+    fun testDefaultAutoSequenceInitializesWithoutFault() {
         orchestrator.autonomousInit()
         
         RobotClock.setMockTimeMs(1100)
         orchestrator.autonomousPeriodic()
         
-        // SimPath should load, but if it doesn't, it gracefully handles it.
-        // We verify that state is stable
-        val state = robot.store.state
-        assertNotNull(state)
+        assertNotNull(robot.store.state)
+        assertFalse(orchestrator.isFaultedForTest)
     }
 
     @Test
-    fun testRealTimeDtCalculationUsesRobotClock() {
+    fun testLargeRobotClockJumpIsBoundedSafely() {
         orchestrator.autonomousInit()
 
         // Advance simulated time
         RobotClock.setMockTimeMs(2000) // +1 second
         
-        // autonomousPeriodic should handle the time delta
         orchestrator.autonomousPeriodic()
-        
-        assertTrue(true)
+
+        assertFalse(orchestrator.isFaultedForTest)
     }
 
     @Test
@@ -94,16 +90,14 @@ class FRCAutoOrchestratorTest {
     }
 
     @Test
-    fun testEventMarkerActionsFireAtCorrectPathTimestamps() {
+    fun testLargeClockJumpDoesNotSkipIntoAnInvalidEventState() {
         orchestrator.autonomousInit()
         
-        // Simulate massive time jump to ensure we blow past event markers like "IntakeDeploy"
+        // Periodic clamps the large wall-clock delta before advancing its time profile.
         RobotClock.setMockTimeMs(5000)
         orchestrator.autonomousPeriodic()
-        
-        // The path will process all events because of the large dt.
-        // We ensure no crashes occur.
-        assertTrue(true)
+
+        assertFalse(orchestrator.isFaultedForTest)
     }
 
     @Test

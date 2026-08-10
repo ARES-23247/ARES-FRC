@@ -3,11 +3,15 @@ package com.areslib.frc.sim.io
 import com.areslib.frc.hardware.CowlIO
 import com.areslib.frc.Dyn4jSimulation
 
+/**
+ * Simulation boundary for cowl mechanism rotations.
+ *
+ * The visualization model stores degrees internally and uses 32 degrees per mechanism rotation;
+ * callers remain insulated from that representation through [CowlIO]. Effort-scaled position
+ * commands cap voltage without changing the requested geometry.
+ */
 class SimulatedCowlIO(private val sim: Dyn4jSimulation) : CowlIO {
     override fun setTargetAngle(rotations: Double) {
-        /**
-         * Documentation for error
-         */
         val targetDegrees = rotations * 32.0
         val error = targetDegrees - sim.simCowlAngle
         sim.simCowlVoltage = (error * 0.5).coerceIn(-12.0, 12.0)

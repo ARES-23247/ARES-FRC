@@ -5,23 +5,18 @@ import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.world.World
 import com.areslib.frc.marvin.MarvinConfig
-/**
- * Documentation for FrcFieldBuilder
- */
 
+/** Builds static Dyn4j collision bodies in blue-origin field meters. */
 object FrcFieldBuilder {
-    /**
-     * Documentation for buildFrcField
-     */
 
+    /**
+     * Builds the season simulation layout using canonical FRC field extents.
+     *
+     * The interior bodies are simulator collision approximations, not authoritative FIRST field
+     * drawings; autonomous field constants remain defined separately in [MarvinConfig].
+     */
     fun buildFrcField(world: World<Body>) {
-        /**
-         * Documentation for width
-         */
         val width = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
-        /**
-         * Documentation for height
-         */
         val height = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
 
         // Outer bounds
@@ -48,10 +43,8 @@ object FrcFieldBuilder {
         addWall(world, 2.5, height / 2.0, 0.6, 1.4)       // Blue Climb Base
         addWall(world, width - 2.5, height / 2.0, 0.6, 1.4) // Red Climb Base
     }
-    /**
-     * Documentation for buildWorldWalls
-     */
 
+    /** Adds only an axis-aligned boundary of [width] by [height] meters. */
     fun buildWorldWalls(world: World<Body>, width: Double, height: Double) {
         addWall(world, width / 2.0, height, width, 0.1)   // Top
         addWall(world, width / 2.0, 0.0, width, 0.1)      // Bottom
@@ -60,9 +53,6 @@ object FrcFieldBuilder {
     }
 
     private fun addWall(world: World<Body>, x: Double, y: Double, w: Double, h: Double) {
-        /**
-         * Documentation for wall
-         */
         val wall = Body()
         wall.addFixture(Geometry.createRectangle(w, h))
         wall.setMass(MassType.INFINITE)

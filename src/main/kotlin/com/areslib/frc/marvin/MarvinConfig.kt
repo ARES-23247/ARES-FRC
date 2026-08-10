@@ -2,10 +2,8 @@ package com.areslib.frc.marvin
 
 import com.areslib.control.assist.ShotConfig
 import com.areslib.math.geometry.Translation2d
-/**
- * Documentation for MarvinConfig
- */
 
+/** Tuned Marvin XIX mechanism, shot, and official 2024 Crescendo field constants. */
 object MarvinConfig {
     /**
      * Feeder transfer speed (RPS) commanded when a shot is fired. Matches the aligned
@@ -24,7 +22,13 @@ object MarvinConfig {
      */
     const val cowlMaxRotations = 1.80
 
-    /** Ballistic lookup configuration; cowl table values are mechanism rotations. */
+    /**
+     * Ballistic lookup configuration.
+     *
+     * Offsets and lookup keys are meters, time-of-flight values and delay are seconds, flywheel
+     * values are RPM, and cowl values are mechanism rotations. A rearward-facing shooter requires
+     * the aim solution to add pi radians to the field bearing.
+     */
     val SHOT_CONFIG = ShotConfig(
         shooterOffsetX = -0.044704,
         shooterOffsetY = -0.055626,

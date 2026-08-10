@@ -23,10 +23,20 @@ import edu.wpi.first.math.MathUtil
 import edu.wpi.first.wpilibj.DriverStation
 import edu.wpi.first.wpilibj.GenericHID
 import edu.wpi.first.wpilibj.XboxController
-/**
- * Documentation for FRCTeleOpDriveController
- */
 
+/**
+ * Converts the two cached Xbox-controller snapshots into Redux setpoints and a field-relative
+ * swerve command during teleop.
+ *
+ * Translational inputs are meters per second in the blue-origin WPILib field frame; heading and
+ * angular velocity are CCW-positive radians. Red-alliance translation is rotated by 180 degrees
+ * so driver-forward remains away from the alliance wall. The controller dispatches only changed
+ * setpoints on the 20 ms robot loop and never reads mechanism hardware directly.
+ *
+ * Command priority is intentionally explicit: copilot X-lock returns before mechanism handling;
+ * driver shooting owns automatic aim; unjam overrides slamtake and manual intake; an active
+ * slamtake owns its mechanism targets until the reducer ends it.
+ */
 class FRCTeleOpDriveController(
     private val robot: FrcSwerveRobot,
     private val marvinShooter: MarvinShooterSubsystem,
@@ -42,74 +52,49 @@ class FRCTeleOpDriveController(
     private var rumbleStartTimestampMs: Long = 0
     private val shotResult = ShotResult()
 
-    // Pre-allocated objects
+    // Pre-allocated shuttle targets in blue-origin field meters; index 1 is currently selected.
     private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
     private val targetPosesBlue = arrayOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
-    /**
-     * Documentation for cachedAlliance
-     */
 
+    /**
+     * Alliance used to interpret field-relative driver input.
+     *
+     * Assigning this also keeps the shared Redux drive state synchronized with Driver Station
+     * state, avoiding an alliance mismatch between input handling and other drive consumers.
+     */
     var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
         set(value) {
             field = value
-            val reduxAlliance = if (value == DriverStation.Alliance.Red) {
-                com.areslib.state.Alliance.RED
-            } else {
-                com.areslib.state.Alliance.BLUE
+            val reduxAlliance = when (value) {
+                DriverStation.Alliance.Red -> com.areslib.state.Alliance.RED
+                DriverStation.Alliance.Blue -> com.areslib.state.Alliance.BLUE
             }
             if (robot.store.state.drive.alliance != reduxAlliance) {
                 robot.store.dispatch(RobotAction.SetAlliance(reduxAlliance))
             }
         }
-    /**
-     * Documentation for speakerTranslation
-     */
+    /** Active alliance speaker target in blue-origin field coordinates, in meters. */
     var speakerTranslation = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker
-    /**
-     * Documentation for teleopInit
-     */
 
+    /** Lifecycle hook retained for symmetry with [teleopPeriodic]; no reset is currently needed. */
     fun teleopInit() {
     }
-    /**
-     * Documentation for teleopPeriodic
-     */
 
+    /** Processes one cached 20 ms input snapshot and emits drive/mechanism setpoints. */
     fun teleopPeriodic() {
         try {
-            /**
-             * Documentation for marvin
-             */
             val marvin = robot.store.state.superstructure.marvin
-            /**
-             * Documentation for rawForward
-             */
 
             val rawForward = MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) * 4.5
-            /**
-             * Documentation for rawStrafe
-             */
             val rawStrafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
             // Field coordinates are blue-origin. Rotate translation intent 180 degrees
             // on red so pushing away from either alliance wall remains driver-forward.
             val allianceScale = if (cachedAlliance == DriverStation.Alliance.Red) -1.0 else 1.0
-            /**
-             * Documentation for forward
-             */
             val forward = rawForward * allianceScale
-            /**
-             * Documentation for strafe
-             */
             val strafe = rawStrafe * allianceScale
-            /**
-             * Documentation for rotation
-             */
             
             var rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
-            /**
-             * Documentation for currentPose
-             */
 
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
@@ -120,37 +105,13 @@ class FRCTeleOpDriveController(
             }
 
             // ── Driver / Copilot Shooting Triggers ──
-            /**
-             * Documentation for rtPressed
-             */
             val rtPressed = controllerState.rightTrigger > 0.5f
-            /**
-             * Documentation for rbPressed
-             */
             val rbPressed = controllerState.rightBumper
-            /**
-             * Documentation for bPressed
-             */
             val bPressed = controllerState.b
-            /**
-             * Documentation for copilotRtPressed
-             */
             val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
-            /**
-             * Documentation for copilotRbPressed
-             */
             val copilotRbPressed = coPilotControllerState.rightBumper
-            /**
-             * Documentation for targetFlywheelActive
-             */
             var targetFlywheelActive = false
-            /**
-             * Documentation for targetFlywheelSpeed
-             */
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
-            /**
-             * Documentation for targetCowlAngle
-             */
             var targetCowlAngle = marvin.cowl.targetAngleRotations
 
             rotation = when {
@@ -164,13 +125,7 @@ class FRCTeleOpDriveController(
                 }
                 rbPressed -> {
                     // Aim and Shuttle
-                    /**
-                     * Documentation for isRed
-                     */
                     val isRed = cachedAlliance == DriverStation.Alliance.Red
-                    /**
-                     * Documentation for shuttleTarget
-                     */
                     val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
 
                     marvinShooter.updateShootOnTheMove(
@@ -208,9 +163,6 @@ class FRCTeleOpDriveController(
 
             // Dispatch flywheel & cowl changes only
             if (!rtPressed && !rbPressed && !bPressed) {
-                /**
-                 * Documentation for currentFlywheelActive
-                 */
                 val currentFlywheelActive = robot.store.state.superstructure.marvin.flywheelActive
                 if (currentFlywheelActive != targetFlywheelActive) {
                     robot.store.dispatch(SetFlywheelActive(targetFlywheelActive, com.areslib.util.RobotClock.currentTimeMillis()))
@@ -233,32 +185,17 @@ class FRCTeleOpDriveController(
             robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
 
             // ── A Button: Start Slamtake Sequence ──
-            /**
-             * Documentation for aPressed
-             */
             val aPressed = controllerState.a
-            /**
-             * Documentation for isSlamtakeActive
-             */
             val isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
             if (aPressed && !isSlamtakeActive) {
                 robot.store.dispatch(StartSlamtake())
             }
 
             // ── Left Bumper: Unjam ──
-            /**
-             * Documentation for lbPressed
-             */
             val lbPressed = controllerState.leftBumper
 
             // ── Left Trigger: Intake/Feeder active run ──
-            /**
-             * Documentation for ltPressed
-             */
             val ltPressed = controllerState.leftTrigger > 0.5f
-            /**
-             * Documentation for copilotLtPressed
-             */
             val copilotLtPressed = coPilotControllerState.leftTrigger > 0.5f
 
             // ── POV Left/Right: Manual Intake Deploy Override ──
@@ -268,21 +205,9 @@ class FRCTeleOpDriveController(
             }
 
             // Dispatch states according to pilot control priorities
-            /**
-             * Documentation for targetPivot
-             */
             var targetPivot = intakeDeployed
-            /**
-             * Documentation for targetIntakeRollers
-             */
             var targetIntakeRollers = 0.0
-            /**
-             * Documentation for targetFloorSpeed
-             */
             var targetFloorSpeed = 0.0
-            /**
-             * Documentation for targetFeederSpeed
-             */
             var targetFeederSpeed = 0.0
 
             when {
@@ -297,7 +222,7 @@ class FRCTeleOpDriveController(
                     targetFeederSpeed = -5.0
                 }
                 isSlamtakeActive -> {
-                    // Handled inside MarvinReducer! We do not mutate targets manually here
+                    // The reducer's active slamtake state machine owns these targets.
                 }
                 ltPressed -> {
                     // Active manual intake
@@ -344,17 +269,8 @@ class FRCTeleOpDriveController(
             }
 
             // ── POV Up/Down: Climber Voltage (Driver or Copilot) ──
-            /**
-             * Documentation for povUp
-             */
             val povUp = controllerState.dpadUp || coPilotControllerState.dpadUp
-            /**
-             * Documentation for povDown
-             */
             val povDown = controllerState.dpadDown || coPilotControllerState.dpadDown
-            /**
-             * Documentation for targetClimberVoltage
-             */
             val targetClimberVoltage = when {
                 povUp -> 6.0
                 povDown -> -6.0
@@ -365,9 +281,6 @@ class FRCTeleOpDriveController(
             }
 
             // ── Beach / Traction Loss detection ──
-            /**
-             * Documentation for beached
-             */
             val beached = robot.isBeached
             if (beached != lastBeached) {
                 robot.telemetry.putBoolean("Diagnostics/Beached", beached)

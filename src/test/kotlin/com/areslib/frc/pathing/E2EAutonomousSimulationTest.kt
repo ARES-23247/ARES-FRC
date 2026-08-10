@@ -18,47 +18,26 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.BufferedReader
 import java.io.InputStreamReader
-/**
- * Documentation for E2EAutonomousSimulationTest
- */
 
 class E2EAutonomousSimulationTest {
-    /**
-     * Documentation for testE2EAutonomousTrajectoryAndSubsystems
-     */
 
     @Test
     fun testE2EAutonomousTrajectoryAndSubsystems() {
         // 1. Load SimPath.path from test classpath resources (inherited from main resources)
-        /**
-         * Documentation for resourcePath
-         */
         val resourcePath = "/deploy/pathplanner/paths/SimPath.path"
-        /**
-         * Documentation for inputStream
-         */
         val inputStream = javaClass.getResourceAsStream(resourcePath)
         assertNotNull(inputStream, "Could not find SimPath.path resource in test classpath!")
-        /**
-         * Documentation for jsonString
-         */
 
         val jsonString = BufferedReader(InputStreamReader(inputStream!!, Charsets.UTF_8)).use { reader ->
             reader.readText()
         }
-        /**
-         * Documentation for path
-         */
         val path = PathPlannerParser.parsePath(jsonString)
         assertNotNull(path)
         assertTrue(path.points.isNotEmpty(), "Parsed path points should not be empty")
         assertEquals(3, path.events.size, "Should have exactly 3 parsed event markers (FlywheelOn, IntakeDeploy, FeederShoot)")
 
-        // 2. Build a REAL FrcSwerveRobot + FRCAutoOrchestrator so events flow through the
+        // 2. Build production FrcSwerveRobot + FRCAutoOrchestrator instances so events flow through the
         //    production dispatch path rather than a reimplementation in the test.
-        /**
-         * Documentation for robot
-         */
         val robot = FrcSwerveRobot(
             isSimulation = true,
             initialState = RobotState(
@@ -66,21 +45,9 @@ class E2EAutonomousSimulationTest {
             ),
             reducer = { state, action -> MarvinReducer.reduce(state, action) }
         )
-        /**
-         * Documentation for sim
-         */
         val sim = Dyn4jSimulation()
-        /**
-         * Documentation for marvinShooter
-         */
         val marvinShooter = MarvinShooterSubsystem(robot.store)
-        /**
-         * Documentation for marvinIntake
-         */
         val marvinIntake = MarvinIntakeSubsystem(robot.store)
-        /**
-         * Documentation for orchestrator
-         */
         val orchestrator = FRCAutoOrchestrator(robot, sim, marvinShooter, marvinIntake)
 
         // 3. Seed an aligned flywheel (target + measured velocity) so the FeederShoot event
@@ -97,22 +64,10 @@ class E2EAutonomousSimulationTest {
             )
         )
 
-        // 4. Drive each parsed event through the REAL orchestrator handler in declared order.
-        /**
-         * Documentation for flywheelOnCompleted
-         */
+        // 4. Drive each parsed event through the production orchestrator handler in declared order.
         var flywheelOnCompleted = false
-        /**
-         * Documentation for intakeDeployCompleted
-         */
         var intakeDeployCompleted = false
-        /**
-         * Documentation for feederShootCompleted
-         */
         var feederShootCompleted = false
-        /**
-         * Documentation for t
-         */
         var t = 1.0
         for (event in path.events) {
             if (orchestrator.handleEvent(event.eventName, t)) {
@@ -131,9 +86,6 @@ class E2EAutonomousSimulationTest {
         assertTrue(feederShootCompleted, "FeederShoot auto event should have completed via the real orchestrator")
 
         // 6. Hard assertions on the resulting Redux state.
-        /**
-         * Documentation for marvin
-         */
         val marvin = robot.store.state.superstructure.marvin
         assertEquals(4000.0, marvin.flywheel.targetVelocityRpm, "FlywheelOn should spin the flywheel up to 4000 RPM")
         assertTrue(marvin.intake.isDeployed, "IntakeDeploy should deploy the intake pivot")

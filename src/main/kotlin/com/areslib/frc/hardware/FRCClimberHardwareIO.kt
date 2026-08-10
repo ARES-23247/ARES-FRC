@@ -1,8 +1,5 @@
 package com.areslib.frc.hardware
 
-import com.areslib.frc.hardware.ClimberIO
-import com.ctre.phoenix6.BaseStatusSignal
-import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -10,8 +7,12 @@ import com.ctre.phoenix6.signals.InvertedValue
 import com.ctre.phoenix6.signals.NeutralModeValue
 
 /**
- * Concrete implementation of ClimberIO utilizing a CTRE TalonFX motor
- * on ID 19 on the "CAN2" high-speed bus, with configured soft limits.
+ * CTRE TalonFX climber IO for CAN ID 19 on `CAN2`.
+ *
+ * Position feedback and commands are mechanism rotations after the configured 80:1
+ * sensor ratio. [refresh] is the only sensor-read phase; property getters return the
+ * cached status-signal values. Closed-loop effort is bounded independently of the
+ * geometric target, and TalonFX soft limits provide the final `0.0..1.73` boundary.
  */
 class FRCClimberHardwareIO(
     private val motor: TalonFX

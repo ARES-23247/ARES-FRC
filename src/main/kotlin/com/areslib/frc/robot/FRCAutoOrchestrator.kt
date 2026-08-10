@@ -13,10 +13,17 @@ import com.areslib.pathing.Path
 import com.areslib.pathing.MutablePathPoint
 import com.areslib.frc.aresAlliance
 import com.areslib.frc.marvin.marvin
-/**
- * Documentation for FRCAutoOrchestrator
- */
 
+/**
+ * Owns one autonomous path execution for the current WPILib autonomous period.
+ *
+ * Path points are blue-origin field coordinates and are alliance-adjusted during
+ * [autonomousInit]. A time-derived profile distance drives target sampling, while a
+ * rolling closest-point projection of measured pose triggers events. `FeederShoot`
+ * freezes profile time at its marker for at most two seconds; invalid flywheel
+ * freshness cannot authorize the shot. Missing/empty paths and runtime exceptions latch
+ * a fault and invoke [failSafeStop].
+ */
 class FRCAutoOrchestrator(
     private val robot: FrcSwerveRobot,
     private val sim: Dyn4jSimulation?,
@@ -24,7 +31,6 @@ class FRCAutoOrchestrator(
     private val marvinIntake: MarvinIntakeSubsystem
 ) {
     private var activePath: Path? = null
-    private var autoStartTime = 0.0
     private var autoDistance = 0.0
     private var actualPathDistance = 0.0
     private var profileElapsedSeconds = 0.0
@@ -33,14 +39,11 @@ class FRCAutoOrchestrator(
     private var waitingHoldDistance = Double.NaN
     private var autoFaulted = false
     private var lastLoopTime = 0.0
-    private var lastOdomX = 0.0
-    private var lastOdomY = 0.0
     
     private val triggeredEvents = mutableSetOf<Int>()
     private var isWaitingForCommand = false
     private var isFirstPath = true
     private var commandWaitStartTime = 0.0
-    private var previousDistance = 0.0
     
     private val driveController = HolonomicDriveController(
         PIDController(5.0, 0.0, 0.5),
@@ -50,15 +53,15 @@ class FRCAutoOrchestrator(
 
     private val targetPoseScratch = DoubleArray(3)
     private val scratchPathPoint = MutablePathPoint()
-    /**
-     * Documentation for autonomousInit
-     */
 
+    /** Loads/mirrors the selected path, builds its time profile, and seeds all pose owners. */
     fun autonomousInit() {
         isFirstPath = true
         var pathName = ""
         try {
-            pathName = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
+            val dashboard = edu.wpi.first.networktables.NetworkTableInstance.getDefault()
+                .getTable("SmartDashboard")
+            pathName = dashboard.getEntry("SelectedPath").getString("SimPath")
             if (edu.wpi.first.wpilibj.RobotBase.isReal() && pathName == "SimPath") {
                 edu.wpi.first.wpilibj.DriverStation.reportError("No auto path selected (default SimPath)", true)
                 activePath = Path(emptyList())
@@ -111,37 +114,25 @@ class FRCAutoOrchestrator(
         isWaitingForCommand = false
         autoFaulted = false
         commandWaitStartTime = 0.0
-        autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-        val estimator = robot.store.state.drive.poseEstimator
-        lastOdomX = estimator.estimatedPoseX
-        lastOdomY = estimator.estimatedPoseY
+        val nowSeconds = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         autoDistance = 0.0
         actualPathDistance = 0.0
         profileElapsedSeconds = 0.0
         profileSegmentIndex = 0
         waitingHoldDistance = Double.NaN
-        previousDistance = 0.0
-        lastLoopTime = autoStartTime
+        lastLoopTime = nowSeconds
     }
-    /**
-     * Documentation for autonomousPeriodic
-     */
 
+    /** Advances profile tracking/events once; a latched fault makes later calls no-ops. */
     fun autonomousPeriodic() {
         if (autoFaulted) return
         try {
-            /**
-             * Documentation for path
-             */
             val path = activePath ?: return
             if (path.points.isEmpty()) {
                 autoFaulted = true
                 failSafeStop()
                 return
             }
-            /**
-             * Documentation for dt
-             */
             val currentTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
             if (lastLoopTime <= 0.0) {
                 lastLoopTime = currentTime
@@ -149,9 +140,6 @@ class FRCAutoOrchestrator(
             }
             val dt = (currentTime - lastLoopTime).coerceIn(0.005, 0.1)
             lastLoopTime = currentTime
-            /**
-             * Documentation for currentPose
-             */
 
             val estimator = robot.store.state.drive.poseEstimator
 
@@ -215,9 +203,6 @@ class FRCAutoOrchestrator(
 
             // Event markers
             for (i in 0 until path.events.size) {
-                /**
-                 * Documentation for event
-                 */
                 val event = path.events[i]
                 
                 if (actualPathDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
@@ -235,24 +220,15 @@ class FRCAutoOrchestrator(
                     }
                 }
             }
-            previousDistance = autoDistance
-
             // Trajectory telemetry
             targetPoseScratch[0] = scratchPathPoint.x
             targetPoseScratch[1] = scratchPathPoint.y
             targetPoseScratch[2] = scratchPathPoint.headingRad
             robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
-            /**
-             * Documentation for dx
-             */
             val dx = scratchPathPoint.x - estimator.estimatedPoseX
             val dy = scratchPathPoint.y - estimator.estimatedPoseY
             robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
 
-            val actualDx = estimator.estimatedPoseX - lastOdomX
-            val actualDy = estimator.estimatedPoseY - lastOdomY
-            lastOdomX = estimator.estimatedPoseX
-            lastOdomY = estimator.estimatedPoseY
         } catch (e: Exception) {
             edu.wpi.first.wpilibj.DriverStation.reportError("Exception in autonomousPeriodic: ${e.message}", false)
             autoFaulted = true
@@ -269,38 +245,45 @@ class FRCAutoOrchestrator(
      * @return true if the event completed, false if it must keep waiting.
      */
     internal fun handleEvent(eventName: String, currentTimeSeconds: Double): Boolean {
-        var eventCompleted = true
-        when (eventName) {
-            "FlywheelOn" -> marvinShooter.spinUp(4000.0)
-            "IntakeDeploy" -> {
+        return when (eventName) {
+            FLYWHEEL_ON_EVENT -> {
+                marvinShooter.spinUp(4000.0)
+                true
+            }
+            INTAKE_DEPLOY_EVENT -> {
                 marvinIntake.deploy()
                 marvinIntake.setRollerSpeed(15.0)
+                true
             }
-            "FeederShoot" -> {
-                val marvinState = robot.store.state.superstructure.marvin
-                val isRpmAligned = marvinState.flywheel.velocityValid &&
-                    marvinState.flywheel.targetVelocityRpm > 100.0 &&
-                    kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
-                if (isRpmAligned) {
-                    marvinShooter.shoot()
-                    robot.store.dispatch(SetFeederSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, com.areslib.util.RobotClock.currentTimeMillis()))
-                    isWaitingForCommand = false
-                    commandWaitStartTime = 0.0
-                } else {
-                    if (!isWaitingForCommand) {
-                        commandWaitStartTime = currentTimeSeconds
-                    }
-                    if (currentTimeSeconds - commandWaitStartTime > 2.0) {
-                        isWaitingForCommand = false
-                        commandWaitStartTime = 0.0
-                    } else {
-                        isWaitingForCommand = true
-                        eventCompleted = false
-                    }
-                }
-            }
+            FEEDER_SHOOT_EVENT -> handleFeederShoot(currentTimeSeconds)
+            else -> true
         }
-        return eventCompleted
+    }
+
+    private fun handleFeederShoot(currentTimeSeconds: Double): Boolean {
+        val flywheel = robot.store.state.superstructure.marvin.flywheel
+        val rpmAligned = flywheel.velocityValid &&
+            flywheel.targetVelocityRpm > 100.0 &&
+            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
+
+        if (rpmAligned) {
+            marvinShooter.shoot()
+            robot.store.dispatch(
+                SetFeederSpeed(
+                    MarvinConfig.FEEDER_SHOOT_SPEED_RPS,
+                    com.areslib.util.RobotClock.currentTimeMillis()
+                )
+            )
+            isWaitingForCommand = false
+            commandWaitStartTime = 0.0
+            return true
+        }
+
+        if (!isWaitingForCommand) commandWaitStartTime = currentTimeSeconds
+        val timedOut = currentTimeSeconds - commandWaitStartTime > COMMAND_WAIT_TIMEOUT_SECONDS
+        isWaitingForCommand = !timedOut
+        if (timedOut) commandWaitStartTime = 0.0
+        return timedOut
     }
 
     private fun buildProfileTimeline(path: Path) {
@@ -394,5 +377,9 @@ class FRCAutoOrchestrator(
 
     private companion object {
         const val MIN_PROFILE_VELOCITY_MPS = 0.10
+        const val COMMAND_WAIT_TIMEOUT_SECONDS = 2.0
+        const val FLYWHEEL_ON_EVENT = "FlywheelOn"
+        const val INTAKE_DEPLOY_EVENT = "IntakeDeploy"
+        const val FEEDER_SHOOT_EVENT = "FeederShoot"
     }
 }

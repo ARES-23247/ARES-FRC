@@ -7,8 +7,12 @@ import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
 /**
- * Concrete implementation of FlywheelIO utilizing 4 physical CTRE TalonFX motors
- * on the "CAN2" high-speed bus. Geared in opposing pairs.
+ * Four-motor TalonFX flywheel IO on `CAN2`, arranged as opposed master/follower pairs.
+ *
+ * Public speed units are RPM; CTRE closed-loop requests use rotations per second at this
+ * boundary. [refresh] jointly refreshes both master velocity signals and records whether
+ * that observation is trustworthy. Consumers must require [velocityValid] before using
+ * cached RPM to authorize feeding. Reverse voltage is disabled by configuration.
  */
 class FRCFlywheelHardwareIO(
     private val leftMaster: TalonFX,
@@ -98,9 +102,6 @@ class FRCFlywheelHardwareIO(
     }
 
     override fun setVelocityRpm(rpm: Double) {
-        /**
-         * Documentation for rps
-         */
         val rps = rpm / 60.0
         leftMaster.setControl(velocityRequest.withVelocity(rps))
         rightMaster.setControl(velocityRequest.withVelocity(rps))

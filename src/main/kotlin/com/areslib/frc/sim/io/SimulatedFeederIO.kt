@@ -3,6 +3,13 @@ package com.areslib.frc.sim.io
 import com.areslib.frc.hardware.FeederIO
 import com.areslib.frc.Dyn4jSimulation
 
+/**
+ * Simulation boundary for feeder voltage and optional piece detection.
+ *
+ * When [detectorConfigured] is false, [pieceDetectionValid] is false and `isBeamBroken == false`
+ * must not be interpreted as a trusted no-piece observation. This matches fail-closed hardware
+ * behavior when no detector is installed or its sample is stale.
+ */
 class SimulatedFeederIO(
     private val sim: Dyn4jSimulation,
     private val detectorConfigured: Boolean = false

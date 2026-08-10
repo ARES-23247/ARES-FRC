@@ -1,16 +1,15 @@
 package com.areslib.frc.hardware
 
-import com.areslib.frc.hardware.IntakeIO
-import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
 /**
- * Concrete implementation of IntakeIO utilizing CTRE TalonFX motors for pivot
- * and rollers, tracking position via the internal motor encoder.
+ * TalonFX IO for the Marvin XIX intake pivot and roller.
  *
- * Designed for Marvin 19's CAN2 bus and 4:1 gear feedback ratio (no CANcoder).
+ * The public pivot contract is degrees; commands are converted to mechanism rotations
+ * after CTRE's configured 4:1 sensor ratio. Roller commands use RPS. [refresh] is the
+ * sole sensor-read phase, so position/current getters remain cached and CAN-free.
  */
 class FRCIntakeHardwareIO(
     private val pivotMotor: TalonFX,
@@ -83,9 +82,6 @@ class FRCIntakeHardwareIO(
     override fun setPivotAngle(degrees: Double) {
         // Convert degrees to mechanism rotations (1 degree = (1.0 / 360.0) rotations)
         // Feedback.SensorToMechanismRatio handles the internal 4:1 scaling in TalonFX
-        /**
-         * Documentation for rotations
-         */
         val rotations = degrees / 360.0
         pivotMotor.setControl(positionRequest.withPosition(rotations))
     }

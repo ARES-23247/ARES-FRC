@@ -1,8 +1,6 @@
 package com.areslib.frc.marvin
 
 import com.areslib.Store
-import com.areslib.state.RobotState
-import com.areslib.action.RobotAction
 import com.areslib.math.geometry.Pose2d
 import com.areslib.math.geometry.Translation2d
 import com.areslib.math.geometry.ChassisSpeeds
@@ -15,14 +13,13 @@ import com.areslib.control.assist.ShotSetup
  * This subsystem controller orchestrates multiple underlying controllers (flywheel,
  * cowl, feeder) to deliver a single-responsibility interface for aiming and firing.
  * 
- * **Physical Units & Conventions:**
- * - Translational velocities: Meters per second ($m/s$).
- * - Angular velocities: Radians per second ($rad/s$).
- * - Heading: CCW-positive radians ($rad$).
- * - Angles/Rotations: Rotations or Degrees as specifically named.
+ * SOTM uses measured field-frame chassis velocity rather than joystick intent. Field
+ * positions are meters, headings are CCW-positive radians, flywheel targets are RPM,
+ * and every cowl value is a mechanism rotation. Rearward-facing aim follows
+ * [MarvinConfig.SHOT_CONFIG]. Feeding remains closed until both heading and fresh RPM gates pass.
  *
  * **Performance Guarantees:**
- * - Zero-GC Allocations in hot teleop and auto periodic update loops.
+ * - Mutable [scratchSpeeds] and caller-owned [ShotResult] keep periodic calculation allocation-free.
  *
  * @param store The central Redux-style store containing global robot state.
  */
@@ -38,62 +35,49 @@ class MarvinShooterSubsystem(private val store: Store) {
     private var lastVx = 0.0
     private var lastVy = 0.0
     private var lastVTime = 0.0
-    /**
-     * Documentation for flywheelRPM
-     */
 
+    /** Cached measured flywheel RPM. */
     val flywheelRPM: Double
         get() = flywheelController.flywheelRPM
-    /**
-     * Documentation for flywheelTargetRPM
-     */
 
+    /** Commanded flywheel RPM. */
     val flywheelTargetRPM: Double
         get() = flywheelController.flywheelTargetRPM
-    /**
-     * Documentation for cowlAngleRotations
-     */
 
+    /** Cached measured cowl mechanism rotations. */
     val cowlAngleRotations: Double
         get() = cowlController.cowlAngleRotations
-    /**
-     * Documentation for transferActive
-     */
 
+    /** Whether an already-authorized transfer is in progress. */
     val transferActive: Boolean
         get() = feederController.transferActive
-    /**
-     * Documentation for spinUp
-     */
 
+    /** Enables the flywheel at [targetRpm]. */
     fun spinUp(targetRpm: Double) {
         flywheelController.spinUp(targetRpm)
     }
-    /**
-     * Documentation for shoot
-     */
 
+    /** Starts a transfer; callers are responsible for enforcing firing interlocks. */
     fun shoot() {
         feederController.shoot()
     }
-    /**
-     * Documentation for stop
-     */
 
+    /** Stops flywheel, feeder, and floor and clears their re-command-sensitive targets. */
     fun stop() {
         flywheelController.stop()
         feederController.stop()
     }
-    /**
-     * Documentation for setCowlAngle
-     */
 
+    /** Commands cowl mechanism rotations through the shared software clamp. */
     fun setCowlAngleRotations(rotations: Double) {
         cowlController.setCowlAngleRotations(rotations)
     }
 
     /**
-     * Calculates SOTM parameters, dispatches target speeds/angles, and returns target rotation command.
+     * Calculates SOTM parameters from measured field-frame motion, dispatches shooter
+     * targets/interlocks, and returns a chassis omega command in radians per second.
+     *
+     * [shotResult] is populated in place for telemetry/caller inspection.
      */
     fun updateShootOnTheMove(
         currentPose: Pose2d,
@@ -101,21 +85,9 @@ class MarvinShooterSubsystem(private val store: Store) {
         shotResult: ShotResult,
         runFloorRollers: Boolean = false
     ): Double {
-        /**
-         * Documentation for driveState
-         */
         val driveState = store.state.drive
-        /**
-         * Documentation for rx
-         */
         val rx = driveState.measuredFieldXVelocityMetersPerSecond
-        /**
-         * Documentation for ry
-         */
         val ry = driveState.measuredFieldYVelocityMetersPerSecond
-        /**
-         * Documentation for omega
-         */
         val omega = driveState.measuredAngularVelocityRadiansPerSecond
         
         val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
@@ -127,50 +99,24 @@ class MarvinShooterSubsystem(private val store: Store) {
         lastVy = ry
         lastVTime = now
         
-        // Approximate delay of 0.2s for SOTM calculation
-        val dtDelay = 0.2
-        scratchSpeeds.vxMetersPerSecond = rx + ax * dtDelay
-        scratchSpeeds.vyMetersPerSecond = ry + ay * dtDelay
+        // Project measured acceleration through the mechanism/control response delay.
+        scratchSpeeds.vxMetersPerSecond = rx + ax * ACCELERATION_LOOKAHEAD_SECONDS
+        scratchSpeeds.vyMetersPerSecond = ry + ay * ACCELERATION_LOOKAHEAD_SECONDS
         scratchSpeeds.omegaRadiansPerSecond = omega
         
         shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, shotResult)
-        /**
-         * Documentation for targetRpm
-         */
         
         val targetRpm = shotResult.targetFlywheelRpm
         flywheelController.spinUp(targetRpm)
-        /**
-         * Documentation for targetCowl
-         */
         
         val targetCowlRotations = shotResult.targetCowlAngleRotations
         cowlController.setCowlAngleRotations(targetCowlRotations)
-        /**
-         * Documentation for headingError
-         */
         
         val headingError = shotResult.robotTargetHeadingRad - currentPose.heading.radians
-        /**
-         * Documentation for wrappedError
-         */
         val wrappedError = com.areslib.math.wrapAngle(headingError)
-        /**
-         * Documentation for kp
-         */
-        val kp = 4.0
-        /**
-         * Documentation for rotation
-         */
-        val rotation = wrappedError * kp + shotResult.angularVelocityFeedforwardRadPerSec
-        /**
-         * Documentation for headingAligned
-         */
+        val rotation = wrappedError * AIM_KP + shotResult.angularVelocityFeedforwardRadPerSec
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
-        /**
-         * Documentation for rpmAligned
-         */
         val rpmAligned = flywheelController.isRpmAligned(shotResult.targetFlywheelRpm)
         
         feederController.updateFeeders(rpmAligned, headingAligned, runFloorRollers)
@@ -179,61 +125,39 @@ class MarvinShooterSubsystem(private val store: Store) {
     }
 
     /**
-     * Calculates static shooting parameters and dispatches targets.
+     * Calculates a stationary shot, dispatches RPM/cowl targets, applies rearward-facing
+     * heading control, and returns chassis omega in radians per second.
      */
     fun updateStaticShoot(
         currentPose: Pose2d,
         targetTranslation: Translation2d
     ): Double {
-        /**
-         * Documentation for dist
-         */
         val dist = kotlin.math.hypot(currentPose.x - targetTranslation.x, currentPose.y - targetTranslation.y)
-        /**
-         * Documentation for targetRpm
-         */
         val targetRpm = shotSetup.interpolateRpm(dist)
-        /**
-         * Documentation for targetCowl
-         */
         val targetCowlRotations = shotSetup.interpolateCowlRotations(dist)
         
         flywheelController.spinUp(targetRpm)
         cowlController.setCowlAngleRotations(targetCowlRotations)
-        /**
-         * Documentation for headingError
-         */
         
         var targetHeadingRad = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x)
         if (MarvinConfig.SHOT_CONFIG.shooterFacesRearward) {
             targetHeadingRad = com.areslib.math.wrapAngle(targetHeadingRad + Math.PI)
         }
         val headingError = targetHeadingRad - currentPose.heading.radians
-        /**
-         * Documentation for wrappedError
-         */
         val wrappedError = com.areslib.math.wrapAngle(headingError)
-        /**
-         * Documentation for kp
-         */
-        val kp = 4.0
-        /**
-         * Documentation for rotation
-         */
-        val rotation = wrappedError * kp
-        /**
-         * Documentation for headingAligned
-         */
+        val rotation = wrappedError * AIM_KP
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
-        /**
-         * Documentation for rpmAligned
-         */
         val rpmAligned = flywheelController.isRpmAligned(targetRpm)
         
         feederController.updateFeeders(rpmAligned, headingAligned, false)
         
         return rotation
+    }
+
+    private companion object {
+        const val ACCELERATION_LOOKAHEAD_SECONDS = 0.2
+        const val AIM_KP = 4.0
     }
 }
 

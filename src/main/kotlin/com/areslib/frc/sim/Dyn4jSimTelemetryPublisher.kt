@@ -4,14 +4,19 @@ import org.dyn4j.dynamics.Body
 import com.areslib.state.RobotState
 import com.areslib.telemetry.ITelemetry
 import com.areslib.frc.FlyingBall
-/**
- * Documentation for Dyn4jSimTelemetryPublisher
- */
 
+/**
+ * Packs robot mechanisms and game pieces into WPILib-style 3-D pose arrays.
+ *
+ * Pose translation uses blue-origin field meters and quaternion components are ordered
+ * `(w, x, y, z)`. Buffers are retained between calls; the piece buffer grows only when a new
+ * high-water mark is reached, then unused entries are zeroed so stale poses disappear.
+ */
 class Dyn4jSimTelemetryPublisher {
     private var activeFuelData = DoubleArray(100 * 7)
     private val subsystemPoseBuf = DoubleArray(7)
 
+    /** Publishes one visualization frame from cached Redux and simulation state. */
     fun publishVisualization(
         state: RobotState,
         telemetry: ITelemetry,

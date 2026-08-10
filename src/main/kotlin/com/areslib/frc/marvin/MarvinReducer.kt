@@ -2,7 +2,6 @@ package com.areslib.frc.marvin
 
 import com.areslib.action.RobotAction
 import com.areslib.state.RobotState
-import com.areslib.state.SuperstructureState
 import com.areslib.reducer.rootReducer
 
 /**
@@ -10,8 +9,8 @@ import com.areslib.reducer.rootReducer
  *
  * Composes over the core [rootReducer] (which handles drive, vision, pathing, costmap,
  * and the generic FSM) and then applies Marvin-specific state updates for each season
- * action. The reducer is pure: it only records commanded targets. Physical bounds (e.g.
- * joint travel limits) are enforced downstream by the controller facades
+ * action. The reducer is pure: it records commanded targets and cached sensor observations but
+ * performs no IO. Physical bounds (e.g. joint travel limits) are enforced downstream by controller facades
  * (e.g. [MarvinCowlController]) and by TalonFX soft limits in the hardware IO layer, not
  * here.
  *
@@ -20,29 +19,19 @@ import com.areslib.reducer.rootReducer
  * - Climber position: Mechanism rotations.
  * - Velocities: RPM for flywheel, RPS for rollers/feeders.
  *
- * **Performance Guarantees:**
- * - Zero-GC Allocations. Avoids new object creations by copying existing states only when modified and utilizing thread-local buffers.
+ * Sensor observations use deadbands to avoid copying the state tree for insignificant
+ * changes. Freshness transitions always bypass those numeric deadbands so invalid data
+ * cannot remain authoritative.
  */
 object MarvinReducer {
-    /**
-     * Documentation for reduce
-     */
 
+    /** Applies the core reducer first, then the Marvin-specific state transition. */
     fun reduce(state: RobotState, action: RobotAction): RobotState {
         // First run standard core reducer (handles drive, vision, path, costmap, and generic FSM)
-        /**
-         * Documentation for nextState
-         */
         var nextState = rootReducer(state, action)
 
         // Then apply Marvin specific state updates
-        /**
-         * Documentation for currentMarvin
-         */
         val currentMarvin = nextState.superstructure.marvin
-        /**
-         * Documentation for nextMarvin
-         */
         val nextMarvin = when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
@@ -88,9 +77,6 @@ object MarvinReducer {
                 }
             }
             is SuperstructureSensorUpdate -> {
-                /**
-                 * Documentation for updatedMarvin
-                 */
                 var updatedMarvin = currentMarvin
 
                 if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0 ||

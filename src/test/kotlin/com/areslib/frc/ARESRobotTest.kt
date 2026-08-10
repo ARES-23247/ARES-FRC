@@ -7,18 +7,12 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
-/**
- * Documentation for ARESRobotTest
- */
 
 class ARESRobotTest {
 
     private lateinit var robot: ARESRobot
     private lateinit var controllerSim: XboxControllerSim
     private lateinit var coPilotSim: XboxControllerSim
-    /**
-     * Documentation for setUp
-     */
 
     @BeforeEach
     fun setUp() {
@@ -28,17 +22,11 @@ class ARESRobotTest {
         coPilotSim = XboxControllerSim(1)
         robot = ARESRobot()
     }
-    /**
-     * Documentation for tearDown
-     */
 
     @AfterEach
     fun tearDown() {
         robot.close()
     }
-    /**
-     * Documentation for testRobotLifecycle
-     */
 
     @Test
     fun testRobotLifecycle() {
@@ -111,9 +99,5 @@ class ARESRobotTest {
         robot.teleopPeriodic()
         controllerSim.setLeftBumper(false)
 
-        // 10. copilot a -> toggle intake / manual deploy
-        coPilotSim.setAButton(true)
-        robot.teleopPeriodic()
-        coPilotSim.setAButton(false)
     }
 }

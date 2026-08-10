@@ -3,11 +3,14 @@ package com.areslib.frc.sim.io
 import com.areslib.frc.hardware.IntakeIO
 import com.areslib.frc.Dyn4jSimulation
 
+/**
+ * Simulation boundary for intake pivot degrees and roller voltage.
+ *
+ * Effort-scaled pivot commands cap voltage while retaining the requested angle, mirroring the
+ * brownout contract of the hardware implementation.
+ */
 class SimulatedIntakeIO(private val sim: Dyn4jSimulation) : IntakeIO {
     override fun setPivotAngle(degrees: Double) {
-        /**
-         * Documentation for error
-         */
         val error = degrees - sim.intakePivotSim.angleDegrees
         sim.simIntakePivotVoltage = (error * 0.4).coerceIn(-12.0, 12.0)
     }

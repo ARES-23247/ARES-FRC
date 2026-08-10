@@ -1,13 +1,15 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.hardware.FloorIO
-import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
 /**
- * Concrete implementation of FloorIO utilizing a CTRE TalonFX motor
- * on ID 16 on the "CAN2" high-speed bus.
+ * Open-loop floor-roller TalonFX IO for CAN ID 16 on `CAN2`.
+ *
+ * Redux expresses the requested roller speed in RPS, but [setAppliedVoltage] is the
+ * hardware boundary because this mechanism intentionally has no velocity loop. Velocity
+ * and current getters return signals cached by [refresh].
  */
 class FRCFloorHardwareIO(
     private val motor: TalonFX

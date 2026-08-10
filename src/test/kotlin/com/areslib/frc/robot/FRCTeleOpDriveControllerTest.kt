@@ -76,7 +76,7 @@ class FRCTeleOpDriveControllerTest {
     }
 
     @Test
-    fun testFieldCentricTransformationRotatesCorrectly() {
+    fun testRepeatedFieldCentricInputProducesConsistentCommands() {
         // Straight forward input
         controllerState.leftStickY = -1.0f
         controllerState.leftStickX = 0.0f
@@ -86,8 +86,7 @@ class FRCTeleOpDriveControllerTest {
         val vy1 = robot.store.state.drive.yVelocityMetersPerSecond
         assertTrue(vx1 != 0.0 || vy1 != 0.0)
         
-        // Verify the joystick input produces consistent drive output
-        // (manual rotation was removed; CTRE handles field-centric at the hardware level)
+        // The hardware boundary, rather than this controller, performs the field-frame transform.
         controllerState.leftStickY = -1.0f
         controllerState.leftStickX = 0.0f
         teleOpController.teleopPeriodic()
@@ -121,7 +120,7 @@ class FRCTeleOpDriveControllerTest {
     }
 
     @Test
-    fun testMotorOutputStaysWithinBounds() {
+    fun testPlanarChassisCommandStaysWithinBounds() {
         // Max forward and max strafe
         controllerState.leftStickY = -1.0f
         controllerState.leftStickX = -1.0f
@@ -131,8 +130,8 @@ class FRCTeleOpDriveControllerTest {
         val vx = robot.store.state.drive.xVelocityMetersPerSecond
         val vy = robot.store.state.drive.yVelocityMetersPerSecond
         
-        // Ensure within 4.5 * sqrt(2) or so
+        // Independent 4.5 m/s axis limits imply a 4.5*sqrt(2) planar upper bound.
         val speed = Math.hypot(vx, vy)
-        assertTrue(speed <= 6.5) // 4.5 * 1.414 is approx 6.36
+        assertTrue(speed <= 6.5)
     }
 }

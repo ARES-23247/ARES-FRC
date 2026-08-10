@@ -1,8 +1,6 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.marvin.MarvinConfig
-import com.ctre.phoenix6.BaseStatusSignal
-import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -10,11 +8,12 @@ import com.ctre.phoenix6.signals.InvertedValue
 import com.ctre.phoenix6.signals.NeutralModeValue
 
 /**
- * Concrete implementation of CowlIO utilizing a single CTRE TalonFX motor
- * to actuate the adjustable hood angle.
- * 
- * Configured in mechanism rotations directly (0.50 to 1.75 mechanism rotations),
- * matching Marvin 19 system constants and SOTM interpolations.
+ * TalonFX IO for the adjustable cowl, expressed entirely in mechanism rotations.
+ *
+ * Shot-table values such as `0.50..1.75` are rotations, not degrees. [refresh] owns
+ * CAN reads and getters expose cached observations. The target remains geometric when
+ * brownout scaling changes; the overload accepting `maxEffortScale` limits only output
+ * voltage. Software and TalonFX limits share [MarvinConfig.cowlMaxRotations].
  */
 class FRCCowlHardwareIO(
     private val motor: TalonFX
