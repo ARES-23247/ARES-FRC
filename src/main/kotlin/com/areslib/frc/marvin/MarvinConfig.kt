@@ -24,9 +24,7 @@ object MarvinConfig {
      */
     const val cowlMaxRotations = 1.80
 
-    /**
-     * Documentation for SHOT_CONFIG
-     */
+    /** Ballistic lookup configuration; cowl table values are mechanism rotations. */
     val SHOT_CONFIG = ShotConfig(
         shooterOffsetX = -0.044704,
         shooterOffsetY = -0.055626,
@@ -38,6 +36,7 @@ object MarvinConfig {
         shotRpm = doubleArrayOf(
             3350.0, 3400.0, 3450.0, 3500.0, 3550.0, 3600.0, 3650.0, 3700.0, 3750.0, 3800.0, 3850.0, 3900.0, 3950.0, 4000.0, 4050.0, 4100.0, 4150.0, 4200.0
         ),
+        // `shotCowl` is the compatibility constructor name in ARESLib; units are rotations.
         shotCowl = doubleArrayOf(
             0.50, 0.70, 0.80, 0.95, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60, 1.65, 1.70, 1.75
         ),
@@ -51,8 +50,13 @@ object MarvinConfig {
      * detector, and the sim field builder so every site agrees on the target.
      */
     object FieldTargets {
-        // TODO: verify against WPILib 2024 Crescendo field constants
-        val redSpeaker = Translation2d(11.915, 4.035)
-        val blueSpeaker = Translation2d(4.625, 4.035)
+        // Official FIRST 2024 layout: the speaker/subwoofer centerline is at
+        // Y=218.42 in. The scoring plane is the alliance wall at each field end.
+        private const val SPEAKER_CENTER_Y_METERS = 218.42 * 0.0254
+        val blueSpeaker = Translation2d(0.0, SPEAKER_CENTER_Y_METERS)
+        val redSpeaker = Translation2d(
+            com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
+            SPEAKER_CENTER_Y_METERS
+        )
     }
 }

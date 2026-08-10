@@ -77,11 +77,19 @@ class Dyn4jPhysicsWorld(seed: Long) {
          * Documentation for width
          */
 
-        val width = if (config.fieldType == com.areslib.state.FieldType.FRC) 16.541 else 3.6576
+        val width = if (config.fieldType == com.areslib.state.FieldType.FRC) {
+            com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
+        } else {
+            com.areslib.math.coordinate.CoordinateTransformers.FTC_FIELD_SIZE
+        }
         /**
          * Documentation for height
          */
-        val height = if (config.fieldType == com.areslib.state.FieldType.FRC) 8.069 else 3.6576
+        val height = if (config.fieldType == com.areslib.state.FieldType.FRC) {
+            com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
+        } else {
+            com.areslib.math.coordinate.CoordinateTransformers.FTC_FIELD_SIZE
+        }
 
         com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(world, width, height)
         com.areslib.sim.field.FieldObstacleLoader.loadObstacles(world, config.obstacles)
@@ -109,11 +117,11 @@ class Dyn4jPhysicsWorld(seed: Long) {
         /**
          * Documentation for width
          */
-        val width = 16.541
+        val width = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
         /**
          * Documentation for height
          */
-        val height = 8.069
+        val height = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
         /**
          * Documentation for ballRadius
          */

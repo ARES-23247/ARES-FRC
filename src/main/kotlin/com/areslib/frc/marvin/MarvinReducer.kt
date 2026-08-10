@@ -16,8 +16,8 @@ import com.areslib.reducer.rootReducer
  * here.
  *
  * **Physical Units & Conventions:**
- * - Angles: Degrees ($^\circ$) for intake and cowl.
- * - Distances: Meters ($m$) for climber extension.
+ * - Angles: Degrees ($^\circ$) for intake and rotations for cowl.
+ * - Climber position: Mechanism rotations.
  * - Velocities: RPM for flywheel, RPS for rollers/feeders.
  *
  * **Performance Guarantees:**
@@ -54,7 +54,7 @@ object MarvinReducer {
             is SetFlywheelActive -> currentMarvin.copy(flywheelActive = action.active)
             is SetTransferActive -> currentMarvin.copy(transferActive = action.active)
             is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
-            is SetClimberExtension -> currentMarvin.withClimberExtension(action.meters)
+            is SetClimberPositionRotations -> currentMarvin.withClimberPositionRotations(action.rotations)
             is StartSlamtake -> {
                 currentMarvin.copy(
                     slamtakeActive = true,
@@ -93,8 +93,12 @@ object MarvinReducer {
                  */
                 var updatedMarvin = currentMarvin
 
-                if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0) {
-                    updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(velocityRpm = action.flywheelRpm))
+                if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0 ||
+                    updatedMarvin.flywheel.velocityValid != action.flywheelVelocityValid) {
+                    updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(
+                        velocityRpm = if (action.flywheelVelocityValid) action.flywheelRpm else 0.0,
+                        velocityValid = action.flywheelVelocityValid
+                    ))
                 }
                 if (Math.abs(updatedMarvin.cowl.angleRotations - action.cowlAngleRotations) > 0.005) {
                     updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(angleRotations = action.cowlAngleRotations))
@@ -102,9 +106,27 @@ object MarvinReducer {
                 if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - action.intakeAngle) > 0.005) {
                     updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle))
                 }
-                if (updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
-                    val wasDetected = updatedMarvin.feeder.gamePieceDetected
-                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected, previousGamePieceDetected = wasDetected))
+                if (!action.pieceDetectionValid) {
+                    if (updatedMarvin.feeder.pieceDetectionValid || updatedMarvin.feeder.gamePieceDetected) {
+                        updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(
+                            gamePieceDetected = false,
+                            previousGamePieceDetected = updatedMarvin.feeder.gamePieceDetected,
+                            pieceDetectionValid = false
+                        ))
+                    }
+                } else if (!updatedMarvin.feeder.pieceDetectionValid || updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
+                    // Preserve the last trusted reading across a transient invalid
+                    // interval so detector recovery cannot count the same piece twice.
+                    val wasDetected = if (updatedMarvin.feeder.pieceDetectionValid) {
+                        updatedMarvin.feeder.gamePieceDetected
+                    } else {
+                        updatedMarvin.feeder.previousGamePieceDetected
+                    }
+                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(
+                        gamePieceDetected = action.pieceDetected,
+                        previousGamePieceDetected = wasDetected,
+                        pieceDetectionValid = true
+                    ))
                     if (!wasDetected && action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(inventoryCount = updatedMarvin.inventoryCount + 1)
                     } else if (wasDetected && !action.pieceDetected && updatedMarvin.transferActive) {
@@ -117,12 +139,12 @@ object MarvinReducer {
                 if (Math.abs(updatedMarvin.floor.currentAmps - action.floorCurrentAmps) > 0.05) {
                     updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = action.floorCurrentAmps))
                 }
-                if (Math.abs(updatedMarvin.climber.extensionMeters - action.climberExtensionMeters) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
+                if (Math.abs(updatedMarvin.climber.positionRotations - action.climberPositionRotations) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(positionRotations = action.climberPositionRotations))
                 }
 
                 if (updatedMarvin.slamtakeActive) {
-                    if (action.pieceDetected) {
+                    if (action.pieceDetectionValid && action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(
                             slamtakeActive = false,
                             slamtakePhase = 0,

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Assertions.*
 class MarvinReducerTest {
 
     @Test
-    fun `test SetClimberExtension action updates climber target`() {
+    fun `test SetClimberPositionRotations action updates explicit rotations target`() {
         /**
          * Documentation for initialState
          */
@@ -26,9 +26,10 @@ class MarvinReducerTest {
          */
         val statePivotStowed = MarvinReducer.reduce(
             initialState,
-            SetClimberExtension(0.25, 1000L)
+            SetClimberPositionRotations(0.25, 1000L)
         )
-        assertEquals(0.25, statePivotStowed.superstructure.marvin.climber.targetExtensionMeters, "Reducer is pure — climber extension set directly (CBF enforcement moved to facade)")
+        assertEquals(0.25, statePivotStowed.superstructure.marvin.climber.targetPositionRotations, "Reducer stores rotations without an uncalibrated distance conversion")
+        assertEquals(ClimberControlMode.POSITION_ROTATIONS, statePivotStowed.superstructure.marvin.climber.controlMode)
 
         // 2. If intake is deployed (pivotAngleDegrees = 90.0), target extension should be set correctly
         /**
@@ -46,9 +47,9 @@ class MarvinReducerTest {
          */
         val statePivotDeployedUpdated = MarvinReducer.reduce(
             statePivotDeployed,
-            SetClimberExtension(0.25, 1000L)
+            SetClimberPositionRotations(0.25, 1000L)
         )
-        assertEquals(0.25, statePivotDeployedUpdated.superstructure.marvin.climber.targetExtensionMeters, "Climber extension should set correctly when pivot is deployed")
+        assertEquals(0.25, statePivotDeployedUpdated.superstructure.marvin.climber.targetPositionRotations, "Climber rotations should set correctly when pivot is deployed")
     }
 
     @Test
@@ -76,7 +77,7 @@ class MarvinReducerTest {
                 cowlAngleRotations = 0.0,
                 intakeAngle = 0.0,
                 pieceDetected = false,
-                climberExtensionMeters = 0.03,
+                climberPositionRotations = 0.03,
                 timestampMs = 1000L
             )
         )
@@ -102,7 +103,7 @@ class MarvinReducerTest {
          */
         val stateClimberTargetExtended = MarvinReducer.reduce(
             statePivotDeployed,
-            SetClimberExtension(0.1, 1000L)
+            SetClimberPositionRotations(0.1, 1000L)
         )
         // Now if we try to command intake pivot stowed (SetIntakePivot(false) -> targetAngleDegrees = 0.0)
         /**
@@ -174,6 +175,7 @@ class MarvinReducerTest {
          */
         val stateClimberVoltage = MarvinReducer.reduce(initialState, SetClimberVoltage(11.0, 1000L))
         assertEquals(11.0, stateClimberVoltage.superstructure.marvin.climber.targetVoltage)
+        assertEquals(ClimberControlMode.VOLTAGE, stateClimberVoltage.superstructure.marvin.climber.controlMode)
     }
 
     @Test
@@ -204,7 +206,7 @@ class MarvinReducerTest {
                 cowlAngleRotations = 0.0,
                 intakeAngle = 90.0,
                 pieceDetected = false,
-                climberExtensionMeters = 0.0,
+                climberPositionRotations = 0.0,
                 timestampMs = 1200L
             )
         )
@@ -247,5 +249,83 @@ class MarvinReducerTest {
          */
         val stateSlamtakeStop = MarvinReducer.reduce(stateSlamtakeStart, StopSlamtake(1500L))
         assertFalse(stateSlamtakeStop.superstructure.marvin.slamtakeActive)
+    }
+
+    @Test
+    fun `invalid feeder detector cannot claim inventory or end slamtake`() {
+        val initial = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(inventoryCount = 1, slamtakeActive = true)
+            )
+        )
+
+        val invalidReading = MarvinReducer.reduce(
+            initial,
+            SuperstructureSensorUpdate(
+                flywheelRpm = 0.0,
+                cowlAngleRotations = 0.0,
+                intakeAngle = 90.0,
+                pieceDetected = true,
+                pieceDetectionValid = false,
+                timestampMs = 1000L
+            )
+        )
+
+        assertFalse(invalidReading.superstructure.marvin.feeder.pieceDetectionValid)
+        assertFalse(invalidReading.superstructure.marvin.feeder.gamePieceDetected)
+        assertEquals(1, invalidReading.superstructure.marvin.inventoryCount)
+        assertTrue(invalidReading.superstructure.marvin.slamtakeActive)
+    }
+
+    @Test
+    fun `detector validity recovery does not count the same held piece twice`() {
+        val detected = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    inventoryCount = 1,
+                    feeder = FeederState(
+                        gamePieceDetected = true,
+                        previousGamePieceDetected = false,
+                        pieceDetectionValid = true
+                    )
+                )
+            )
+        )
+        val invalid = MarvinReducer.reduce(
+            detected,
+            SuperstructureSensorUpdate(0.0, 0.0, 0.0, true, pieceDetectionValid = false)
+        )
+        val recovered = MarvinReducer.reduce(
+            invalid,
+            SuperstructureSensorUpdate(0.0, 0.0, 0.0, true, pieceDetectionValid = true)
+        )
+
+        assertEquals(1, recovered.superstructure.marvin.inventoryCount)
+        assertTrue(recovered.superstructure.marvin.feeder.gamePieceDetected)
+        assertTrue(recovered.superstructure.marvin.feeder.pieceDetectionValid)
+    }
+
+    @Test
+    fun `invalid flywheel velocity cannot report ready`() {
+        val initial = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(flywheel = FlywheelState(targetVelocityRpm = 4000.0))
+            )
+        )
+
+        val invalidReading = MarvinReducer.reduce(
+            initial,
+            SuperstructureSensorUpdate(
+                flywheelRpm = 4000.0,
+                cowlAngleRotations = 0.0,
+                intakeAngle = 0.0,
+                pieceDetected = false,
+                flywheelVelocityValid = false,
+                timestampMs = 1000L
+            )
+        )
+
+        assertFalse(invalidReading.superstructure.marvin.flywheel.velocityValid)
+        assertFalse(invalidReading.superstructure.marvin.isFlywheelAtSpeed)
     }
 }

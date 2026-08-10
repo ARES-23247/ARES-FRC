@@ -45,19 +45,23 @@ class MarvinSuperstructure(
 ) : Subsystem {
 
     override fun readSensors(store: Store, timestampMs: Long) {
+        val pieceDetectionValid = feederIO.pieceDetectionValid
+        val pieceDetected = pieceDetectionValid && feederIO.isBeamBroken
         store.dispatch(SuperstructureSensorUpdate(
             flywheelRpm = flywheelIO.velocityRpm,
+            flywheelVelocityValid = flywheelIO.velocityValid,
             cowlAngleRotations = cowlIO.angleRotations,
             intakeAngle = intakeIO.pivotAngleDegrees,
-            pieceDetected = feederIO.isBeamBroken,
+            pieceDetected = pieceDetected,
+            pieceDetectionValid = pieceDetectionValid,
             floorVelocityRps = floorIO.velocityRps,
-            climberExtensionMeters = climberIO.extensionMeters,
+            climberPositionRotations = climberIO.positionRotations,
             floorCurrentAmps = floorIO.currentAmps,
             timestampMs = timestampMs
         ))
         
         val marvin = store.state.superstructure.marvin
-        if (marvin.slamtakeActive && !feederIO.isBeamBroken) {
+        if (marvin.slamtakeActive && (!pieceDetectionValid || !pieceDetected)) {
             val elapsed = (timestampMs - marvin.slamtakeStartTimeMs) / 1000.0
             when (marvin.slamtakePhase) {
                 DEPLOYED_PHASE -> if (elapsed >= RETRACT_AT_SECONDS) {
@@ -75,14 +79,17 @@ class MarvinSuperstructure(
          * Documentation for marvin
          */
         val marvin = state.superstructure.marvin
-        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
-        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations * scale)
+        val flywheelTargetRpm = if (marvin.flywheelActive) marvin.flywheel.targetVelocityRpm * scale else 0.0
+        flywheelIO.setVelocityRpm(flywheelTargetRpm)
+        // Position targets describe mechanism geometry and must not move when
+        // brownout scaling changes. Velocity and voltage commands are scaled below.
+        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations, scale)
         /**
          * Documentation for pivotAngle
          */
 
-        val pivotAngle = marvin.intake.targetAngleDegrees * scale
-        intakeIO.setPivotAngle(pivotAngle)
+        val pivotAngle = marvin.intake.targetAngleDegrees
+        intakeIO.setPivotAngle(pivotAngle, scale)
         /**
          * Documentation for targetRollerSpeed
          */
@@ -107,8 +114,13 @@ class MarvinSuperstructure(
          * Documentation for targetClimberVoltage
          */
 
-        val targetClimberVoltage = marvin.climber.targetVoltage
-        climberIO.setAppliedVoltage(targetClimberVoltage * scale)
+        when (marvin.climber.controlMode) {
+            ClimberControlMode.VOLTAGE -> climberIO.setAppliedVoltage(marvin.climber.targetVoltage * scale)
+            ClimberControlMode.POSITION_ROTATIONS -> climberIO.setTargetPositionRotations(
+                marvin.climber.targetPositionRotations,
+                scale
+            )
+        }
     }
 
     companion object {

@@ -50,6 +50,9 @@ class FRCFeederHardwareIO(
     override val isBeamBroken: Boolean
         get() = false
 
+    override val pieceDetectionValid: Boolean
+        get() = false
+
     override val currentAmps: Double
         get() = feederCurrent.valueAsDouble
 }

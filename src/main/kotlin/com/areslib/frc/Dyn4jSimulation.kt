@@ -53,9 +53,16 @@ class FlyingBall(
  * Documentation for Dyn4jSimulation
  */
 
-class Dyn4jSimulation(seed: Long = 42L) {
+class Dyn4jSimulation(
+    seed: Long = 42L,
+    private val feederPieceDetectorConfigured: Boolean = false
+) {
 
-    constructor(config: com.areslib.state.RobotFieldConfig, seed: Long = 42L) : this(seed) {
+    constructor(
+        config: com.areslib.state.RobotFieldConfig,
+        seed: Long = 42L,
+        feederPieceDetectorConfigured: Boolean = false
+    ) : this(seed, feederPieceDetectorConfigured) {
         buildWorld(config)
     }
 
@@ -76,7 +83,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
     internal var simFloorVoltage = 0.0
     internal var simFloorVelocityRps = 0.0
     internal var simClimberVoltage = 0.0
-    internal var simClimberExtensionMeters = 0.0
+    internal var simClimberPositionRotations = 0.0
     internal var simCowlAngle = 0.0
     internal var simFeederPieceDetected = false
     /**
@@ -100,7 +107,7 @@ class Dyn4jSimulation(seed: Long = 42L) {
     /**
      * Documentation for feederIO
      */
-    val feederIO: FeederIO = com.areslib.frc.sim.io.SimulatedFeederIO(this)
+    val feederIO: FeederIO = com.areslib.frc.sim.io.SimulatedFeederIO(this, feederPieceDetectorConfigured)
     /**
      * Documentation for floorIO
      */
@@ -164,8 +171,8 @@ class Dyn4jSimulation(seed: Long = 42L) {
          */
 
         val climberVelocity = (simClimberVoltage / 12.0) * 1.0
-        simClimberExtensionMeters += climberVelocity * dt
-        simClimberExtensionMeters = simClimberExtensionMeters.coerceIn(0.0, 1.73)
+        simClimberPositionRotations += climberVelocity * dt
+        simClimberPositionRotations = simClimberPositionRotations.coerceIn(0.0, 1.73)
         /**
          * Documentation for t
          */
@@ -364,7 +371,10 @@ class Dyn4jSimulation(seed: Long = 42L) {
                     ball.setMass(MassType.NORMAL)
                     ball.linearDamping = 2.0
                     ball.angularDamping = 2.0
-                    ball.translate(8.2705, 4.0345)
+                    ball.translate(
+                        com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH / 2.0,
+                        com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH / 2.0
+                    )
                     ball.linearVelocity.set(evx, evy)
                     
                     physicsWorld.world.addBody(ball)
@@ -377,11 +387,11 @@ class Dyn4jSimulation(seed: Long = 42L) {
                      * Documentation for fieldWidth
                      */
 
-                    val fieldWidth = 16.541
+                    val fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
                     /**
                      * Documentation for fieldHeight
                      */
-                    val fieldHeight = 8.069
+                    val fieldHeight = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
                     /**
                      * Documentation for cx
                      */
@@ -429,7 +439,10 @@ class Dyn4jSimulation(seed: Long = 42L) {
             xMeters = t.translationX,
             yMeters = t.translationY,
             headingRadians = t.rotationAngle,
-            timestampMs = com.areslib.util.RobotClock.currentTimeMillis()
+            timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
+            angularVelocityRadiansPerSecond = physicsWorld.robotBody.angularVelocity,
+            xVelocityMetersPerSecond = physicsWorld.robotBody.linearVelocity.x,
+            yVelocityMetersPerSecond = physicsWorld.robotBody.linearVelocity.y
         )
     }
     /**

@@ -4,9 +4,6 @@ import com.areslib.Store
 import com.areslib.action.RobotAction
 
 class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
-    private var lastFeederSpeed = Double.NaN
-    private var lastFloorSpeed = Double.NaN
-    private var lastTransferActive: Boolean? = null
     /**
      * Documentation for transferActive
      */
@@ -18,14 +15,17 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
      */
 
     fun shoot() {
-        dispatchOnChange(lastTransferActive, true, ::SetTransferActive) { lastTransferActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.transferActive, true, ::SetTransferActive) {}
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, MarvinConfig.FEEDER_SHOOT_SPEED_RPS, ::SetFeederSpeed) {}
     }
     /**
      * Documentation for stop
      */
 
     fun stop() {
-        dispatchOnChange(lastTransferActive, false, ::SetTransferActive) { lastTransferActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.transferActive, false, ::SetTransferActive) {}
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, 0.0, ::SetFeederSpeed) {}
+        dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, 0.0, ::SetFloorSpeed) {}
     }
     /**
      * Documentation for updateFeeders
@@ -36,12 +36,12 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
          * Documentation for speed
          */
         val speed = if ((headingAligned && rpmAligned) || transferActive == true) 10.0 else 0.0
-        dispatchOnChange(lastFeederSpeed, speed, ::SetFeederSpeed) { lastFeederSpeed = it }
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, speed, ::SetFeederSpeed) {}
         
         if (runFloorRollers) {
-            dispatchOnChange(lastFloorSpeed, speed, ::SetFloorSpeed) { lastFloorSpeed = it }
+            dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, speed, ::SetFloorSpeed) {}
         } else {
-            dispatchOnChange(lastFloorSpeed, 0.0, ::SetFloorSpeed) { lastFloorSpeed = it }
+            dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, 0.0, ::SetFloorSpeed) {}
         }
     }
 }

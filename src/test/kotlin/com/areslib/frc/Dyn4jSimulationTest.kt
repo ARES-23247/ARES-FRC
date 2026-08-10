@@ -21,7 +21,7 @@ class Dyn4jSimulationTest {
         /**
          * Documentation for sim
          */
-        val sim = Dyn4jSimulation(seed = 42L)
+        val sim = Dyn4jSimulation(seed = 42L, feederPieceDetectorConfigured = true)
         /**
          * Documentation for state
          */
@@ -99,7 +99,11 @@ class Dyn4jSimulationTest {
         val superstructure = SuperstructureState(
             custom = com.areslib.frc.marvin.MarvinState(
                 flywheelActive = true,
-                flywheel = com.areslib.frc.marvin.FlywheelState(velocityRpm = 4000.0, targetVelocityRpm = 4000.0),
+                flywheel = com.areslib.frc.marvin.FlywheelState(
+                    velocityRpm = 4000.0,
+                    velocityValid = true,
+                    targetVelocityRpm = 4000.0
+                ),
                 inventoryCount = 10
             )
         )
@@ -234,14 +238,14 @@ class Dyn4jSimulationTest {
          */
         val initialGroundBalls = ballsList.size
 
-        // Mock a flying ball inside the Blue Hub cylindrical scoring zone (center: 4.135, 4.0345)
+        // Mock a flying ball inside the Blue Speaker scoring zone.
         // at height z = 2.0 (inside 1.6 to 2.8 meters range)
         /**
          * Documentation for scoredBall
          */
         val scoredBall = FlyingBall(
-            x = 4.135,
-            y = 4.0345,
+            x = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker.x,
+            y = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker.y,
             z = 2.0,
             vx = 0.1,
             vy = 0.1,
@@ -258,13 +262,13 @@ class Dyn4jSimulationTest {
         // Verify new ground ball was spawned (balls size increased)
         assertEquals(initialGroundBalls + 1, ballsList.size, "A new ground ball should be spawned")
 
-        // Verify the newest ball is spawned at the center of the field (8.2705, 4.0345)
+        // Verify the newest ball is spawned at the canonical field center.
         /**
          * Documentation for newestBall
          */
         val newestBall = ballsList.last()
-        assertEquals(8.2705, newestBall.transform.translationX, 0.05, "Scored ball should eject to field X center")
-        assertEquals(4.0345, newestBall.transform.translationY, 0.05, "Scored ball should eject to field Y center")
+        assertEquals(com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH / 2.0, newestBall.transform.translationX, 0.05, "Scored ball should eject to field X center")
+        assertEquals(com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH / 2.0, newestBall.transform.translationY, 0.05, "Scored ball should eject to field Y center")
         
         // Verify it has non-zero ejection velocities
         assertTrue(newestBall.linearVelocity.magnitude > 1.0, "Ejected ball should have an outward velocity")

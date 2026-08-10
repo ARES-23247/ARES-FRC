@@ -101,22 +101,23 @@ class FRCTeleOpDriveControllerTest {
 
     @Test
     fun testAllianceRelativeDirectionInversionWorksForBlueVsRed() {
-        // Red Alliance
-        teleOpController.cachedAlliance = DriverStation.Alliance.Red
-        controllerState.rightBumper = true
-        teleOpController.teleopPeriodic()
-        
-        val redFlywheelSpeed = robot.store.state.superstructure.marvin.flywheel.targetVelocityRpm
-        
-        // Blue Alliance
+        controllerState.leftStickY = -1.0f
+        controllerState.leftStickX = -1.0f
+
         teleOpController.cachedAlliance = DriverStation.Alliance.Blue
-        controllerState.rightBumper = true
         teleOpController.teleopPeriodic()
-        
-        val blueFlywheelSpeed = robot.store.state.superstructure.marvin.flywheel.targetVelocityRpm
-        
-        assertTrue(redFlywheelSpeed >= 0.0)
-        assertTrue(blueFlywheelSpeed >= 0.0)
+        val blueForward = robot.store.state.drive.xVelocityMetersPerSecond
+        val blueStrafe = robot.store.state.drive.yVelocityMetersPerSecond
+        assertEquals(com.areslib.state.Alliance.BLUE, robot.store.state.drive.alliance)
+
+        teleOpController.cachedAlliance = DriverStation.Alliance.Red
+        teleOpController.teleopPeriodic()
+        val redForward = robot.store.state.drive.xVelocityMetersPerSecond
+        val redStrafe = robot.store.state.drive.yVelocityMetersPerSecond
+
+        assertEquals(com.areslib.state.Alliance.RED, robot.store.state.drive.alliance)
+        assertEquals(-blueForward, redForward, 1e-6)
+        assertEquals(-blueStrafe, redStrafe, 1e-6)
     }
 
     @Test

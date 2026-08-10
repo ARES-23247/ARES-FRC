@@ -90,6 +90,18 @@ class FRCIntakeHardwareIO(
         pivotMotor.setControl(positionRequest.withPosition(rotations))
     }
 
+    override fun setPivotAngle(degrees: Double, maxEffortScale: Double) {
+        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setPivotAngle(degrees)
+            return
+        }
+        val targetRotations = degrees / 360.0
+        val errorRotations = targetRotations - pivotPosition.valueAsDouble
+        val maxVolts = NOMINAL_VOLTAGE * effortScale
+        setPivotVoltage((POSITION_KP_VOLTS_PER_ROTATION * errorRotations).coerceIn(-maxVolts, maxVolts))
+    }
+
     override fun setPivotVoltage(volts: Double) {
         pivotMotor.setControl(voltageRequest.withOutput(volts))
     }
@@ -110,4 +122,10 @@ class FRCIntakeHardwareIO(
 
     override val rollerCurrentAmps: Double
         get() = rollerCurrent.valueAsDouble
+
+    private companion object {
+        const val POSITION_KP_VOLTS_PER_ROTATION = 24.0
+        const val NOMINAL_VOLTAGE = 12.0
+        const val FULL_EFFORT_THRESHOLD = 0.999
+    }
 }

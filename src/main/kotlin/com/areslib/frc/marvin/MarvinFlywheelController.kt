@@ -4,8 +4,6 @@ import com.areslib.Store
 import com.areslib.action.RobotAction
 
 class MarvinFlywheelController(store: Store) : MarvinControllerBase(store) {
-    private var lastFlywheelRpm = Double.NaN
-    private var lastFlywheelActive: Boolean? = null
     /**
      * Documentation for flywheelRPM
      */
@@ -23,21 +21,23 @@ class MarvinFlywheelController(store: Store) : MarvinControllerBase(store) {
      */
 
     fun spinUp(targetRpm: Double) {
-        dispatchOnChange(lastFlywheelRpm, targetRpm, ::SetFlywheelSpeed) { lastFlywheelRpm = it }
-        dispatchOnChange(lastFlywheelActive, true, ::SetFlywheelActive) { lastFlywheelActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.flywheel.targetVelocityRpm, targetRpm, ::SetFlywheelSpeed) {}
+        dispatchOnChange(store.state.superstructure.marvin.flywheelActive, true, ::SetFlywheelActive) {}
     }
     /**
      * Documentation for stop
      */
 
     fun stop() {
-        dispatchOnChange(lastFlywheelActive, false, ::SetFlywheelActive) { lastFlywheelActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.flywheel.targetVelocityRpm, 0.0, ::SetFlywheelSpeed) {}
+        dispatchOnChange(store.state.superstructure.marvin.flywheelActive, false, ::SetFlywheelActive) {}
     }
     /**
      * Documentation for isRpmAligned
      */
 
     fun isRpmAligned(targetRpm: Double): Boolean {
-        return targetRpm > 100.0 && kotlin.math.abs(flywheelRPM - targetRpm) < 150.0
+        val flywheel = store.state.superstructure.marvin.flywheel
+        return flywheel.velocityValid && targetRpm > 100.0 && kotlin.math.abs(flywheelRPM - targetRpm) < 150.0
     }
 }

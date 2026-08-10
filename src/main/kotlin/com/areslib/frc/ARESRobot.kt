@@ -315,7 +315,7 @@ class ARESRobot : TimedRobot() {
                 marvin.feeder.velocityRps,
                 if (marvin.feeder.gamePieceDetected) 1.0 else 0.0,
                 marvin.floor.velocityRps,
-                marvin.climber.extensionMeters,
+                marvin.climber.positionRotations,
                 marvin.climber.targetVoltage,
                 if (marvin.slamtakeActive) 1.0 else 0.0
             )
@@ -343,6 +343,7 @@ class ARESRobot : TimedRobot() {
             robot, marvinShooter, marvinIntake, marvinClimber,
             controller, coPilotController, controllerState, coPilotControllerState
         )
+        applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
         autoOrchestrator = FRCAutoOrchestrator(
             robot, sim, marvinShooter, marvinIntake
         )
@@ -370,15 +371,17 @@ class ARESRobot : TimedRobot() {
                  * Documentation for alliance
                  */
                 val alliance = allianceOpt.get()
-                if (alliance != cachedAlliance) {
-                    cachedAlliance = alliance
-                    teleOpController.cachedAlliance = alliance
-                    teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
-                }
+                if (alliance != cachedAlliance) applyAlliance(alliance)
             }
         }
         controller.updateState(controllerState)
         coPilotController.updateState(coPilotControllerState)
+    }
+
+    private fun applyAlliance(alliance: DriverStation.Alliance) {
+        cachedAlliance = alliance
+        teleOpController.cachedAlliance = alliance
+        teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
     }
 
     override fun disabledInit() {

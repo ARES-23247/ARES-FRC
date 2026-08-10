@@ -11,6 +11,8 @@ data class FlywheelState(
      * Documentation for velocityRpm
      */
     val velocityRpm: Double = 0.0,
+    /** Whether the velocity observation is fresh and valid this loop. */
+    val velocityValid: Boolean = false,
     /**
      * Documentation for targetVelocityRpm
      */
@@ -85,6 +87,8 @@ data class FeederState(
      * Documentation for gamePieceDetected
      */
     val gamePieceDetected: Boolean = false,
+    /** Whether a real or explicitly configured simulated detector exists. */
+    val pieceDetectionValid: Boolean = false,
     /**
      * Documentation for previousGamePieceDetected
      */
@@ -94,15 +98,13 @@ data class FeederState(
 /**
  * Immutable representation of the fast-climber elevator system.
  */
+enum class ClimberControlMode { VOLTAGE, POSITION_ROTATIONS }
+
 data class ClimberState(
-    /**
-     * Documentation for extensionMeters
-     */
-    val extensionMeters: Double = 0.0,
-    /**
-     * Documentation for targetExtensionMeters
-     */
-    val targetExtensionMeters: Double = 0.0,
+    /** Measured mechanism position in rotations. */
+    val positionRotations: Double = 0.0,
+    /** Closed-loop mechanism target in rotations. */
+    val targetPositionRotations: Double = 0.0,
     /**
      * Documentation for currentAmps
      */
@@ -110,7 +112,8 @@ data class ClimberState(
     /**
      * Documentation for targetVoltage
      */
-    val targetVoltage: Double = 0.0
+    val targetVoltage: Double = 0.0,
+    val controlMode: ClimberControlMode = ClimberControlMode.VOLTAGE
 )
 
 /**
@@ -192,7 +195,7 @@ data class MarvinState(
      * Documentation for isFlywheelAtSpeed
      */
     val isFlywheelAtSpeed: Boolean
-        get() = flywheel.targetVelocityRpm > 100.0 && flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
+        get() = flywheel.velocityValid && flywheel.targetVelocityRpm > 100.0 && flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
     /**
      * Documentation for withFlywheelSpeed
      */
@@ -224,11 +227,15 @@ data class MarvinState(
     /**
      * Documentation for withClimberVoltage
      */
-    fun withClimberVoltage(volts: Double) = copy(climber = climber.copy(targetVoltage = volts))
-    /**
-     * Documentation for withClimberExtension
-     */
-    fun withClimberExtension(meters: Double) = copy(climber = climber.copy(targetExtensionMeters = meters))
+    fun withClimberVoltage(volts: Double) = copy(climber = climber.copy(
+        targetVoltage = volts,
+        controlMode = ClimberControlMode.VOLTAGE
+    ))
+
+    fun withClimberPositionRotations(rotations: Double) = copy(climber = climber.copy(
+        targetPositionRotations = rotations,
+        controlMode = ClimberControlMode.POSITION_ROTATIONS
+    ))
 }
 
 /**

@@ -92,6 +92,7 @@ class E2EAutonomousSimulationTest {
                 cowlAngleRotations = 0.0,
                 intakeAngle = 0.0,
                 pieceDetected = false,
+                flywheelVelocityValid = true,
                 timestampMs = 1000L
             )
         )

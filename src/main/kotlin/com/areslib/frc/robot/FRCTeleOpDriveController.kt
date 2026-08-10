@@ -1,6 +1,7 @@
 package com.areslib.frc.robot
 
 import com.areslib.control.assist.ShotResult
+import com.areslib.action.RobotAction
 import com.areslib.frc.FrcSwerveRobot
 import com.areslib.frc.marvin.MarvinClimberSubsystem
 import com.areslib.frc.marvin.MarvinIntakeSubsystem
@@ -49,10 +50,21 @@ class FRCTeleOpDriveController(
      */
 
     var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
+        set(value) {
+            field = value
+            val reduxAlliance = if (value == DriverStation.Alliance.Red) {
+                com.areslib.state.Alliance.RED
+            } else {
+                com.areslib.state.Alliance.BLUE
+            }
+            if (robot.store.state.drive.alliance != reduxAlliance) {
+                robot.store.dispatch(RobotAction.SetAlliance(reduxAlliance))
+            }
+        }
     /**
      * Documentation for speakerTranslation
      */
-    var speakerTranslation = Translation2d(4.625, 4.035) // Blue speaker default
+    var speakerTranslation = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker
     /**
      * Documentation for teleopInit
      */
@@ -79,15 +91,17 @@ class FRCTeleOpDriveController(
              */
             val rawStrafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) * 4.5
             
-            // Let the CTRE field-centric request handle alliance orientation natively
+            // Field coordinates are blue-origin. Rotate translation intent 180 degrees
+            // on red so pushing away from either alliance wall remains driver-forward.
+            val allianceScale = if (cachedAlliance == DriverStation.Alliance.Red) -1.0 else 1.0
             /**
              * Documentation for forward
              */
-            val forward = rawForward
+            val forward = rawForward * allianceScale
             /**
              * Documentation for strafe
              */
-            val strafe = rawStrafe
+            val strafe = rawStrafe * allianceScale
             /**
              * Documentation for rotation
              */

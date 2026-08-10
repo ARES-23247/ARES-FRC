@@ -69,6 +69,22 @@ class FRCCowlHardwareIO(
         motor.setControl(positionRequest.withPosition(rotations))
     }
 
+    override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
+        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetAngle(rotations)
+            return
+        }
+        val error = rotations - angleRotations
+        val staticVolts = when {
+            error > POSITION_EPSILON_ROTATIONS -> POSITION_KS_VOLTS
+            error < -POSITION_EPSILON_ROTATIONS -> -POSITION_KS_VOLTS
+            else -> 0.0
+        }
+        val maxVolts = NOMINAL_VOLTAGE * effortScale
+        setAppliedVoltage((POSITION_KP_VOLTS_PER_ROTATION * error + staticVolts).coerceIn(-maxVolts, maxVolts))
+    }
+
     override fun setAppliedVoltage(volts: Double) {
         motor.setControl(voltageRequest.withOutput(volts))
     }
@@ -78,4 +94,12 @@ class FRCCowlHardwareIO(
 
     override val currentAmps: Double
         get() = cowlCurrent.valueAsDouble
+
+    private companion object {
+        const val POSITION_KP_VOLTS_PER_ROTATION = 20.0
+        const val POSITION_KS_VOLTS = 2.0
+        const val POSITION_EPSILON_ROTATIONS = 0.002
+        const val NOMINAL_VOLTAGE = 12.0
+        const val FULL_EFFORT_THRESHOLD = 0.999
+    }
 }

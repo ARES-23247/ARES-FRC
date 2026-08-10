@@ -3,8 +3,6 @@ package com.areslib.frc.marvin
 import com.areslib.Store
 
 class MarvinIntakeSubsystem(store: Store) : MarvinControllerBase(store) {
-    private var lastDeployed: Boolean? = null
-    private var lastRollerSpeed = Double.NaN
 
     /**
      * Documentation for isDeployed
@@ -28,20 +26,20 @@ class MarvinIntakeSubsystem(store: Store) : MarvinControllerBase(store) {
      * Documentation for deploy
      */
     fun deploy() {
-        dispatchOnChange(lastDeployed, true, ::SetIntakePivot) { lastDeployed = it }
+        dispatchOnChange(store.state.superstructure.marvin.intake.isDeployed, true, ::SetIntakePivot) {}
     }
 
     /**
      * Documentation for retract
      */
     fun retract() {
-        dispatchOnChange(lastDeployed, false, ::SetIntakePivot) { lastDeployed = it }
+        dispatchOnChange(store.state.superstructure.marvin.intake.isDeployed, false, ::SetIntakePivot) {}
     }
 
     /**
      * Documentation for setRollerSpeed
      */
     fun setRollerSpeed(rps: Double) {
-        dispatchOnChange(lastRollerSpeed, rps, ::SetIntakeRollers) { lastRollerSpeed = it }
+        dispatchOnChange(store.state.superstructure.marvin.intake.targetRollerVelocityRps, rps, ::SetIntakeRollers) {}
     }
 }

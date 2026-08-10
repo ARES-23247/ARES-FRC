@@ -3,32 +3,36 @@ package com.areslib.frc.marvin
 import com.areslib.Store
 
 class MarvinClimberSubsystem(store: Store) : MarvinControllerBase(store) {
-    private var lastTargetExtension = Double.NaN
-    private var lastTargetVoltage = Double.NaN
 
     /**
-     * Documentation for extensionMeters
+     * Current climber mechanism position in motor rotations.
      */
-    val extensionMeters: Double
-        get() = store.state.superstructure.marvin.climber.extensionMeters
+    val positionRotations: Double
+        get() = store.state.superstructure.marvin.climber.positionRotations
 
     /**
-     * Documentation for targetExtensionMeters
+     * Commanded climber mechanism position in motor rotations.
      */
-    val targetExtensionMeters: Double
-        get() = store.state.superstructure.marvin.climber.targetExtensionMeters
+    val targetPositionRotations: Double
+        get() = store.state.superstructure.marvin.climber.targetPositionRotations
 
     /**
-     * Documentation for setTargetExtension
+     * Selects closed-loop position control with an explicit rotations target.
      */
-    fun setTargetExtension(meters: Double) {
-        dispatchOnChange(lastTargetExtension, meters, ::SetClimberExtension) { lastTargetExtension = it }
+    fun setTargetPositionRotations(rotations: Double) {
+        val climber = store.state.superstructure.marvin.climber
+        if (climber.controlMode != ClimberControlMode.POSITION_ROTATIONS || climber.targetPositionRotations != rotations) {
+            store.dispatch(SetClimberPositionRotations(rotations))
+        }
     }
 
     /**
      * Documentation for setVoltage
      */
     fun setVoltage(volts: Double) {
-        dispatchOnChange(lastTargetVoltage, volts, ::SetClimberVoltage) { lastTargetVoltage = it }
+        val climber = store.state.superstructure.marvin.climber
+        if (climber.controlMode != ClimberControlMode.VOLTAGE || climber.targetVoltage != volts) {
+            store.dispatch(SetClimberVoltage(volts))
+        }
     }
 }

@@ -108,15 +108,15 @@ class MarvinShooterSubsystem(private val store: Store) {
         /**
          * Documentation for rx
          */
-        val rx = driveState.xVelocityMetersPerSecond
+        val rx = driveState.measuredFieldXVelocityMetersPerSecond
         /**
          * Documentation for ry
          */
-        val ry = driveState.yVelocityMetersPerSecond
+        val ry = driveState.measuredFieldYVelocityMetersPerSecond
         /**
          * Documentation for omega
          */
-        val omega = driveState.angularVelocityRadiansPerSecond
+        val omega = driveState.measuredAngularVelocityRadiansPerSecond
         
         val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         val dt = if (lastVTime > 0.0) now - lastVTime else 0.02
@@ -144,8 +144,8 @@ class MarvinShooterSubsystem(private val store: Store) {
          * Documentation for targetCowl
          */
         
-        val targetCowl = shotResult.targetCowlAngleDegrees
-        cowlController.setCowlAngleRotations(targetCowl)
+        val targetCowlRotations = shotResult.targetCowlAngleRotations
+        cowlController.setCowlAngleRotations(targetCowlRotations)
         /**
          * Documentation for headingError
          */
@@ -196,10 +196,10 @@ class MarvinShooterSubsystem(private val store: Store) {
         /**
          * Documentation for targetCowl
          */
-        val targetCowl = shotSetup.interpolateCowl(dist)
+        val targetCowlRotations = shotSetup.interpolateCowlRotations(dist)
         
         flywheelController.spinUp(targetRpm)
-        cowlController.setCowlAngleRotations(targetCowl)
+        cowlController.setCowlAngleRotations(targetCowlRotations)
         /**
          * Documentation for headingError
          */

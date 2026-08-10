@@ -20,9 +20,6 @@ class FRCClimberHardwareIO(
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
 
-    // Climber scaling: 1 mechanism rotation is treated as the extension unit
-    private val rotationsPerMeter = 1.0
-
     private val climberPosition = motor.position
     private val climberCurrent = motor.statorCurrent
 
@@ -64,21 +61,34 @@ class FRCClimberHardwareIO(
         climberCurrent.refresh()
     }
 
-    override fun setTargetExtension(meters: Double) {
-        /**
-         * Documentation for targetRotations
-         */
-        val targetRotations = meters * rotationsPerMeter
-        motor.setControl(positionRequest.withPosition(targetRotations))
+    override fun setTargetPositionRotations(rotations: Double) {
+        motor.setControl(positionRequest.withPosition(rotations))
+    }
+
+    override fun setTargetPositionRotations(rotations: Double, maxEffortScale: Double) {
+        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetPositionRotations(rotations)
+            return
+        }
+        val error = rotations - positionRotations
+        val maxVolts = NOMINAL_VOLTAGE * effortScale
+        setAppliedVoltage((POSITION_KP_VOLTS_PER_ROTATION * error).coerceIn(-maxVolts, maxVolts))
     }
 
     override fun setAppliedVoltage(volts: Double) {
         motor.setControl(voltageRequest.withOutput(volts))
     }
 
-    override val extensionMeters: Double
-        get() = climberPosition.valueAsDouble / rotationsPerMeter
+    override val positionRotations: Double
+        get() = climberPosition.valueAsDouble
 
     override val currentAmps: Double
         get() = climberCurrent.valueAsDouble
+
+    private companion object {
+        const val POSITION_KP_VOLTS_PER_ROTATION = 12.0
+        const val NOMINAL_VOLTAGE = 12.0
+        const val FULL_EFFORT_THRESHOLD = 0.999
+    }
 }

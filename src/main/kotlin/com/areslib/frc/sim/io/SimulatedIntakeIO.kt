@@ -11,6 +11,11 @@ class SimulatedIntakeIO(private val sim: Dyn4jSimulation) : IntakeIO {
         val error = degrees - sim.intakePivotSim.angleDegrees
         sim.simIntakePivotVoltage = (error * 0.4).coerceIn(-12.0, 12.0)
     }
+    override fun setPivotAngle(degrees: Double, maxEffortScale: Double) {
+        val error = degrees - sim.intakePivotSim.angleDegrees
+        val maxVolts = 12.0 * maxEffortScale.coerceIn(0.0, 1.0)
+        sim.simIntakePivotVoltage = (error * 0.4).coerceIn(-maxVolts, maxVolts)
+    }
     override fun setPivotVoltage(volts: Double) {
         sim.simIntakePivotVoltage = volts.coerceIn(-12.0, 12.0)
     }

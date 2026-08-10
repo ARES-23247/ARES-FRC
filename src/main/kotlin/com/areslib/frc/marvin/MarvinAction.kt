@@ -82,11 +82,8 @@ data class SetClimberVoltage @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
-data class SetClimberExtension @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for meters
-     */
-    val meters: Double,
+data class SetClimberPositionRotations @kotlin.jvm.JvmOverloads constructor(
+    val rotations: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
@@ -107,14 +104,16 @@ data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
      * Documentation for pieceDetected
      */
     val pieceDetected: Boolean,
+    val flywheelVelocityValid: Boolean = false,
+    val pieceDetectionValid: Boolean = false,
     /**
      * Documentation for floorVelocityRps
      */
     val floorVelocityRps: Double = 0.0,
     /**
-     * Documentation for climberExtensionMeters
+     * Climber mechanism position in motor rotations.
      */
-    val climberExtensionMeters: Double = 0.0,
+    val climberPositionRotations: Double = 0.0,
     val floorCurrentAmps: Double = 0.0,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction

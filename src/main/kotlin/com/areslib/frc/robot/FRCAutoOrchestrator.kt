@@ -26,6 +26,12 @@ class FRCAutoOrchestrator(
     private var activePath: Path? = null
     private var autoStartTime = 0.0
     private var autoDistance = 0.0
+    private var actualPathDistance = 0.0
+    private var profileElapsedSeconds = 0.0
+    private var profilePointTimes = DoubleArray(0)
+    private var profileSegmentIndex = 0
+    private var waitingHoldDistance = Double.NaN
+    private var autoFaulted = false
     private var lastLoopTime = 0.0
     private var lastOdomX = 0.0
     private var lastOdomY = 0.0
@@ -67,6 +73,7 @@ class FRCAutoOrchestrator(
                     fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
                 )
                 activePath = path
+                buildProfileTimeline(path)
 
                 val startPoint = activePath?.points?.firstOrNull()
                 if (startPoint != null && isFirstPath) {
@@ -102,12 +109,17 @@ class FRCAutoOrchestrator(
         }
         triggeredEvents.clear()
         isWaitingForCommand = false
+        autoFaulted = false
         commandWaitStartTime = 0.0
         autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
         val estimator = robot.store.state.drive.poseEstimator
         lastOdomX = estimator.estimatedPoseX
         lastOdomY = estimator.estimatedPoseY
         autoDistance = 0.0
+        actualPathDistance = 0.0
+        profileElapsedSeconds = 0.0
+        profileSegmentIndex = 0
+        waitingHoldDistance = Double.NaN
         previousDistance = 0.0
         lastLoopTime = autoStartTime
     }
@@ -116,11 +128,17 @@ class FRCAutoOrchestrator(
      */
 
     fun autonomousPeriodic() {
+        if (autoFaulted) return
         try {
             /**
              * Documentation for path
              */
             val path = activePath ?: return
+            if (path.points.isEmpty()) {
+                autoFaulted = true
+                failSafeStop()
+                return
+            }
             /**
              * Documentation for dt
              */
@@ -138,9 +156,23 @@ class FRCAutoOrchestrator(
             val estimator = robot.store.state.drive.poseEstimator
 
             val totalLength = path.points.lastOrNull()?.distanceMeters ?: 0.0
-            autoDistance = kotlin.math.min(autoDistance, totalLength)
+            if (!isWaitingForCommand) profileElapsedSeconds += dt
+            autoDistance = if (isWaitingForCommand && waitingHoldDistance.isFinite()) {
+                waitingHoldDistance
+            } else {
+                distanceAtProfileTime(path, profileElapsedSeconds)
+            }.coerceIn(0.0, totalLength)
 
             path.sampleAtDistance(autoDistance, scratchPathPoint)
+
+            val minSearch = (actualPathDistance - 0.75).coerceAtLeast(0.0)
+            val maxSearch = (actualPathDistance + 0.75).coerceAtMost(totalLength)
+            actualPathDistance = path.findClosestDistance(
+                estimator.estimatedPoseX,
+                estimator.estimatedPoseY,
+                minSearch,
+                maxSearch
+            )
 
             if (autoDistance >= totalLength) {
                 val speeds = driveController.calculateDirect(
@@ -154,18 +186,10 @@ class FRCAutoOrchestrator(
                     pathTangentRadians = scratchPathPoint.tangentRadians,
                     dtSeconds = dt
                 )
-                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
-                    edu.wpi.first.math.kinematics.ChassisSpeeds(
-                        speeds.vxMetersPerSecond,
-                        speeds.vyMetersPerSecond,
-                        speeds.omegaRadiansPerSecond
-                    ),
-                    dt
-                )
                 robot.drive.joystickDrive(
-                    discretizedSpeeds.vxMetersPerSecond,
-                    discretizedSpeeds.vyMetersPerSecond,
-                    discretizedSpeeds.omegaRadiansPerSecond,
+                    speeds.vxMetersPerSecond,
+                    speeds.vyMetersPerSecond,
+                    speeds.omegaRadiansPerSecond,
                     isFieldCentric = false
                 )
             } else {
@@ -176,24 +200,15 @@ class FRCAutoOrchestrator(
                     targetX = scratchPathPoint.x,
                     targetY = scratchPathPoint.y,
                     targetHeadingRad = scratchPathPoint.headingRad,
-                    targetVelocityMps = scratchPathPoint.velocityMps,
+                    targetVelocityMps = if (isWaitingForCommand) 0.0 else scratchPathPoint.velocityMps,
                     pathTangentRadians = scratchPathPoint.tangentRadians,
                     dtSeconds = dt
                 )
 
-                // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
-                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
-                    edu.wpi.first.math.kinematics.ChassisSpeeds(
-                        speeds.vxMetersPerSecond,
-                        speeds.vyMetersPerSecond,
-                        speeds.omegaRadiansPerSecond
-                    ),
-                    dt
-                )
                 robot.drive.joystickDrive(
-                    discretizedSpeeds.vxMetersPerSecond,
-                    discretizedSpeeds.vyMetersPerSecond,
-                    discretizedSpeeds.omegaRadiansPerSecond,
+                    speeds.vxMetersPerSecond,
+                    speeds.vyMetersPerSecond,
+                    speeds.omegaRadiansPerSecond,
                     isFieldCentric = false
                 )
             }
@@ -205,12 +220,18 @@ class FRCAutoOrchestrator(
                  */
                 val event = path.events[i]
                 
-                if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
+                if (actualPathDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
+                    val wasWaiting = isWaitingForCommand
                     val eventCompleted = handleEvent(event.eventName, currentTime)
                     if (eventCompleted) {
                         println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
                         robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
                         triggeredEvents.add(i)
+                        waitingHoldDistance = Double.NaN
+                    } else if (!wasWaiting && isWaitingForCommand) {
+                        waitingHoldDistance = event.triggerDistanceMeters.coerceIn(0.0, totalLength)
+                        profileElapsedSeconds = profileTimeAtDistance(path, waitingHoldDistance)
+                        autoDistance = waitingHoldDistance
                     }
                 }
             }
@@ -232,14 +253,10 @@ class FRCAutoOrchestrator(
             val actualDy = estimator.estimatedPoseY - lastOdomY
             lastOdomX = estimator.estimatedPoseX
             lastOdomY = estimator.estimatedPoseY
-            if (!isWaitingForCommand) {
-                val minSearch = (autoDistance - 0.5).coerceAtLeast(0.0)
-                val maxSearch = (autoDistance + 0.5).coerceAtMost(path.points.lastOrNull()?.distanceMeters ?: 0.0)
-                autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, minSearch, maxSearch)
-            }
         } catch (e: Exception) {
             edu.wpi.first.wpilibj.DriverStation.reportError("Exception in autonomousPeriodic: ${e.message}", false)
-            robot.safeHardware()
+            autoFaulted = true
+            failSafeStop()
         }
     }
 
@@ -261,7 +278,8 @@ class FRCAutoOrchestrator(
             }
             "FeederShoot" -> {
                 val marvinState = robot.store.state.superstructure.marvin
-                val isRpmAligned = marvinState.flywheel.targetVelocityRpm > 100.0 &&
+                val isRpmAligned = marvinState.flywheel.velocityValid &&
+                    marvinState.flywheel.targetVelocityRpm > 100.0 &&
                     kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
                 if (isRpmAligned) {
                     marvinShooter.shoot()
@@ -283,5 +301,98 @@ class FRCAutoOrchestrator(
             }
         }
         return eventCompleted
+    }
+
+    private fun buildProfileTimeline(path: Path) {
+        val points = path.points
+        profilePointTimes = DoubleArray(points.size)
+        var cumulativeSeconds = 0.0
+        for (i in 1 until points.size) {
+            val distance = (points[i].distanceMeters - points[i - 1].distanceMeters).coerceAtLeast(0.0)
+            val velocitySum = (points[i - 1].velocityMps + points[i].velocityMps).coerceAtLeast(0.0)
+            val segmentSeconds = if (velocitySum > MIN_PROFILE_VELOCITY_MPS) {
+                2.0 * distance / velocitySum
+            } else {
+                distance / MIN_PROFILE_VELOCITY_MPS
+            }
+            cumulativeSeconds += segmentSeconds
+            profilePointTimes[i] = cumulativeSeconds
+        }
+    }
+
+    private fun distanceAtProfileTime(path: Path, elapsedSeconds: Double): Double {
+        val points = path.points
+        if (points.isEmpty()) return 0.0
+        if (points.size == 1 || profilePointTimes.size != points.size) return points.first().distanceMeters
+        if (elapsedSeconds >= profilePointTimes.last()) return points.last().distanceMeters
+
+        while (profileSegmentIndex + 1 < profilePointTimes.size &&
+            elapsedSeconds > profilePointTimes[profileSegmentIndex + 1]) {
+            profileSegmentIndex++
+        }
+        while (profileSegmentIndex > 0 && elapsedSeconds < profilePointTimes[profileSegmentIndex]) {
+            profileSegmentIndex--
+        }
+
+        val start = points[profileSegmentIndex]
+        val end = points[profileSegmentIndex + 1]
+        val segmentStartTime = profilePointTimes[profileSegmentIndex]
+        val duration = profilePointTimes[profileSegmentIndex + 1] - segmentStartTime
+        if (duration <= 1e-9) return end.distanceMeters
+        val localTime = (elapsedSeconds - segmentStartTime).coerceIn(0.0, duration)
+        val distanceDelta = end.distanceMeters - start.distanceMeters
+        val traveled = if (start.velocityMps + end.velocityMps > MIN_PROFILE_VELOCITY_MPS) {
+            val acceleration = (end.velocityMps - start.velocityMps) / duration
+            start.velocityMps * localTime + 0.5 * acceleration * localTime * localTime
+        } else {
+            distanceDelta * (localTime / duration)
+        }
+        return (start.distanceMeters + traveled).coerceIn(start.distanceMeters, end.distanceMeters)
+    }
+
+    private fun profileTimeAtDistance(path: Path, distanceMeters: Double): Double {
+        val points = path.points
+        if (points.size < 2 || profilePointTimes.size != points.size) return 0.0
+        for (i in 0 until points.lastIndex) {
+            val start = points[i]
+            val end = points[i + 1]
+            if (distanceMeters <= end.distanceMeters) {
+                val distanceDelta = end.distanceMeters - start.distanceMeters
+                val segmentDuration = profilePointTimes[i + 1] - profilePointTimes[i]
+                if (distanceDelta <= 1e-9 || segmentDuration <= 1e-9) return profilePointTimes[i]
+                val localDistance = (distanceMeters - start.distanceMeters).coerceIn(0.0, distanceDelta)
+                val localTime = if (start.velocityMps + end.velocityMps > MIN_PROFILE_VELOCITY_MPS) {
+                    val acceleration = (end.velocityMps - start.velocityMps) / segmentDuration
+                    if (kotlin.math.abs(acceleration) <= 1e-9) {
+                        if (start.velocityMps > 1e-9) localDistance / start.velocityMps else 0.0
+                    } else {
+                        val discriminant = (start.velocityMps * start.velocityMps +
+                            2.0 * acceleration * localDistance).coerceAtLeast(0.0)
+                        (-start.velocityMps + kotlin.math.sqrt(discriminant)) / acceleration
+                    }
+                } else {
+                    segmentDuration * (localDistance / distanceDelta)
+                }.coerceIn(0.0, segmentDuration)
+                return profilePointTimes[i] + localTime
+            }
+        }
+        return profilePointTimes.last()
+    }
+
+    private fun failSafeStop() {
+        robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+        marvinShooter.stop()
+        marvinIntake.setRollerSpeed(0.0)
+        robot.store.dispatch(com.areslib.frc.marvin.SetClimberVoltage(0.0))
+        robot.store.dispatch(com.areslib.frc.marvin.StopSlamtake())
+        robot.safeHardware()
+    }
+
+    internal val targetDistanceMetersForTest: Double get() = autoDistance
+    internal val actualDistanceMetersForTest: Double get() = actualPathDistance
+    internal val isFaultedForTest: Boolean get() = autoFaulted
+
+    private companion object {
+        const val MIN_PROFILE_VELOCITY_MPS = 0.10
     }
 }

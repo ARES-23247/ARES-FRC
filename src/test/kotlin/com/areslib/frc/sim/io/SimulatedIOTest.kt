@@ -36,11 +36,11 @@ class SimulatedIOTest {
          * Documentation for climber
          */
         val climber = SimulatedClimberIO(sim)
-        climber.setTargetExtension(0.1)
+        climber.setTargetPositionRotations(0.1)
         assertTrue(sim.simClimberVoltage != 0.0)
         climber.setAppliedVoltage(-6.0)
         assertEquals(-6.0, sim.simClimberVoltage)
-        assertEquals(sim.simClimberExtensionMeters, climber.extensionMeters)
+        assertEquals(sim.simClimberPositionRotations, climber.positionRotations)
         assertEquals(1.5, climber.currentAmps)
 
         // 3. Intake
@@ -66,6 +66,7 @@ class SimulatedIOTest {
         feeder.setAppliedVoltage(4.0)
         assertEquals(4.0, sim.simFeederVoltage)
         assertFalse(feeder.isBeamBroken)
+        assertFalse(feeder.pieceDetectionValid)
         assertEquals(0.4, feeder.currentAmps, 1e-6)
 
         // 5. Floor
@@ -90,5 +91,21 @@ class SimulatedIOTest {
         assertEquals(sim.flywheelSim.velocityRpm, flywheel.velocityRpm)
         assertTrue(flywheel.currentAmps >= 0.0)
         assertEquals(30.0, flywheel.tempCelsius)
+        assertTrue(flywheel.velocityValid)
+    }
+
+    @Test
+    fun feederDetectorIsOnlyValidWhenExplicitlyConfigured() {
+        val unconfiguredSim = Dyn4jSimulation(seed = 42L)
+        unconfiguredSim.simFeederPieceDetected = true
+        val absentDetector = SimulatedFeederIO(unconfiguredSim)
+        assertFalse(absentDetector.pieceDetectionValid)
+        assertFalse(absentDetector.isBeamBroken)
+
+        val configuredSim = Dyn4jSimulation(seed = 42L, feederPieceDetectorConfigured = true)
+        configuredSim.simFeederPieceDetected = true
+        val configuredDetector = SimulatedFeederIO(configuredSim, detectorConfigured = true)
+        assertTrue(configuredDetector.pieceDetectionValid)
+        assertTrue(configuredDetector.isBeamBroken)
     }
 }

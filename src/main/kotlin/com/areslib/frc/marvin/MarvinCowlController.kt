@@ -4,7 +4,6 @@ import com.areslib.Store
 import com.areslib.action.RobotAction
 
 class MarvinCowlController(store: Store) : MarvinControllerBase(store) {
-    private var lastCowlAngle = Double.NaN
     /**
      * Documentation for cowlAngleRotations
      */
@@ -17,6 +16,6 @@ class MarvinCowlController(store: Store) : MarvinControllerBase(store) {
 
     fun setCowlAngleRotations(rotations: Double) {
         val clampedRotations = rotations.coerceIn(0.0, MarvinConfig.cowlMaxRotations)
-        dispatchOnChange(lastCowlAngle, clampedRotations, ::SetCowlAngle) { lastCowlAngle = it }
+        dispatchOnChange(store.state.superstructure.marvin.cowl.targetAngleRotations, clampedRotations, ::SetCowlAngle) {}
     }
 }

@@ -16,6 +16,7 @@ class FRCFlywheelHardwareIO(
     private val rightMaster: TalonFX,
     private val rightFollower: TalonFX
 ) : FlywheelIO {
+    @Volatile private var cachedVelocityValid = false
 
     private val velocityRequest = VelocityVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -86,8 +87,10 @@ class FRCFlywheelHardwareIO(
 
 
     override fun refresh() {
+        cachedVelocityValid = BaseStatusSignal.refreshAll(
+            leftMasterVelocity, rightMasterVelocity
+        ).isOK
         BaseStatusSignal.refreshAll(
-            leftMasterVelocity, rightMasterVelocity,
             leftMasterCurrent, leftFollowerCurrent,
             rightMasterCurrent, rightFollowerCurrent,
             leftMasterTemp, rightMasterTemp
@@ -110,6 +113,9 @@ class FRCFlywheelHardwareIO(
 
     override val velocityRpm: Double
         get() = (leftMasterVelocity.valueAsDouble + rightMasterVelocity.valueAsDouble) / 2.0 * 60.0
+
+    override val velocityValid: Boolean
+        get() = cachedVelocityValid
 
     override val currentAmps: Double
         get() = leftMasterCurrent.valueAsDouble +

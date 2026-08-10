@@ -18,11 +18,11 @@ object FrcFieldBuilder {
         /**
          * Documentation for width
          */
-        val width = 16.541
+        val width = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
         /**
          * Documentation for height
          */
-        val height = 8.069
+        val height = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
 
         // Outer bounds
         addWall(world, width / 2.0, height, width, 0.1)   // Top
