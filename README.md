@@ -7,7 +7,8 @@ This is intentionally **not** a WPILib Command-Based project. Driver input, auto
 ## Start here
 
 - [Architecture and safety contracts](docs/ARCHITECTURE.md) — lifecycle, Redux flow, IO freshness, units, safety, coordinates, and hardware map.
-- [Autonomous and simulation](docs/AUTONOMOUS_AND_SIMULATION.md) — path deployment, profile timing, event/wait semantics, mirroring, and the dyn4j model.
+- [Autonomous and simulation](docs/AUTONOMOUS_AND_SIMULATION.md) — native visual autos, action
+  discovery, preflight, mirroring, and the dyn4j model.
 - [Build, test, deploy, and troubleshoot](docs/OPERATIONS.md) — commands, prerequisites, swerve offsets, and common failure modes.
 - [Deploy-directory contract](src/main/deploy/README.md) — files copied to `/home/lvuser/deploy` on the RoboRIO.
 
@@ -69,7 +70,8 @@ cd ..\ARESLib-Kotlin
 ## Non-negotiable conventions
 
 - Pose headings are radians, CCW-positive: `0` points along field `+X`, and `pi/2` points along `+Y`.
-- Field coordinates use the WPILib blue-origin convention. Autonomous paths are authored in that frame and mirrored for Red.
+- Field coordinates use the WPILib blue-origin convention. Native autos are authored in that frame
+  and reflected across the alliance-wall axis for Red.
 - The official Crescendo speaker centers used for aiming are `(0, 5.547868)` m for Blue and `(16.54175, 5.547868)` m for Red.
 - Flywheel speeds are RPM. Intake, feeder, and floor speed commands are RPS.
 - Cowl setpoints and lookup-table values are **mechanism rotations**, not degrees.
@@ -82,11 +84,12 @@ cd ..\ARESLib-Kotlin
 
 | Path | Purpose |
 |---|---|
+| `.ares-robot.json` | Offline project identity used by Analytics workspace discovery |
 | `src/main/kotlin/com/areslib/frc/ARESRobot.kt` | `TimedRobot` lifecycle and real/sim composition root |
 | `src/main/kotlin/com/areslib/frc/robot/` | Teleop drive and autonomous orchestration |
 | `src/main/kotlin/com/areslib/frc/marvin/` | Season state, actions, reducer, facades, and mechanism controllers |
 | `src/main/kotlin/com/areslib/frc/hardware/` | Marvin XIX TalonFX IO bindings |
 | `src/main/kotlin/com/areslib/frc/sim/` | dyn4j physics, simulated IO, field construction, and telemetry |
-| `src/main/deploy/` | Static files copied to the RoboRIO |
-| `src/main/resources/deploy/` | Classpath fixtures used by tests/simulation; not the RoboRIO deploy directory |
+| `src/main/deploy/ares/` | Native autos and offline action catalog copied to the RoboRIO |
+| `src/main/deploy/paths/` | Canonical field geometry consumed by simulation and Analytics |
 | `src/test/kotlin/` | Lifecycle, reducer, IO, simulation, and autonomous regression tests |

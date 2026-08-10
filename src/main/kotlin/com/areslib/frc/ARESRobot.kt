@@ -30,6 +30,7 @@ import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.DriverStation
 
 import com.areslib.frc.robot.FRCAutoOrchestrator
+import com.areslib.frc.robot.FrcAutoCapabilities
 import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.frc.robot.FrcSysIdController
 
@@ -259,9 +260,9 @@ class ARESRobot : TimedRobot() {
         )
         sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
         applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
-        autoOrchestrator = FRCAutoOrchestrator(
-            robot, sim, marvinShooter, marvinIntake
-        )
+        FrcAutoCapabilities.register()
+        autoOrchestrator = FRCAutoOrchestrator(robot, sim)
+        autoOrchestrator.publishCatalog()
 
         addPeriodic({
             try {
@@ -293,11 +294,21 @@ class ARESRobot : TimedRobot() {
 
     private fun applyAlliance(alliance: DriverStation.Alliance) {
         cachedAlliance = alliance
+        robot.store.dispatch(
+            RobotAction.SetAlliance(
+                if (alliance == DriverStation.Alliance.Red) {
+                    com.areslib.state.Alliance.RED
+                } else {
+                    com.areslib.state.Alliance.BLUE
+                }
+            )
+        )
         teleOpController.cachedAlliance = alliance
         teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
     }
 
     override fun disabledInit() {
+        if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
         if (::sysIdController.isInitialized) sysIdController.stop()
         controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
         coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
@@ -309,6 +320,7 @@ class ARESRobot : TimedRobot() {
     // ── Teleop ──
 
     override fun teleopInit() {
+        autoOrchestrator.stop()
         teleOpController.teleopInit()
     }
 
@@ -319,11 +331,16 @@ class ARESRobot : TimedRobot() {
     // ── Autonomous ──
 
     override fun autonomousInit() {
+        applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         autoOrchestrator.autonomousInit()
     }
 
     override fun autonomousPeriodic() {
         autoOrchestrator.autonomousPeriodic()
+    }
+
+    override fun autonomousExit() {
+        autoOrchestrator.stop()
     }
 
     // ── Simulation ──

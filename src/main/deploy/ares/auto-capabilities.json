@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "actions": [
+    {
+      "key": "intake.collect",
+      "displayName": "Collect note",
+      "description": "Deploys the intake and runs the intake and floor rollers.",
+      "category": "Intake"
+    },
+    {
+      "key": "intake.stop",
+      "displayName": "Stop intake",
+      "description": "Stops the intake and floor rollers without moving the pivot.",
+      "category": "Intake"
+    },
+    {
+      "key": "intake.stow",
+      "displayName": "Stow intake",
+      "description": "Stops the rollers and retracts the intake pivot.",
+      "category": "Intake"
+    },
+    {
+      "key": "shooter.prepare",
+      "displayName": "Prepare shooter",
+      "description": "Spins the flywheel to the autonomous shooting preset.",
+      "category": "Shooter"
+    },
+    {
+      "key": "shooter.feedWhenReady",
+      "displayName": "Shoot when ready",
+      "description": "Waits up to two seconds for fresh aligned flywheel RPM, then feeds the note.",
+      "category": "Shooter"
+    },
+    {
+      "key": "shooter.stop",
+      "displayName": "Stop shooter",
+      "description": "Stops the flywheel, feeder, and floor roller and clears the transfer latch.",
+      "category": "Shooter"
+    }
+  ]
+}

@@ -44,9 +44,10 @@ cd ..\ARESLib-Kotlin
 
 ## Deployment checklist
 
-1. Run `test` and a desktop simulation of the intended autonomous path.
-2. Confirm `SmartDashboard/SelectedPath` is not the real-robot default `SimPath`.
-3. Place competition `.path` files under `src/main/deploy/pathplanner/paths/`.
+1. Run `test` and a desktop simulation of the intended native auto.
+2. Confirm `SmartDashboard/SelectedAuto` names the intended `.aresauto` document.
+3. Save competition autos under `src/main/deploy/ares/autos/` and confirm every action appears in
+   `src/main/deploy/ares/auto-capabilities.json`.
 4. Verify `src/main/deploy/swerve_offsets.json` matches the robot.
 5. Verify the cowl and climber encoder zero references before using position control.
 6. Confirm both Limelights are reachable as `limelight-shooter` and `limelight-back`.
@@ -54,7 +55,8 @@ cd ..\ARESLib-Kotlin
 8. While disabled, confirm alliance, pose, mechanism validity telemetry, and zero/safe outputs.
 9. Enable mechanisms individually before running a full autonomous routine.
 
-GradleRIO copies `src/main/deploy` to `/home/lvuser/deploy`. Files under `src/main/resources/deploy` are classpath resources for tests/simulation and are not a substitute for the RoboRIO deploy directory.
+GradleRIO copies `src/main/deploy` to `/home/lvuser/deploy`. Native autos therefore arrive under
+`/home/lvuser/deploy/ares/autos/` without a robot-side conversion step.
 
 ## Swerve offsets
 
@@ -85,13 +87,17 @@ Do not fetch offsets from an unknown robot or network target and immediately dep
 
 ### Autonomous immediately stops
 
-Check Driver Station errors and `SmartDashboard/SelectedPath` first. On a real robot, the default `SimPath` deliberately produces an empty path and fail-safe stop. Also verify the named file exists under `/home/lvuser/deploy/pathplanner/paths/` with the `.path` extension.
+Check `ARES/Auto/Error` and `SmartDashboard/SelectedAuto` first. Verify the document exists under
+`/home/lvuser/deploy/ares/autos/`, its filename matches its embedded `documentId`, every action is
+registered, and no robot footprint crosses the field boundary. `do-nothing` is a valid safe default.
 
-### A path works in tests but is missing on the RoboRIO
+### An auto exists in Analytics but is missing on the RoboRIO
 
-It is probably in `src/main/resources/deploy`, which is available on the test/simulation classpath but is not copied as a deploy asset. Move/copy the competition path to `src/main/deploy/pathplanner/paths/`.
+Save it into the selected FRC project so it appears under `src/main/deploy/ares/autos`, then redeploy
+the static files. Editing on the laptop never requires the robot to be powered on, but executing a
+new document requires that document to be deployed.
 
-### `FeederShoot` waits and then continues without a shot
+### `shooter.feedWhenReady` waits and then continues without a shot
 
 The wait is intentionally capped at 2 s. Inspect flywheel target RPM, measured RPM, and `velocityValid`. A plausible cached RPM with invalid status is not ready. Readiness also requires a target above 100 RPM and less than 150 RPM error.
 

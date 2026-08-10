@@ -5,6 +5,10 @@ import com.areslib.math.geometry.Translation2d
 
 /** Tuned Marvin XIX mechanism, shot, and official 2024 Crescendo field constants. */
 object MarvinConfig {
+    /** Bumper-to-bumper footprint used by field-boundary validation. */
+    const val ROBOT_BUMPER_LENGTH_METERS = 0.80
+    const val ROBOT_BUMPER_WIDTH_METERS = 0.80
+
     /**
      * Feeder transfer speed (RPS) commanded when a shot is fired. Matches the aligned
      * run speed used by [MarvinFeederController.updateFeeders] so autonomous and teleop

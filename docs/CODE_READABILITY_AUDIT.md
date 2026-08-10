@@ -42,8 +42,8 @@ not included in the 56-file `src` inventory.
   visualization boundaries.
 - `src/main/kotlin/com/areslib/frc/Main.kt` — replaced the generic template warning with the actual
   WPILib entry-point and initialization contract.
-- `src/main/kotlin/com/areslib/frc/PathLoader.kt` — documented basename input, RoboRIO/classpath
-  resolution order, authoritative deploy assets, and the missing-path exception.
+- `src/main/kotlin/com/areslib/frc/robot/FrcAutoCapabilities.kt` — defines the source-owned native
+  auto action catalog, fresh task factories, and bounded flywheel-readiness gate.
 
 ### Hardware boundaries
 
@@ -96,9 +96,9 @@ not included in the 56-file `src` inventory.
 
 ### Teleop and autonomous orchestration
 
-- `src/main/kotlin/com/areslib/frc/robot/FRCAutoOrchestrator.kt` — documented blue-origin path
-  mirroring, time-profile versus measured-distance ownership, marker waits, freshness, and
-  fail-safe faults; removed dead bookkeeping and extracted the feeder-wait handler and event names.
+- `src/main/kotlin/com/areslib/frc/robot/FRCAutoOrchestrator.kt` — reduced orchestration to native
+  `.aresauto` resolution, field-footprint preflight, alliance transformation, shared compilation,
+  deterministic task execution, pose seeding, telemetry, and fail-safe lifecycle cleanup.
 - `src/main/kotlin/com/areslib/frc/robot/FRCTeleOpDriveController.kt` — documented meters/radians,
   red-alliance translation rotation, cached input ownership, command priority, Redux synchronization,
   and allocation avoidance; replaced a false slamtake comment and simplified enum mapping.
@@ -125,7 +125,7 @@ not included in the 56-file `src` inventory.
 - `src/main/kotlin/com/areslib/frc/sim/io/SimulatedIntakeIO.kt` — documented pivot degrees, roller
   voltage, and geometry-preserving effort scaling.
 
-## Changed test files (10)
+## Changed test files (8)
 
 - `src/test/kotlin/com/areslib/frc/ARESRobotTest.kt` — removed generated placeholders and an unmapped
   copilot-A step that claimed to toggle the intake but asserted no behavior.
@@ -133,14 +133,12 @@ not included in the 56-file `src` inventory.
   removed an unused value, and clarified the rotations API assertion.
 - `src/test/kotlin/com/areslib/frc/Dyn4jSimulationTest.kt` — corrected detector-edge, cowl-unit, and
   internal-versus-public representation comments; removed generated placeholders.
-- `src/test/kotlin/com/areslib/frc/PathLoaderTest.kt` — removed generated placeholder KDocs.
-- `src/test/kotlin/com/areslib/frc/pathing/E2EAutonomousSimulationTest.kt` — removed generated
-  placeholders and normalized comments describing the production event path.
 - `src/test/kotlin/com/areslib/frc/reducer/MarvinReducerTest.kt` — removed false claims that climber
   commands were intake-clamped or that a CBF lived in the shooter facade; made phase and unit
   comments match the actual actions.
-- `src/test/kotlin/com/areslib/frc/robot/FRCAutoOrchestratorTest.kt` — replaced inaccurate event/time
-  comments and tautological assertions with named, observable fault-state checks.
+- `src/test/kotlin/com/areslib/frc/robot/FrcNativeAutoContractTest.kt` — checks manifest/runtime
+  catalog parity, every deploy asset on both alliances, field rejection, pose mirroring, readiness
+  timeout, and execution through the production native runner.
 - `src/test/kotlin/com/areslib/frc/robot/FRCTeleOpDriveControllerTest.kt` — renamed claims to match
   chassis-command coverage and clarified where field-frame transformation occurs.
 - `src/test/kotlin/com/areslib/frc/sim/field/FrcFieldBuilderTest.kt` — removed generated placeholders.

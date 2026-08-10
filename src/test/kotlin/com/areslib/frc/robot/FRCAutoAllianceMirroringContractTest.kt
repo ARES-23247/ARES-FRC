@@ -28,7 +28,7 @@ class FRCAutoAllianceMirroringContractTest {
                     tangentRadians = 0.60
                 )
             ),
-            events = listOf(PathEvent("FeederShoot", 1.25))
+            events = listOf(PathEvent("shooter.feedWhenReady", 1.25))
         )
 
         val mirrored = AllianceMirroring.mirror(

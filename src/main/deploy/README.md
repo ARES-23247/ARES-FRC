@@ -8,12 +8,26 @@ GradleRIO copies this directory to `/home/lvuser/deploy` during deployment.
 src/main/deploy/
 |-- README.md
 |-- swerve_offsets.json
-`-- pathplanner/
-    `-- paths/
-        `-- <SelectedPath>.path
+|-- ares/
+|   |-- auto-capabilities.json
+|   `-- autos/
+|       `-- <document-id>.aresauto
+`-- paths/
+    `-- field.json
 ```
 
-`FRCAutoOrchestrator` loads a selected path from `pathplanner/paths/<name>.path`. Competition paths must be placed here before deployment. The `SimPath.path` under `src/main/resources/deploy/` is a test/simulation classpath fixture and is not copied here automatically.
+`FRCAutoOrchestrator` loads the native document selected by
+`SmartDashboard/SelectedAuto`. Analytics saves GUI-authored routines directly into
+`ares/autos`; no robot connection or PathPlanner conversion is required. `do-nothing` is the
+fail-safe default. `auto-capabilities.json` is the offline action catalog used by Analytics and is
+kept in exact parity with `FrcAutoCapabilities` by tests.
+
+`do-nothing` is reserved: the runner validates it but preserves the current localized pose instead
+of applying the document's placeholder starting pose.
+
+Autos are authored once in Blue-alliance, corner-origin field coordinates. Red execution reflects
+X across the alliance-wall axis before trajectory generation. Keep every robot center at least
+0.40 m from the field boundary for Marvin's current 0.80 m square bumper footprint.
 
 ## Swerve offsets
 
