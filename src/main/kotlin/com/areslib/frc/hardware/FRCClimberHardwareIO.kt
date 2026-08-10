@@ -1,8 +1,6 @@
 package com.areslib.frc.hardware
 
-import com.areslib.frc.hardware.ClimberIO
 import com.ctre.phoenix6.BaseStatusSignal
-import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -10,18 +8,20 @@ import com.ctre.phoenix6.signals.InvertedValue
 import com.ctre.phoenix6.signals.NeutralModeValue
 
 /**
- * Concrete implementation of ClimberIO utilizing a CTRE TalonFX motor
- * on ID 19 on the "CAN2" high-speed bus, with configured soft limits.
+ * CTRE TalonFX climber IO for CAN ID 19 on `CAN2`.
+ *
+ * Position feedback and commands are mechanism rotations after the configured 80:1
+ * sensor ratio. [refresh] is the only sensor-read phase; property getters return the
+ * cached status-signal values. Closed-loop effort is bounded independently of the
+ * geometric target, and TalonFX soft limits provide the final `0.0..1.73` boundary.
  */
 class FRCClimberHardwareIO(
     private val motor: TalonFX
 ) : ClimberIO {
+    @Volatile private var cachedPositionValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
-
-    // Climber scaling: 1 mechanism rotation is treated as the extension unit
-    private val rotationsPerMeter = 1.0
 
     private val climberPosition = motor.position
     private val climberCurrent = motor.statorCurrent
@@ -60,25 +60,51 @@ class FRCClimberHardwareIO(
     }
 
     override fun refresh() {
-        climberPosition.refresh()
-        climberCurrent.refresh()
+        cachedPositionValid = BaseStatusSignal.refreshAll(climberPosition).isOK &&
+            climberPosition.valueAsDouble.isFinite()
+        BaseStatusSignal.refreshAll(climberCurrent)
     }
 
-    override fun setTargetExtension(meters: Double) {
-        /**
-         * Documentation for targetRotations
-         */
-        val targetRotations = meters * rotationsPerMeter
-        motor.setControl(positionRequest.withPosition(targetRotations))
+    override fun setTargetPositionRotations(rotations: Double) {
+        val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations
+        motor.setControl(positionRequest.withPosition(safeRotations))
+    }
+
+    override fun setTargetPositionRotations(rotations: Double, maxEffortScale: Double) {
+        val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetPositionRotations(rotations)
+            return
+        }
+        val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations
+        val error = safeRotations - positionRotations
+        val maxVolts = NOMINAL_VOLTAGE * effortScale
+        setAppliedVoltage((POSITION_KP_VOLTS_PER_ROTATION * error).coerceIn(-maxVolts, maxVolts))
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        motor.setControl(voltageRequest.withOutput(safeVolts))
     }
 
-    override val extensionMeters: Double
-        get() = climberPosition.valueAsDouble / rotationsPerMeter
+    override val positionRotations: Double
+        get() = climberPosition.valueAsDouble
+
+    override val positionValid: Boolean
+        get() = cachedPositionValid
 
     override val currentAmps: Double
         get() = climberCurrent.valueAsDouble
+
+    private companion object {
+        const val POSITION_KP_VOLTS_PER_ROTATION = 12.0
+        const val NOMINAL_VOLTAGE = 12.0
+        const val FULL_EFFORT_THRESHOLD = 0.999
+    }
 }

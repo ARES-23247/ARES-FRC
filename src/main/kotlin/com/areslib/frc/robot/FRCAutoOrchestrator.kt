@@ -1,287 +1,318 @@
 package com.areslib.frc.robot
 
 import com.areslib.action.RobotAction
-import com.areslib.control.drivetrain.HolonomicDriveController
-import com.areslib.control.feedback.PIDController
-import com.areslib.frc.FrcSwerveRobot
+import com.areslib.auto.AresAutoFileLoader
+import com.areslib.auto.AutoPose
+import com.areslib.auto.AutoRoutine
+import com.areslib.auto.AutoRoutineCompiler
+import com.areslib.auto.AutoStep
+import com.areslib.auto.AutoValidationSeverity
 import com.areslib.frc.Dyn4jSimulation
-import com.areslib.frc.marvin.MarvinIntakeSubsystem
-import com.areslib.frc.marvin.MarvinShooterSubsystem
+import com.areslib.frc.FrcSwerveRobot
+import com.areslib.frc.marvin.SetClimberVoltage
 import com.areslib.frc.marvin.MarvinConfig
-import com.areslib.frc.marvin.SetFeederSpeed
-import com.areslib.pathing.Path
-import com.areslib.pathing.MutablePathPoint
-import com.areslib.frc.aresAlliance
-import com.areslib.frc.marvin.marvin
+import com.areslib.frc.marvin.StopSlamtake
+import com.areslib.math.coordinate.AllianceMirroring
+import com.areslib.math.coordinate.CoordinateTransformers
+import com.areslib.math.coordinate.FieldOrigin
+import com.areslib.math.coordinate.FieldSymmetry
+import com.areslib.math.geometry.Pose2d
+import com.areslib.math.geometry.Rotation2d
+import com.areslib.pathing.DriveModel
+import com.areslib.pathing.JerkLimitedTrajectoryProvider
+import com.areslib.pathing.TrajectoryLimits
+import com.areslib.pathing.TrajectoryPlanner
+import com.areslib.pathing.TrajectoryPreset
+import com.areslib.sequencer.Task
+import com.areslib.sequencer.TaskExecutor
+import com.areslib.sequencer.TaskStateMachine
+import com.areslib.sequencer.TaskStatus
+import com.areslib.state.Alliance
+import com.areslib.util.RobotClock
+import java.io.File
+import java.io.InputStream
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+
 /**
- * Documentation for FRCAutoOrchestrator
+ * Executes one GUI/DSL-authored `.aresauto` during the FRC autonomous period.
+ *
+ * Autos are authored in Blue-alliance, corner-origin field coordinates. Red execution reflects
+ * poses across the alliance-wall axis (`x' = fieldLength - x`) before trajectory generation. The
+ * complete document and named-command catalog are compiled before localization is seeded or a task
+ * is armed. Missing files, invalid robot footprints, compile errors, and task failures all latch a
+ * fail-safe stop.
  */
-
-class FRCAutoOrchestrator(
+class FRCAutoOrchestrator @JvmOverloads constructor(
     private val robot: FrcSwerveRobot,
-    private val sim: Dyn4jSimulation?,
-    private val marvinShooter: MarvinShooterSubsystem,
-    private val marvinIntake: MarvinIntakeSubsystem
+    private val sim: Dyn4jSimulation? = null,
+    private val selectionProvider: () -> String = ::dashboardSelection,
+    private val directoryProvider: () -> List<File> = ::defaultAutoDirectories,
+    private val resourceOpener: ((String) -> InputStream?)? = { resourcePath ->
+        FRCAutoOrchestrator::class.java.getResourceAsStream("/deploy/$resourcePath")
+    }
 ) {
-    private var activePath: Path? = null
-    private var autoStartTime = 0.0
-    private var autoDistance = 0.0
-    private var lastLoopTime = 0.0
-    private var lastOdomX = 0.0
-    private var lastOdomY = 0.0
-    
-    private val triggeredEvents = mutableSetOf<Int>()
-    private var isWaitingForCommand = false
-    private var isFirstPath = true
-    private var commandWaitStartTime = 0.0
-    private var previousDistance = 0.0
-    
-    private val driveController = HolonomicDriveController(
-        PIDController(5.0, 0.0, 0.5),
-        PIDController(5.0, 0.0, 0.5),
-        PIDController(4.0, 0.0, 0.4).apply { enableContinuousInput(-Math.PI, Math.PI) }
-    )
+    private var executor: TaskExecutor? = null
+    private var rootTask: Task? = null
+    private var autoFaulted = false
+    private var finished = true
+    private var selectedAutoId = DEFAULT_AUTO_ID
+    private var status = "Idle"
 
-    private val targetPoseScratch = DoubleArray(3)
-    private val scratchPathPoint = MutablePathPoint()
-    /**
-     * Documentation for autonomousInit
-     */
+    /** Publishes the offline deploy catalog and initializes the dashboard selection safely. */
+    fun publishCatalog() {
+        val available = discoverAutos()
+        runCatching {
+            val table = edu.wpi.first.networktables.NetworkTableInstance.getDefault()
+                .getTable(SMART_DASHBOARD_TABLE)
+            table.getEntry(SELECTED_AUTO_ENTRY).setDefaultString(DEFAULT_AUTO_ID)
+            table.getEntry(AVAILABLE_AUTOS_ENTRY).setStringArray(available.toTypedArray())
+        }
+        robot.telemetry.putString("ARES/Auto/AvailableDocuments", available.joinToString(","))
+    }
 
+    /** Loads, validates, alliance-transforms, compiles, seeds, and arms the selected native auto. */
     fun autonomousInit() {
-        isFirstPath = true
-        var pathName = ""
+        cancelExecutor()
+        autoFaulted = false
+        finished = false
+        selectedAutoId = selectionProvider().trim().ifEmpty { DEFAULT_AUTO_ID }
+
         try {
-            pathName = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("SmartDashboard").getEntry("SelectedPath").getString("SimPath")
-            if (edu.wpi.first.wpilibj.RobotBase.isReal() && pathName == "SimPath") {
-                edu.wpi.first.wpilibj.DriverStation.reportError("No auto path selected (default SimPath)", true)
-                activePath = Path(emptyList())
-            } else {
-                var path = com.areslib.frc.PathLoader.loadPath(pathName)
-
-                path = com.areslib.math.coordinate.AllianceMirroring.mirror(
-                    path,
-                    aresAlliance,
-                    com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
-                    fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
-                    fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
-                )
-                activePath = path
-
-                val startPoint = activePath?.points?.firstOrNull()
-                if (startPoint != null && isFirstPath) {
-                    val autoTable = edu.wpi.first.networktables.NetworkTableInstance.getDefault().getTable("Auto")
-                    val startX = autoTable.getEntry("InitialPoseX").getDouble(startPoint.pose.x)
-                    val startY = autoTable.getEntry("InitialPoseY").getDouble(startPoint.pose.y)
-                    val startHeading = autoTable.getEntry("InitialPoseHeading").getDouble(startPoint.pose.heading.radians)
-                    sim?.resetPose(startX, startY, startHeading)
-
-                    // Seed physical CTRE swerve drivetrain to prevent reset desync step jump
-                    robot.swerveDrivetrainIO?.seedPose(
-                        com.areslib.math.geometry.Pose2d(
-                            startX,
-                            startY,
-                            com.areslib.math.geometry.Rotation2d(startHeading)
-                        )
-                    )
-
-                    robot.store.dispatch(RobotAction.PoseUpdate(
-                        xMeters = startX,
-                        yMeters = startY,
-                        headingRadians = startHeading,
-                        timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
-                        isReset = true
-                    ))
-                    isFirstPath = false
-                }
+            val routine = AresAutoFileLoader.load(
+                documentId = selectedAutoId,
+                directories = directoryProvider(),
+                openResource = resourceOpener
+            )
+            require(routine.documentId == selectedAutoId) {
+                "Selected auto '$selectedAutoId' contains document '${routine.documentId}'"
             }
-        } catch (e: Exception) {
-            println("ERROR: Failed to load autonomous path: ${e.message}")
-            activePath = Path(emptyList())
-            edu.wpi.first.wpilibj.DriverStation.reportError("Missing auto path file: $pathName", false)
-        }
-        triggeredEvents.clear()
-        isWaitingForCommand = false
-        commandWaitStartTime = 0.0
-        autoStartTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-        val estimator = robot.store.state.drive.poseEstimator
-        lastOdomX = estimator.estimatedPoseX
-        lastOdomY = estimator.estimatedPoseY
-        autoDistance = 0.0
-        previousDistance = 0.0
-        lastLoopTime = autoStartTime
-    }
-    /**
-     * Documentation for autonomousPeriodic
-     */
+            requireFrcFieldBounds(routine)
 
+            val alliance = robot.store.state.drive.alliance
+            val transform = allianceTransform(alliance)
+            val compilation = AutoRoutineCompiler(
+                trajectoryPlanner = TrajectoryPlanner(listOf(JerkLimitedTrajectoryProvider)),
+                follower = com.areslib.pathing.HolonomicPathFollower(robot.drive),
+                driveModel = DriveModel.SWERVE,
+                limitsForPreset = ::trajectoryLimits,
+                poseTransform = transform
+            ).compile(routine)
+            require(compilation.isSuccess) {
+                compilation.issues.joinToString(separator = "; ") { it.message }
+            }
+
+            compilation.issues
+                .filter { it.severity != AutoValidationSeverity.ERROR }
+                .take(3)
+                .forEachIndexed { index, warning ->
+                    robot.telemetry.putString("ARES/Auto/Warning/${index + 1}", warning.message)
+                }
+
+            if (selectedAutoId != DEFAULT_AUTO_ID) {
+                seedPose(transform(routine.startingPose))
+            }
+            val task = requireNotNull(compilation.task) { "Auto compiler produced no executable task" }
+            rootTask = task
+            executor = TaskExecutor().apply { addTask(task) }
+            setStatus("Running")
+        } catch (error: Exception) {
+            abort("Preflight failed: ${error.message ?: error::class.java.simpleName}")
+        }
+    }
+
+    /** Advances the shared deterministic task graph once and dispatches all resulting Redux actions. */
     fun autonomousPeriodic() {
+        if (finished || autoFaulted) return
+        val activeExecutor = executor ?: run {
+            abort("Auto executor was not armed")
+            return
+        }
+        val task = rootTask ?: run {
+            abort("Compiled auto task is missing")
+            return
+        }
+
         try {
-            /**
-             * Documentation for path
-             */
-            val path = activePath ?: return
-            /**
-             * Documentation for dt
-             */
-            val currentTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-            if (lastLoopTime <= 0.0) {
-                lastLoopTime = currentTime
-                return
-            }
-            val dt = (currentTime - lastLoopTime).coerceIn(0.005, 0.1)
-            lastLoopTime = currentTime
-            /**
-             * Documentation for currentPose
-             */
-
-            val estimator = robot.store.state.drive.poseEstimator
-
-            val totalLength = path.points.lastOrNull()?.distanceMeters ?: 0.0
-            autoDistance = kotlin.math.min(autoDistance, totalLength)
-
-            path.sampleAtDistance(autoDistance, scratchPathPoint)
-
-            if (autoDistance >= totalLength) {
-                val speeds = driveController.calculateDirect(
-                    currentX = estimator.estimatedPoseX,
-                    currentY = estimator.estimatedPoseY,
-                    currentHeadingRad = estimator.estimatedPoseHeading,
-                    targetX = scratchPathPoint.x,
-                    targetY = scratchPathPoint.y,
-                    targetHeadingRad = scratchPathPoint.headingRad,
-                    targetVelocityMps = 0.0,
-                    pathTangentRadians = scratchPathPoint.tangentRadians,
-                    dtSeconds = dt
-                )
-                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
-                    edu.wpi.first.math.kinematics.ChassisSpeeds(
-                        speeds.vxMetersPerSecond,
-                        speeds.vyMetersPerSecond,
-                        speeds.omegaRadiansPerSecond
-                    ),
-                    dt
-                )
-                robot.drive.joystickDrive(
-                    discretizedSpeeds.vxMetersPerSecond,
-                    discretizedSpeeds.vyMetersPerSecond,
-                    discretizedSpeeds.omegaRadiansPerSecond,
-                    isFieldCentric = false
-                )
-            } else {
-                val speeds = driveController.calculateDirect(
-                    currentX = estimator.estimatedPoseX,
-                    currentY = estimator.estimatedPoseY,
-                    currentHeadingRad = estimator.estimatedPoseHeading,
-                    targetX = scratchPathPoint.x,
-                    targetY = scratchPathPoint.y,
-                    targetHeadingRad = scratchPathPoint.headingRad,
-                    targetVelocityMps = scratchPathPoint.velocityMps,
-                    pathTangentRadians = scratchPathPoint.tangentRadians,
-                    dtSeconds = dt
-                )
-
-                // HolonomicDriveController.calculateDirect() already returns robot-relative speeds
-                val discretizedSpeeds = edu.wpi.first.math.kinematics.ChassisSpeeds.discretize(
-                    edu.wpi.first.math.kinematics.ChassisSpeeds(
-                        speeds.vxMetersPerSecond,
-                        speeds.vyMetersPerSecond,
-                        speeds.omegaRadiansPerSecond
-                    ),
-                    dt
-                )
-                robot.drive.joystickDrive(
-                    discretizedSpeeds.vxMetersPerSecond,
-                    discretizedSpeeds.vyMetersPerSecond,
-                    discretizedSpeeds.omegaRadiansPerSecond,
-                    isFieldCentric = false
+            val nowMs = RobotClock.currentTimeMillis()
+            activeExecutor.update(robot.store.state, nowMs).forEach(robot.store::dispatch)
+            when {
+                TaskStateMachine.getStatus(task) == TaskStatus.FAILED ->
+                    abort("Task failed: ${task.name}")
+                activeExecutor.size == 0 -> complete()
+                else -> robot.telemetry.putString(
+                    "ARES/Auto/ActiveTask",
+                    activeExecutor.activeTaskName ?: task.name
                 )
             }
-
-            // Event markers
-            for (i in 0 until path.events.size) {
-                /**
-                 * Documentation for event
-                 */
-                val event = path.events[i]
-                
-                if (autoDistance >= event.triggerDistanceMeters && i !in triggeredEvents) {
-                    val eventCompleted = handleEvent(event.eventName, currentTime)
-                    if (eventCompleted) {
-                        println("AUTO EVENT TRIGGERED: ${event.eventName} at ${event.triggerDistanceMeters}m")
-                        robot.telemetry.putString("Robot/ActiveEvent", event.eventName)
-                        triggeredEvents.add(i)
-                    }
-                }
-            }
-            previousDistance = autoDistance
-
-            // Trajectory telemetry
-            targetPoseScratch[0] = scratchPathPoint.x
-            targetPoseScratch[1] = scratchPathPoint.y
-            targetPoseScratch[2] = scratchPathPoint.headingRad
-            robot.telemetry.putDoubleArray("Robot/TargetPose", targetPoseScratch)
-            /**
-             * Documentation for dx
-             */
-            val dx = scratchPathPoint.x - estimator.estimatedPoseX
-            val dy = scratchPathPoint.y - estimator.estimatedPoseY
-            robot.telemetry.putNumber("Robot/TrajectoryError", kotlin.math.hypot(dx, dy))
-
-            val actualDx = estimator.estimatedPoseX - lastOdomX
-            val actualDy = estimator.estimatedPoseY - lastOdomY
-            lastOdomX = estimator.estimatedPoseX
-            lastOdomY = estimator.estimatedPoseY
-            if (!isWaitingForCommand) {
-                val minSearch = (autoDistance - 0.5).coerceAtLeast(0.0)
-                val maxSearch = (autoDistance + 0.5).coerceAtMost(path.points.lastOrNull()?.distanceMeters ?: 0.0)
-                autoDistance = path.findClosestDistance(estimator.estimatedPoseX, estimator.estimatedPoseY, minSearch, maxSearch)
-            }
-        } catch (e: Exception) {
-            edu.wpi.first.wpilibj.DriverStation.reportError("Exception in autonomousPeriodic: ${e.message}", false)
-            robot.safeHardware()
+        } catch (error: Exception) {
+            abort("Runtime failed: ${error.message ?: error::class.java.simpleName}")
         }
     }
 
-    /**
-     * Dispatches the actions for a single autonomous path event by name.
-     *
-     * Extracted from autonomousPeriodic so the production event-dispatch path is
-     * unit-testable without running the trajectory follower.
-     *
-     * @return true if the event completed, false if it must keep waiting.
-     */
-    internal fun handleEvent(eventName: String, currentTimeSeconds: Double): Boolean {
-        var eventCompleted = true
-        when (eventName) {
-            "FlywheelOn" -> marvinShooter.spinUp(4000.0)
-            "IntakeDeploy" -> {
-                marvinIntake.deploy()
-                marvinIntake.setRollerSpeed(15.0)
-            }
-            "FeederShoot" -> {
-                val marvinState = robot.store.state.superstructure.marvin
-                val isRpmAligned = marvinState.flywheel.targetVelocityRpm > 100.0 &&
-                    kotlin.math.abs(marvinState.flywheel.velocityRpm - marvinState.flywheel.targetVelocityRpm) < 150.0
-                if (isRpmAligned) {
-                    marvinShooter.shoot()
-                    robot.store.dispatch(SetFeederSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, com.areslib.util.RobotClock.currentTimeMillis()))
-                    isWaitingForCommand = false
-                    commandWaitStartTime = 0.0
-                } else {
-                    if (!isWaitingForCommand) {
-                        commandWaitStartTime = currentTimeSeconds
-                    }
-                    if (currentTimeSeconds - commandWaitStartTime > 2.0) {
-                        isWaitingForCommand = false
-                        commandWaitStartTime = 0.0
-                    } else {
-                        isWaitingForCommand = true
-                        eventCompleted = false
-                    }
-                }
-            }
+    /** Cancels an active autonomous run and zeros every drivetrain and season output. */
+    fun stop() {
+        cancelExecutor()
+        finished = true
+        failSafeStop()
+        setStatus("Stopped")
+    }
+
+    private fun complete() {
+        finished = true
+        executor = null
+        rootTask = null
+        failSafeStop()
+        setStatus("Complete")
+    }
+
+    private fun abort(message: String) {
+        autoFaulted = true
+        finished = true
+        cancelExecutor()
+        failSafeStop()
+        setStatus("Blocked")
+        robot.telemetry.putString("ARES/Auto/Error", message)
+        runCatching { edu.wpi.first.wpilibj.DriverStation.reportError("ARES auto: $message", false) }
+    }
+
+    private fun cancelExecutor() {
+        executor?.clear(robot.store.state)
+        executor = null
+        rootTask = null
+    }
+
+    private fun seedPose(pose: Pose2d) {
+        sim?.resetPose(pose.x, pose.y, pose.heading.radians)
+        robot.swerveDrivetrainIO?.seedPose(pose)
+        robot.store.dispatch(
+            RobotAction.PoseUpdate(
+                xMeters = pose.x,
+                yMeters = pose.y,
+                headingRadians = pose.heading.radians,
+                timestampMs = RobotClock.currentTimeMillis(),
+                isReset = true
+            )
+        )
+    }
+
+    private fun failSafeStop() {
+        robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+        FrcAutoCapabilities.allStopActions().forEach(robot.store::dispatch)
+        robot.store.dispatch(SetClimberVoltage(0.0))
+        robot.store.dispatch(StopSlamtake())
+        robot.safeHardware()
+    }
+
+    private fun setStatus(value: String) {
+        status = value
+        robot.telemetry.putString("ARES/Auto/Selected", selectedAutoId)
+        robot.telemetry.putString("ARES/Auto/Status", value)
+    }
+
+    private fun allianceTransform(alliance: Alliance): (AutoPose) -> Pose2d = { pose ->
+        AllianceMirroring.mirror(
+            pose = Pose2d(pose.xMeters, pose.yMeters, Rotation2d(pose.headingRadians)),
+            alliance = alliance,
+            symmetry = FieldSymmetry.MIRRORED,
+            fieldLength = CoordinateTransformers.FRC_FIELD_LENGTH,
+            fieldWidth = CoordinateTransformers.FRC_FIELD_WIDTH,
+            fieldOrigin = FieldOrigin.CORNER
+        )
+    }
+
+    private fun trajectoryLimits(preset: TrajectoryPreset): TrajectoryLimits {
+        val scale = when (preset) {
+            TrajectoryPreset.SAFE -> 0.45
+            TrajectoryPreset.BALANCED -> 0.70
+            TrajectoryPreset.FAST -> 0.90
+            TrajectoryPreset.ADAPTIVE -> 0.60
         }
-        return eventCompleted
+        val maxVelocity = robot.drive.maxSpeedMps * scale
+        val maxAcceleration = robot.store.state.tuning.pathAccelerationLimit
+            .takeIf { it.isFinite() && it > 0.0 }
+            ?.times(scale)
+            ?: DEFAULT_ACCELERATION_MPS2 * scale
+        return TrajectoryLimits(
+            maxVelocityMps = maxVelocity,
+            maxAccelerationMps2 = maxAcceleration,
+            maxJerkMps3 = maxAcceleration * 4.0,
+            maxCentripetalAccelerationMps2 = maxAcceleration * 0.75,
+            maxAngularVelocityRps = robot.drive.maxAngularSpeedRadiansPerSecond * scale,
+            maxAngularAccelerationRps2 = maxAcceleration / DRIVE_RADIUS_METERS
+        )
+    }
+
+    private fun requireFrcFieldBounds(routine: AutoRoutine) {
+        requirePoseInsideField(routine.startingPose, "starting pose")
+        requireStepBounds(routine.steps, "steps")
+    }
+
+    private fun requireStepBounds(steps: List<AutoStep>, path: String) {
+        steps.forEachIndexed { index, step ->
+            step.drive?.target?.let { requirePoseInsideField(it, "$path[$index] drive goal") }
+            requireStepBounds(step.children, "$path[$index].children")
+        }
+    }
+
+    private fun requirePoseInsideField(pose: AutoPose, label: String) {
+        val projectedX = abs(cos(pose.headingRadians)) * ROBOT_HALF_LENGTH_METERS +
+            abs(sin(pose.headingRadians)) * ROBOT_HALF_WIDTH_METERS
+        val projectedY = abs(sin(pose.headingRadians)) * ROBOT_HALF_LENGTH_METERS +
+            abs(cos(pose.headingRadians)) * ROBOT_HALF_WIDTH_METERS
+        require(
+            pose.xMeters in projectedX..(CoordinateTransformers.FRC_FIELD_LENGTH - projectedX) &&
+                pose.yMeters in projectedY..(CoordinateTransformers.FRC_FIELD_WIDTH - projectedY)
+        ) {
+            "$label places the ${ROBOT_LENGTH_METERS} m x $ROBOT_WIDTH_METERS m robot outside the field"
+        }
+    }
+
+    private fun discoverAutos(): List<String> = buildSet {
+        add(DEFAULT_AUTO_ID)
+        directoryProvider().forEach { directory ->
+            directory.listFiles { file -> file.isFile && file.extension == ARES_AUTO_EXTENSION }
+                ?.mapTo(this) { it.nameWithoutExtension }
+        }
+    }.sorted()
+
+    internal val isFaultedForTest: Boolean
+        get() = autoFaulted
+    internal val isFinishedForTest: Boolean
+        get() = finished
+    internal val selectedAutoForTest: String
+        get() = selectedAutoId
+    internal val statusForTest: String
+        get() = status
+
+    private companion object {
+        const val DEFAULT_AUTO_ID = "do-nothing"
+        const val ARES_AUTO_EXTENSION = "aresauto"
+        const val SMART_DASHBOARD_TABLE = "SmartDashboard"
+        const val SELECTED_AUTO_ENTRY = "SelectedAuto"
+        const val AVAILABLE_AUTOS_ENTRY = "AvailableAutos"
+        const val DEFAULT_ACCELERATION_MPS2 = 3.0
+        const val DRIVE_RADIUS_METERS = 0.3907
+        const val ROBOT_LENGTH_METERS = MarvinConfig.ROBOT_BUMPER_LENGTH_METERS
+        const val ROBOT_WIDTH_METERS = MarvinConfig.ROBOT_BUMPER_WIDTH_METERS
+        const val ROBOT_HALF_LENGTH_METERS = ROBOT_LENGTH_METERS / 2.0
+        const val ROBOT_HALF_WIDTH_METERS = ROBOT_WIDTH_METERS / 2.0
+
+        fun dashboardSelection(): String = runCatching {
+            edu.wpi.first.networktables.NetworkTableInstance.getDefault()
+                .getTable(SMART_DASHBOARD_TABLE)
+                .getEntry(SELECTED_AUTO_ENTRY)
+                .getString(DEFAULT_AUTO_ID)
+        }.getOrDefault(DEFAULT_AUTO_ID)
+
+        fun defaultAutoDirectories(): List<File> {
+            val deploy = runCatching { edu.wpi.first.wpilibj.Filesystem.getDeployDirectory() }.getOrNull()
+            return listOfNotNull(
+                deploy?.resolve("ares/autos"),
+                File("src/main/deploy/ares/autos"),
+                File("../ARES-FRC/src/main/deploy/ares/autos")
+            ).distinctBy(File::getAbsolutePath)
+        }
     }
 }

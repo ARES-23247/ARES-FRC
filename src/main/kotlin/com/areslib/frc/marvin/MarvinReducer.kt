@@ -2,7 +2,6 @@ package com.areslib.frc.marvin
 
 import com.areslib.action.RobotAction
 import com.areslib.state.RobotState
-import com.areslib.state.SuperstructureState
 import com.areslib.reducer.rootReducer
 
 /**
@@ -10,39 +9,29 @@ import com.areslib.reducer.rootReducer
  *
  * Composes over the core [rootReducer] (which handles drive, vision, pathing, costmap,
  * and the generic FSM) and then applies Marvin-specific state updates for each season
- * action. The reducer is pure: it only records commanded targets. Physical bounds (e.g.
- * joint travel limits) are enforced downstream by the controller facades
+ * action. The reducer is pure: it records commanded targets and cached sensor observations but
+ * performs no IO. Physical bounds (e.g. joint travel limits) are enforced downstream by controller facades
  * (e.g. [MarvinCowlController]) and by TalonFX soft limits in the hardware IO layer, not
  * here.
  *
  * **Physical Units & Conventions:**
- * - Angles: Degrees ($^\circ$) for intake and cowl.
- * - Distances: Meters ($m$) for climber extension.
+ * - Angles: Degrees ($^\circ$) for intake and rotations for cowl.
+ * - Climber position: Mechanism rotations.
  * - Velocities: RPM for flywheel, RPS for rollers/feeders.
  *
- * **Performance Guarantees:**
- * - Zero-GC Allocations. Avoids new object creations by copying existing states only when modified and utilizing thread-local buffers.
+ * Sensor observations use deadbands to avoid copying the state tree for insignificant
+ * changes. Freshness transitions always bypass those numeric deadbands so invalid data
+ * cannot remain authoritative.
  */
 object MarvinReducer {
-    /**
-     * Documentation for reduce
-     */
 
+    /** Applies the core reducer first, then the Marvin-specific state transition. */
     fun reduce(state: RobotState, action: RobotAction): RobotState {
         // First run standard core reducer (handles drive, vision, path, costmap, and generic FSM)
-        /**
-         * Documentation for nextState
-         */
         var nextState = rootReducer(state, action)
 
         // Then apply Marvin specific state updates
-        /**
-         * Documentation for currentMarvin
-         */
         val currentMarvin = nextState.superstructure.marvin
-        /**
-         * Documentation for nextMarvin
-         */
         val nextMarvin = when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
@@ -54,7 +43,7 @@ object MarvinReducer {
             is SetFlywheelActive -> currentMarvin.copy(flywheelActive = action.active)
             is SetTransferActive -> currentMarvin.copy(transferActive = action.active)
             is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
-            is SetClimberExtension -> currentMarvin.withClimberExtension(action.meters)
+            is SetClimberPositionRotations -> currentMarvin.withClimberPositionRotations(action.rotations)
             is StartSlamtake -> {
                 currentMarvin.copy(
                     slamtakeActive = true,
@@ -88,41 +77,81 @@ object MarvinReducer {
                 }
             }
             is SuperstructureSensorUpdate -> {
-                /**
-                 * Documentation for updatedMarvin
-                 */
                 var updatedMarvin = currentMarvin
 
-                if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0) {
-                    updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(velocityRpm = action.flywheelRpm))
+                val flywheelVelocityValid = action.flywheelVelocityValid && action.flywheelRpm.isFinite()
+                if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0 ||
+                    updatedMarvin.flywheel.velocityValid != flywheelVelocityValid) {
+                    updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(
+                        velocityRpm = if (flywheelVelocityValid) action.flywheelRpm else 0.0,
+                        velocityValid = flywheelVelocityValid
+                    ))
                 }
-                if (Math.abs(updatedMarvin.cowl.angleRotations - action.cowlAngleRotations) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(angleRotations = action.cowlAngleRotations))
+                val cowlAngleValid = action.cowlAngleValid && action.cowlAngleRotations.isFinite()
+                val cowlAngle = if (cowlAngleValid) action.cowlAngleRotations else 0.0
+                if (Math.abs(updatedMarvin.cowl.angleRotations - cowlAngle) > 0.005 ||
+                    updatedMarvin.cowl.angleValid != cowlAngleValid) {
+                    updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(
+                        angleRotations = cowlAngle,
+                        angleValid = cowlAngleValid
+                    ))
                 }
-                if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - action.intakeAngle) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle))
+                val intakeAngleValid = action.intakeAngleValid && action.intakeAngle.isFinite()
+                val intakeAngle = if (intakeAngleValid) action.intakeAngle else 0.0
+                if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - intakeAngle) > 0.005 ||
+                    updatedMarvin.intake.pivotAngleValid != intakeAngleValid) {
+                    updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(
+                        pivotAngleDegrees = intakeAngle,
+                        pivotAngleValid = intakeAngleValid
+                    ))
                 }
-                if (updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
-                    val wasDetected = updatedMarvin.feeder.gamePieceDetected
-                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(gamePieceDetected = action.pieceDetected, previousGamePieceDetected = wasDetected))
+                if (!action.pieceDetectionValid) {
+                    if (updatedMarvin.feeder.pieceDetectionValid || updatedMarvin.feeder.gamePieceDetected) {
+                        updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(
+                            gamePieceDetected = false,
+                            previousGamePieceDetected = updatedMarvin.feeder.gamePieceDetected,
+                            pieceDetectionValid = false
+                        ))
+                    }
+                } else if (!updatedMarvin.feeder.pieceDetectionValid || updatedMarvin.feeder.gamePieceDetected != action.pieceDetected) {
+                    // Preserve the last trusted reading across a transient invalid
+                    // interval so detector recovery cannot count the same piece twice.
+                    val wasDetected = if (updatedMarvin.feeder.pieceDetectionValid) {
+                        updatedMarvin.feeder.gamePieceDetected
+                    } else {
+                        updatedMarvin.feeder.previousGamePieceDetected
+                    }
+                    updatedMarvin = updatedMarvin.copy(feeder = updatedMarvin.feeder.copy(
+                        gamePieceDetected = action.pieceDetected,
+                        previousGamePieceDetected = wasDetected,
+                        pieceDetectionValid = true
+                    ))
                     if (!wasDetected && action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(inventoryCount = updatedMarvin.inventoryCount + 1)
                     } else if (wasDetected && !action.pieceDetected && updatedMarvin.transferActive) {
                         updatedMarvin = updatedMarvin.copy(inventoryCount = (updatedMarvin.inventoryCount - 1).coerceAtLeast(0))
                     }
                 }
-                if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = action.floorVelocityRps))
+                val floorVelocityRps = action.floorVelocityRps.takeIf { it.isFinite() } ?: 0.0
+                if (Math.abs(updatedMarvin.floor.velocityRps - floorVelocityRps) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = floorVelocityRps))
                 }
-                if (Math.abs(updatedMarvin.floor.currentAmps - action.floorCurrentAmps) > 0.05) {
-                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = action.floorCurrentAmps))
+                val floorCurrentAmps = action.floorCurrentAmps.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+                if (Math.abs(updatedMarvin.floor.currentAmps - floorCurrentAmps) > 0.05) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = floorCurrentAmps))
                 }
-                if (Math.abs(updatedMarvin.climber.extensionMeters - action.climberExtensionMeters) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(extensionMeters = action.climberExtensionMeters))
+                val climberPositionValid = action.climberPositionValid && action.climberPositionRotations.isFinite()
+                val climberPosition = if (climberPositionValid) action.climberPositionRotations else 0.0
+                if (Math.abs(updatedMarvin.climber.positionRotations - climberPosition) > 0.005 ||
+                    updatedMarvin.climber.positionValid != climberPositionValid) {
+                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(
+                        positionRotations = climberPosition,
+                        positionValid = climberPositionValid
+                    ))
                 }
 
                 if (updatedMarvin.slamtakeActive) {
-                    if (action.pieceDetected) {
+                    if (action.pieceDetectionValid && action.pieceDetected) {
                         updatedMarvin = updatedMarvin.copy(
                             slamtakeActive = false,
                             slamtakePhase = 0,

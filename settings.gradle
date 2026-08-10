@@ -29,5 +29,13 @@ pluginManagement {
 Properties props = System.getProperties();
 props.setProperty("org.gradle.internal.native.headers.unresolved.dependencies.ignore", "true");
 
-includeBuild("../ARESLib-Kotlin")
+// Local development defaults to the sibling composite build. CI and verification can instead
+// consume the exact artifact already published to mavenLocal(), avoiding writes into a shared
+// ARESLib checkout while another process is using it.
+def usePublishedAresLib = providers.gradleProperty("ares.usePublishedLib")
+    .map { it.toBoolean() }
+    .getOrElse(false)
+if (!usePublishedAresLib) {
+    includeBuild("../ARESLib-Kotlin")
+}
 rootProject.name = 'ARES-FRC'

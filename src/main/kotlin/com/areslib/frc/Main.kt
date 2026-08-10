@@ -3,15 +3,13 @@ package com.areslib.frc
 import edu.wpi.first.wpilibj.RobotBase
 
 /**
- * Main initialization class for the FRC application.
- * Do NOT add any static variables to this class, or any initialization at all.
- * Unless you know what you are doing, do not modify this file except to
- * change the parameter class to the startRobot call.
+ * JVM entry point used by WPILib on both the RoboRIO and desktop simulation.
+ *
+ * Keep initialization inside [ARESRobot.robotInit]; constructing hardware or starting services
+ * here would run before WPILib has established the robot runtime and simulation/native bindings.
  */
 object Main {
-    /**
-     * Documentation for main
-     */
+    /** Delegates robot ownership and lifecycle scheduling to WPILib. */
     @JvmStatic
     fun main(args: Array<String>) {
         RobotBase.startRobot { ARESRobot() }

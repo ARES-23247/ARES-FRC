@@ -1,13 +1,15 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.hardware.FeederIO
-import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
 /**
- * Concrete implementation of FeederIO utilizing a CTRE TalonFX motor on CAN2.
- * Note: Marvin 19 does not have a physical beam break sensor.
+ * Open-loop TalonFX feeder IO on `CAN2`.
+ *
+ * Marvin XIX has no beam-break sensor, so [pieceDetectionValid] is deliberately false;
+ * callers must not interpret [isBeamBroken] as a fresh “no piece” observation. Current
+ * feedback is refreshed once per robot loop and read from the cached status signal.
  */
 class FRCFeederHardwareIO(
     private val motor: TalonFX
@@ -44,10 +46,15 @@ class FRCFeederHardwareIO(
      * by [com.areslib.frc.marvin.MarvinSuperstructure] (FEEDER_KV * rps * brownoutScale).
      */
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        motor.setControl(voltageRequest.withOutput(
+            volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        ))
     }
 
     override val isBeamBroken: Boolean
+        get() = false
+
+    override val pieceDetectionValid: Boolean
         get() = false
 
     override val currentAmps: Double

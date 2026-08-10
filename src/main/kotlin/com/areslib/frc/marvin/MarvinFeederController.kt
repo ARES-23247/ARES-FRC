@@ -1,47 +1,42 @@
 package com.areslib.frc.marvin
 
 import com.areslib.Store
-import com.areslib.action.RobotAction
 
+/** Coordinates the feeder transfer latch and optional floor-roller assist. */
 class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
-    private var lastFeederSpeed = Double.NaN
-    private var lastFloorSpeed = Double.NaN
-    private var lastTransferActive: Boolean? = null
-    /**
-     * Documentation for transferActive
-     */
 
+    /** True after a shot transfer has been explicitly started and before [stop]. */
     val transferActive: Boolean
         get() = store.state.superstructure.marvin.transferActive
-    /**
-     * Documentation for shoot
-     */
 
+    /** Latches transfer active and commands the calibrated feeder shooting speed. */
     fun shoot() {
-        dispatchOnChange(lastTransferActive, true, ::SetTransferActive) { lastTransferActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.transferActive, true, ::SetTransferActive) {}
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, MarvinConfig.FEEDER_SHOOT_SPEED_RPS, ::SetFeederSpeed) {}
     }
-    /**
-     * Documentation for stop
-     */
 
+    /** Clears the transfer latch and stops both feeder and floor targets. */
     fun stop() {
-        dispatchOnChange(lastTransferActive, false, ::SetTransferActive) { lastTransferActive = it }
+        dispatchOnChange(store.state.superstructure.marvin.transferActive, false, ::SetTransferActive) {}
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, 0.0, ::SetFeederSpeed) {}
+        dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, 0.0, ::SetFloorSpeed) {}
     }
-    /**
-     * Documentation for updateFeeders
-     */
 
+    /**
+     * Applies the heading/RPM firing interlock.
+     *
+     * A transfer already in progress is allowed to finish even if alignment moves out
+     * of tolerance. [runFloorRollers] controls whether the floor mirrors feeder speed.
+     */
     fun updateFeeders(rpmAligned: Boolean, headingAligned: Boolean, runFloorRollers: Boolean = false) {
-        /**
-         * Documentation for speed
-         */
-        val speed = if ((headingAligned && rpmAligned) || transferActive == true) 10.0 else 0.0
-        dispatchOnChange(lastFeederSpeed, speed, ::SetFeederSpeed) { lastFeederSpeed = it }
-        
-        if (runFloorRollers) {
-            dispatchOnChange(lastFloorSpeed, speed, ::SetFloorSpeed) { lastFloorSpeed = it }
+        val speed = if ((headingAligned && rpmAligned) || transferActive) {
+            MarvinConfig.FEEDER_SHOOT_SPEED_RPS
         } else {
-            dispatchOnChange(lastFloorSpeed, 0.0, ::SetFloorSpeed) { lastFloorSpeed = it }
+            0.0
         }
+        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, speed, ::SetFeederSpeed) {}
+
+        val floorSpeed = if (runFloorRollers) speed else 0.0
+        dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, floorSpeed, ::SetFloorSpeed) {}
     }
 }

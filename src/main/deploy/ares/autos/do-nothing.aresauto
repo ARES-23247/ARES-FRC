@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "documentId": "do-nothing",
+  "revision": 1,
+  "name": "Do Nothing",
+  "startingPose": {
+    "xMeters": 0.5,
+    "yMeters": 0.5,
+    "headingRadians": 0.0
+  },
+  "steps": [
+    {
+      "kind": "WAIT",
+      "durationSeconds": 0.0
+    }
+  ]
+}

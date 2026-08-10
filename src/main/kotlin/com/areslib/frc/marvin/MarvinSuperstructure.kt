@@ -15,106 +15,131 @@ import com.areslib.frc.hardware.ClimberIO
  *
  * Implements [Subsystem] to register with the robot lifecycle, reading hardware sensors,
  * dispatching [SuperstructureSensorUpdate] actions, and applying voltage/closed-loop outputs
- * with brownout power scaling applied.
+ * with brownout power scaling applied. ARESLib refreshes registered IO before [readSensors],
+ * so this class consumes cached observations only; it never initiates hardware reads.
+ *
+ * Invalid flywheel velocity and absent/untrusted piece detection stay explicit in the
+ * sensor action. Position targets retain their geometry during brownout, while velocity,
+ * voltage, and closed-loop effort are scaled.
  */
 class MarvinSuperstructure(
-    /**
-     * Documentation for flywheelIO
-     */
     val flywheelIO: FlywheelIO,
-    /**
-     * Documentation for cowlIO
-     */
     val cowlIO: CowlIO,
-    /**
-     * Documentation for intakeIO
-     */
     val intakeIO: IntakeIO,
-    /**
-     * Documentation for feederIO
-     */
     val feederIO: FeederIO,
-    /**
-     * Documentation for floorIO
-     */
     val floorIO: FloorIO,
-    /**
-     * Documentation for climberIO
-     */
     val climberIO: ClimberIO
 ) : Subsystem {
 
+    /** Dispatches one coherent cached sensor snapshot and advances slamtake timers. */
     override fun readSensors(store: Store, timestampMs: Long) {
+        val pieceDetectionValid = feederIO.pieceDetectionValid
+        val pieceDetected = pieceDetectionValid && feederIO.isBeamBroken
         store.dispatch(SuperstructureSensorUpdate(
             flywheelRpm = flywheelIO.velocityRpm,
+            flywheelVelocityValid = flywheelIO.velocityValid,
             cowlAngleRotations = cowlIO.angleRotations,
+            cowlAngleValid = cowlIO.angleValid,
             intakeAngle = intakeIO.pivotAngleDegrees,
-            pieceDetected = feederIO.isBeamBroken,
+            intakeAngleValid = intakeIO.pivotAngleValid,
+            pieceDetected = pieceDetected,
+            pieceDetectionValid = pieceDetectionValid,
             floorVelocityRps = floorIO.velocityRps,
-            climberExtensionMeters = climberIO.extensionMeters,
+            climberPositionRotations = climberIO.positionRotations,
+            climberPositionValid = climberIO.positionValid,
             floorCurrentAmps = floorIO.currentAmps,
             timestampMs = timestampMs
         ))
         
         val marvin = store.state.superstructure.marvin
-        if (marvin.slamtakeActive && !feederIO.isBeamBroken) {
-            val elapsed = (timestampMs - marvin.slamtakeStartTimeMs) / 1000.0
-            when (marvin.slamtakePhase) {
-                DEPLOYED_PHASE -> if (elapsed >= RETRACT_AT_SECONDS) {
-                    store.dispatch(SlamtakeTimerExpired(1, timestampMs))
-                }
-                RETRACTED_PHASE -> if (elapsed >= FINISH_AT_SECONDS) {
-                    store.dispatch(SlamtakeTimerExpired(2, timestampMs))
-                }
+        if (!marvin.slamtakeActive || (pieceDetectionValid && pieceDetected)) return
+
+        val elapsed = (timestampMs - marvin.slamtakeStartTimeMs) / 1000.0
+        when (marvin.slamtakePhase) {
+            DEPLOYED_PHASE -> if (elapsed >= RETRACT_AT_SECONDS) {
+                store.dispatch(SlamtakeTimerExpired(1, timestampMs))
+            }
+            RETRACTED_PHASE -> if (elapsed >= FINISH_AT_SECONDS) {
+                store.dispatch(SlamtakeTimerExpired(2, timestampMs))
             }
         }
     }
 
+    /** Emits outputs from immutable state using [scale] as effort/velocity power budget. */
     override fun writeOutputs(state: RobotState, scale: Double) {
-        /**
-         * Documentation for marvin
-         */
         val marvin = state.superstructure.marvin
-        flywheelIO.setVelocityRpm(marvin.flywheel.targetVelocityRpm * scale)
-        cowlIO.setTargetAngle(marvin.cowl.targetAngleRotations * scale)
-        /**
-         * Documentation for pivotAngle
-         */
+        val effortScale = scale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        val flywheelTargetRpm = if (marvin.flywheelActive) {
+            finiteOrZero(marvin.flywheel.targetVelocityRpm).coerceIn(0.0, MAX_FLYWHEEL_RPM) * effortScale
+        } else {
+            0.0
+        }
+        flywheelIO.setVelocityRpm(flywheelTargetRpm)
+        // Position targets describe mechanism geometry and must not move when
+        // brownout scaling changes. Velocity and voltage commands are scaled below.
+        cowlIO.setTargetAngle(
+            finiteOrZero(marvin.cowl.targetAngleRotations).coerceIn(0.0, MarvinConfig.cowlMaxRotations),
+            effortScale
+        )
 
-        val pivotAngle = marvin.intake.targetAngleDegrees * scale
-        intakeIO.setPivotAngle(pivotAngle)
-        /**
-         * Documentation for targetRollerSpeed
-         */
+        val climberTarget = finiteOrZero(marvin.climber.targetPositionRotations).coerceIn(
+            MarvinConfig.MechanismLimits.climberMinRotations,
+            MarvinConfig.MechanismLimits.climberMaxRotations
+        )
+        val climberVoltage = finiteOrZero(marvin.climber.targetVoltage).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
+        val climberMotionRequested = when (marvin.climber.controlMode) {
+            ClimberControlMode.VOLTAGE -> kotlin.math.abs(climberVoltage) > OUTPUT_EPSILON
+            ClimberControlMode.POSITION_ROTATIONS ->
+                !marvin.climber.positionValid ||
+                    kotlin.math.abs(climberTarget - marvin.climber.positionRotations) > POSITION_EPSILON_ROTATIONS
+        }
+        val climberBlocksIntake = !marvin.climber.positionValid ||
+            marvin.climber.positionRotations > MarvinConfig.MechanismLimits.climberClearanceRotations ||
+            climberTarget > MarvinConfig.MechanismLimits.climberClearanceRotations || climberMotionRequested
+        val requestedPivot = finiteOrZero(marvin.intake.targetAngleDegrees).coerceIn(
+            MarvinConfig.MechanismLimits.intakeStowedDegrees,
+            MarvinConfig.MechanismLimits.intakeDeployedDegrees
+        )
+        val safePivot = if (climberBlocksIntake) MarvinConfig.MechanismLimits.intakeStowedDegrees else requestedPivot
+        intakeIO.setPivotAngle(safePivot, effortScale)
 
-        val targetRollerSpeed = marvin.intake.targetRollerVelocityRps * scale
+        val targetRollerSpeed = finiteOrZero(marvin.intake.targetRollerVelocityRps) * effortScale
         intakeIO.setRollerVelocityRps(targetRollerSpeed)
-        /**
-         * Documentation for targetFeederSpeed
-         */
 
-        val targetFeederSpeed = marvin.feeder.targetVelocityRps
-        val FEEDER_KV = 0.12
-        feederIO.setAppliedVoltage(FEEDER_KV * targetFeederSpeed * scale)
-        /**
-         * Documentation for targetFloorSpeed
-         */
+        val targetFeederSpeed = finiteOrZero(marvin.feeder.targetVelocityRps)
+        feederIO.setAppliedVoltage(
+            (FEEDER_KV_VOLTS_PER_RPS * targetFeederSpeed * effortScale).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
+        )
 
-        val targetFloorSpeed = marvin.floor.targetVelocityRps
-        val FLOOR_KV = 0.12
-        floorIO.setAppliedVoltage(FLOOR_KV * targetFloorSpeed * scale)
-        /**
-         * Documentation for targetClimberVoltage
-         */
+        val targetFloorSpeed = finiteOrZero(marvin.floor.targetVelocityRps)
+        floorIO.setAppliedVoltage(
+            (FLOOR_KV_VOLTS_PER_RPS * targetFloorSpeed * effortScale).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
+        )
 
-        val targetClimberVoltage = marvin.climber.targetVoltage
-        climberIO.setAppliedVoltage(targetClimberVoltage * scale)
+        val intakeClear = marvin.intake.pivotAngleValid && marvin.intake.pivotAngleDegrees.isFinite() &&
+            marvin.intake.pivotAngleDegrees <= MarvinConfig.MechanismLimits.intakeClearanceDegrees
+        if (climberMotionRequested && !intakeClear) {
+            climberIO.setAppliedVoltage(0.0)
+        } else {
+            when (marvin.climber.controlMode) {
+                ClimberControlMode.VOLTAGE -> climberIO.setAppliedVoltage(climberVoltage * effortScale)
+                ClimberControlMode.POSITION_ROTATIONS -> climberIO.setTargetPositionRotations(climberTarget, effortScale)
+            }
+        }
     }
+
+    private fun finiteOrZero(value: Double): Double = if (value.isFinite()) value else 0.0
 
     companion object {
         private const val DEPLOYED_PHASE = 1
         private const val RETRACTED_PHASE = 2
         private const val RETRACT_AT_SECONDS = 0.5
         private const val FINISH_AT_SECONDS = 1.5
+        private const val FEEDER_KV_VOLTS_PER_RPS = 0.12
+        private const val FLOOR_KV_VOLTS_PER_RPS = 0.12
+        private const val NOMINAL_VOLTAGE = 12.0
+        private const val MAX_FLYWHEEL_RPM = 6000.0
+        private const val OUTPUT_EPSILON = 1e-4
+        private const val POSITION_EPSILON_ROTATIONS = 0.01
     }
 }

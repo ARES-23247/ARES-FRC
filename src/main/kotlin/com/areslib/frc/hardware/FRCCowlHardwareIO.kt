@@ -2,7 +2,6 @@ package com.areslib.frc.hardware
 
 import com.areslib.frc.marvin.MarvinConfig
 import com.ctre.phoenix6.BaseStatusSignal
-import com.ctre.phoenix6.configs.TalonFXConfiguration
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -10,15 +9,17 @@ import com.ctre.phoenix6.signals.InvertedValue
 import com.ctre.phoenix6.signals.NeutralModeValue
 
 /**
- * Concrete implementation of CowlIO utilizing a single CTRE TalonFX motor
- * to actuate the adjustable hood angle.
- * 
- * Configured in mechanism rotations directly (0.50 to 1.75 mechanism rotations),
- * matching Marvin 19 system constants and SOTM interpolations.
+ * TalonFX IO for the adjustable cowl, expressed entirely in mechanism rotations.
+ *
+ * Shot-table values such as `0.50..1.75` are rotations, not degrees. [refresh] owns
+ * CAN reads and getters expose cached observations. The target remains geometric when
+ * brownout scaling changes; the overload accepting `maxEffortScale` limits only output
+ * voltage. Software and TalonFX limits share [MarvinConfig.cowlMaxRotations].
  */
 class FRCCowlHardwareIO(
     private val motor: TalonFX
 ) : CowlIO {
+    @Volatile private var cachedAngleValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -60,22 +61,58 @@ class FRCCowlHardwareIO(
     }
 
     override fun refresh() {
-        cowlPosition.refresh()
-        cowlCurrent.refresh()
+        cachedAngleValid = BaseStatusSignal.refreshAll(cowlPosition).isOK &&
+            cowlPosition.valueAsDouble.isFinite()
+        BaseStatusSignal.refreshAll(cowlCurrent)
     }
 
     override fun setTargetAngle(rotations: Double) {
-        // Use target cowl angle directly
-        motor.setControl(positionRequest.withPosition(rotations))
+        motor.setControl(positionRequest.withPosition(safeTarget(rotations)))
+    }
+
+    override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
+        val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetAngle(rotations)
+            return
+        }
+        if (!angleValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
+        val error = safeTarget(rotations) - angleRotations
+        val staticVolts = when {
+            error > POSITION_EPSILON_ROTATIONS -> POSITION_KS_VOLTS
+            error < -POSITION_EPSILON_ROTATIONS -> -POSITION_KS_VOLTS
+            else -> 0.0
+        }
+        val maxVolts = NOMINAL_VOLTAGE * effortScale
+        setAppliedVoltage((POSITION_KP_VOLTS_PER_ROTATION * error + staticVolts).coerceIn(-maxVolts, maxVolts))
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        motor.setControl(voltageRequest.withOutput(
+            volts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
+        ))
     }
 
     override val angleRotations: Double
         get() = cowlPosition.valueAsDouble
 
+    override val angleValid: Boolean
+        get() = cachedAngleValid
+
     override val currentAmps: Double
         get() = cowlCurrent.valueAsDouble
+
+    private fun safeTarget(rotations: Double): Double =
+        rotations.takeIf { it.isFinite() }?.coerceIn(0.0, MarvinConfig.cowlMaxRotations) ?: 0.0
+
+    private companion object {
+        const val POSITION_KP_VOLTS_PER_ROTATION = 20.0
+        const val POSITION_KS_VOLTS = 2.0
+        const val POSITION_EPSILON_ROTATIONS = 0.002
+        const val NOMINAL_VOLTAGE = 12.0
+        const val FULL_EFFORT_THRESHOLD = 0.999
+    }
 }

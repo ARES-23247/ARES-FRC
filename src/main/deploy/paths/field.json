@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "id": "frc-2024-crescendo",
+  "name": "2024 Crescendo",
+  "gameYear": "2024",
+  "fieldType": "frc",
+  "widthMeters": 16.541,
+  "heightMeters": 8.211,
+  "xAxisDirection": "right",
+  "yAxisDirection": "up",
+  "redDriverStation": "east",
+  "blueDriverStation": "west",
+  "obstacles": [
+    { "id": "blue-stage-14", "name": "Blue Stage Post 14", "x": 5.3208, "y": 4.1051, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 },
+    { "id": "blue-stage-15", "name": "Blue Stage Post 15", "x": 4.6413, "y": 4.4983, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 },
+    { "id": "blue-stage-16", "name": "Blue Stage Post 16", "x": 4.6413, "y": 3.7132, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 },
+    { "id": "red-stage-11", "name": "Red Stage Post 11", "x": 11.9047, "y": 3.7132, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 },
+    { "id": "red-stage-12", "name": "Red Stage Post 12", "x": 11.9047, "y": 4.4983, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 },
+    { "id": "red-stage-13", "name": "Red Stage Post 13", "x": 11.2202, "y": 4.1051, "width": 0.18, "height": 0.18, "shape": "circle", "friction": 0.5, "restitution": 0.0 }
+  ],
+  "apriltags": [],
+  "elementTypes": [
+    {
+      "id": "game-piece-note",
+      "name": "Note",
+      "shape": "cylinder",
+      "width": 0.3556,
+      "height": 0.0508,
+      "depth": 0.3556,
+      "diameter": 0.3556,
+      "color": "#F57C00",
+      "massKg": 0.235,
+      "movable": true,
+      "friction": 0.6,
+      "restitution": 0.4
+    }
+  ],
+  "elements": [
+    { "id": "blue-wing-1", "elementTypeId": "game-piece-note", "name": "Blue Wing Note 1", "x": 2.8956, "y": 2.6577, "rotation": 0.0 },
+    { "id": "blue-wing-2", "elementTypeId": "game-piece-note", "name": "Blue Wing Note 2", "x": 2.8956, "y": 4.1055, "rotation": 0.0 },
+    { "id": "blue-wing-3", "elementTypeId": "game-piece-note", "name": "Blue Wing Note 3", "x": 2.8956, "y": 5.5533, "rotation": 0.0 },
+    { "id": "red-wing-1", "elementTypeId": "game-piece-note", "name": "Red Wing Note 1", "x": 13.6454, "y": 2.6577, "rotation": 0.0 },
+    { "id": "red-wing-2", "elementTypeId": "game-piece-note", "name": "Red Wing Note 2", "x": 13.6454, "y": 4.1055, "rotation": 0.0 },
+    { "id": "red-wing-3", "elementTypeId": "game-piece-note", "name": "Red Wing Note 3", "x": 13.6454, "y": 5.5533, "rotation": 0.0 },
+    { "id": "centerline-1", "elementTypeId": "game-piece-note", "name": "Centerline Note 1", "x": 8.2705, "y": 0.7529, "rotation": 0.0 },
+    { "id": "centerline-2", "elementTypeId": "game-piece-note", "name": "Centerline Note 2", "x": 8.2705, "y": 2.4293, "rotation": 0.0 },
+    { "id": "centerline-3", "elementTypeId": "game-piece-note", "name": "Centerline Note 3", "x": 8.2705, "y": 4.1057, "rotation": 0.0 },
+    { "id": "centerline-4", "elementTypeId": "game-piece-note", "name": "Centerline Note 4", "x": 8.2705, "y": 5.7821, "rotation": 0.0 },
+    { "id": "centerline-5", "elementTypeId": "game-piece-note", "name": "Centerline Note 5", "x": 8.2705, "y": 7.4585, "rotation": 0.0 }
+  ],
+  "fieldWaypoints": []
+}

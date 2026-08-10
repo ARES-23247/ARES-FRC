@@ -1,19 +1,9 @@
 package com.areslib.frc
 
 import com.areslib.action.RobotAction
-import com.areslib.control.drivetrain.HolonomicDriveController
-import com.areslib.control.feedback.PIDController
-import com.areslib.control.assist.ShotResult
-import com.areslib.control.assist.ShotSetup
-import com.areslib.math.geometry.ChassisSpeeds
-import com.areslib.math.geometry.Pose2d
-import com.areslib.math.geometry.Rotation2d
-import com.areslib.math.geometry.Translation2d
-import com.areslib.pathing.Path
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
 import com.areslib.state.VisionState
-import com.areslib.reducer.rootReducer
 import com.areslib.frc.marvin.*
 import com.areslib.telemetry.GamepadState
 import com.areslib.frc.hardware.FlywheelIO
@@ -29,38 +19,40 @@ import com.areslib.frc.hardware.FRCFloorHardwareIO
 import com.areslib.frc.hardware.FRCFlywheelHardwareIO
 import com.areslib.frc.hardware.FRCIntakeHardwareIO
 
-import edu.wpi.first.math.MathUtil
 import edu.wpi.first.math.VecBuilder
 
-import com.areslib.hardware.SubsystemIO
 import com.areslib.hardware.drive.SwerveHardwareIO
 import com.areslib.hardware.vision.VisionIO
 
 import edu.wpi.first.wpilibj.TimedRobot
 import edu.wpi.first.wpilibj.XboxController
 import edu.wpi.first.wpilibj.RobotBase
-import edu.wpi.first.wpilibj.Timer
 import edu.wpi.first.wpilibj.DriverStation
 
 import com.areslib.frc.robot.FRCAutoOrchestrator
+import com.areslib.frc.robot.FrcAutoCapabilities
 import com.areslib.frc.robot.FRCTeleOpDriveController
-/**
- * Documentation for aresAlliance
- */
+import com.areslib.frc.robot.FrcSysIdController
 
+/**
+ * Current Driver Station alliance in the platform-neutral ARES state model.
+ * Unknown station data deliberately falls back to Blue so blue-origin field transforms remain
+ * defined before the Driver Station supplies an alliance.
+ */
 val aresAlliance: com.areslib.state.Alliance
-    get() = if (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red) {
-        com.areslib.state.Alliance.RED
-    } else {
-        com.areslib.state.Alliance.BLUE
+    get() = when (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)) {
+        DriverStation.Alliance.Red -> com.areslib.state.Alliance.RED
+        DriverStation.Alliance.Blue -> com.areslib.state.Alliance.BLUE
+        else -> com.areslib.state.Alliance.BLUE
     }
 
 /**
- * Main Robot lifecycle for the FRC CTRE Swerve Integration.
+ * WPILib lifecycle and dependency-composition root for Marvin XIX.
  *
- * This is now a thin shell that delegates all state management, hardware IO,
- * and telemetry to the [FrcSwerveRobot] facade — mirroring how FTC's
- * ARESMecanumTeleOp delegates to FtcMecanumRobot.
+ * This shell selects real or simulated IO, owns controller snapshots, and delegates
+ * state/control work to [FrcSwerveRobot], [FRCTeleOpDriveController], and
+ * [FRCAutoOrchestrator]. Its registered 20 ms ARES update refreshes hardware before
+ * sensor reads and Redux-derived output writes. Mode callbacks remain orchestration-only.
  */
 class ARESRobot : TimedRobot() {
 
@@ -77,103 +69,46 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
+    private lateinit var sysIdController: FrcSysIdController
 
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
     private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
     private val BLUE_SPEAKER = MarvinConfig.FieldTargets.blueSpeaker
+    private val superstructureTelemetry = DoubleArray(14)
 
     // Simulation timing
     private var lastSimTime = 0.0
     private val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
 
 
+    /** Constructs IO, the composed reducer/store, subsystem lifecycle, and mode controllers. */
     override fun robotInit() {
         edu.wpi.first.wpilibj.Threads.setCurrentThreadPriority(true, 10)
-        /**
-         * Documentation for isReal
-         */
 
         val isReal = RobotBase.isReal()
 
         // 1. Declare the hardware IO instances (either physical or simulation)
-        /**
-         * Documentation for swerveIO
-         */
         val swerveIO: SwerveHardwareIO?
-        /**
-         * Documentation for visionIO
-         */
         val visionIO: VisionIO?
-        /**
-         * Documentation for flywheelIO
-         */
         val flywheelIO: FlywheelIO
-        /**
-         * Documentation for cowlIO
-         */
         val cowlIO: CowlIO
-        /**
-         * Documentation for intakeIO
-         */
         val intakeIO: IntakeIO
-        /**
-         * Documentation for feederIO
-         */
         val feederIO: FeederIO
-        /**
-         * Documentation for floorIO
-         */
         val floorIO: FloorIO
-        /**
-         * Documentation for climberIO
-         */
         val climberIO: ClimberIO
 
         if (isReal) {
             // can2Bus is already defined as a class property
-            /**
-             * Documentation for leftMasterFX
-             */
             val leftMasterFX = com.ctre.phoenix6.hardware.TalonFX(9, can2Bus)
-            /**
-             * Documentation for leftFollowerFX
-             */
             val leftFollowerFX = com.ctre.phoenix6.hardware.TalonFX(10, can2Bus)
-            /**
-             * Documentation for rightMasterFX
-             */
             val rightMasterFX = com.ctre.phoenix6.hardware.TalonFX(11, can2Bus)
-            /**
-             * Documentation for rightFollowerFX
-             */
             val rightFollowerFX = com.ctre.phoenix6.hardware.TalonFX(12, can2Bus)
-            /**
-             * Documentation for cowlFX
-             */
             val cowlFX = com.ctre.phoenix6.hardware.TalonFX(13, can2Bus)
-            /**
-             * Documentation for pivotFX
-             */
             val pivotFX = com.ctre.phoenix6.hardware.TalonFX(14, can2Bus)
-            /**
-             * Documentation for rollerFX
-             */
             val rollerFX = com.ctre.phoenix6.hardware.TalonFX(15, can2Bus)
-            /**
-             * Documentation for floorFX
-             */
             val floorFX = com.ctre.phoenix6.hardware.TalonFX(16, can2Bus)
-            /**
-             * Documentation for climberFX
-             */
             val climberFX = com.ctre.phoenix6.hardware.TalonFX(19, can2Bus)
-            /**
-             * Documentation for feederFX
-             */
             val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
-            /**
-             * Documentation for ctreDrivetrain
-             */
 
             val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
             val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
@@ -189,14 +124,8 @@ class ARESRobot : TimedRobot() {
                 frc.robot.generated.TunerConstants.createBackRight(edu.wpi.first.units.Units.Rotations.of(activeOffsets.backRight))
             )
             swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
-            /**
-             * Documentation for limelightShooter
-             */
 
             val limelightShooter = FrcLimelightIO("limelight-shooter")
-            /**
-             * Documentation for limelightBack
-             */
             val limelightBack = FrcLimelightIO("limelight-back")
             visionIO = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
 
@@ -221,25 +150,19 @@ class ARESRobot : TimedRobot() {
         }
 
         // Register subsystems to HardwareRegistry so they are refreshed/logged automatically
-        flywheelIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Flywheel", it) }
-        cowlIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Cowl", it) }
-        intakeIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Intake", it) }
-        feederIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Feeder", it) }
-        floorIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Floor", it) }
-        climberIO?.let { com.areslib.hardware.HardwareRegistry.registerDevice("Climber", it) }
+        com.areslib.hardware.HardwareRegistry.registerDevice("Flywheel", flywheelIO)
+        com.areslib.hardware.HardwareRegistry.registerDevice("Cowl", cowlIO)
+        com.areslib.hardware.HardwareRegistry.registerDevice("Intake", intakeIO)
+        com.areslib.hardware.HardwareRegistry.registerDevice("Feeder", feederIO)
+        com.areslib.hardware.HardwareRegistry.registerDevice("Floor", floorIO)
+        com.areslib.hardware.HardwareRegistry.registerDevice("Climber", climberIO)
 
         // 2. Compose the root reducer with the Marvin reducer
-        /**
-         * Documentation for composedReducer
-         */
         fun composedReducer(state: RobotState, action: RobotAction): RobotState {
             return MarvinReducer.reduce(state, action)
         }
 
         // 3. Create the initial state containing the MarvinState
-        /**
-         * Documentation for initialState
-         */
         val initialState = RobotState(
             superstructure = SuperstructureState(
                 custom = MarvinState()
@@ -261,7 +184,7 @@ class ARESRobot : TimedRobot() {
         robot.store.actionListener = { action ->
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
                 val encPositions = DoubleArray(4)
-                swerveIO?.getEncoderPositions(encPositions)
+                swerveIO.getEncoderPositions(encPositions)
                 val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
                 val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
                 val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
@@ -278,9 +201,6 @@ class ARESRobot : TimedRobot() {
         }
 
         // 5. Create and register the MarvinSuperstructure subsystem
-        /**
-         * Documentation for superstructureSubsystem
-         */
         val superstructureSubsystem = MarvinSuperstructure(
             flywheelIO = flywheelIO,
             cowlIO = cowlIO,
@@ -298,28 +218,23 @@ class ARESRobot : TimedRobot() {
 
         // 7. Register a custom telemetry publisher for Marvin state
         robot.telemetryManager.customPublishers.add { state, telemetry ->
-            /**
-             * Documentation for marvin
-             */
             val marvin = state.superstructure.marvin
             // Log Marvin state
-            val telemetryArray = doubleArrayOf(
-                marvin.flywheel.velocityRpm,
-                marvin.flywheel.targetVelocityRpm,
-                marvin.cowl.angleRotations,
-                marvin.cowl.targetAngleRotations,
-                marvin.intake.pivotAngleDegrees,
-                marvin.intake.targetAngleDegrees,
-                if (marvin.intake.isDeployed) 1.0 else 0.0,
-                marvin.intake.rollerVelocityRps,
-                marvin.feeder.velocityRps,
-                if (marvin.feeder.gamePieceDetected) 1.0 else 0.0,
-                marvin.floor.velocityRps,
-                marvin.climber.extensionMeters,
-                marvin.climber.targetVoltage,
-                if (marvin.slamtakeActive) 1.0 else 0.0
-            )
-            telemetry.putDoubleArray("Superstructure/PackedState", telemetryArray)
+            superstructureTelemetry[0] = marvin.flywheel.velocityRpm
+            superstructureTelemetry[1] = marvin.flywheel.targetVelocityRpm
+            superstructureTelemetry[2] = marvin.cowl.angleRotations
+            superstructureTelemetry[3] = marvin.cowl.targetAngleRotations
+            superstructureTelemetry[4] = marvin.intake.pivotAngleDegrees
+            superstructureTelemetry[5] = marvin.intake.targetAngleDegrees
+            superstructureTelemetry[6] = if (marvin.intake.isDeployed) 1.0 else 0.0
+            superstructureTelemetry[7] = marvin.intake.rollerVelocityRps
+            superstructureTelemetry[8] = marvin.feeder.velocityRps
+            superstructureTelemetry[9] = if (marvin.feeder.gamePieceDetected) 1.0 else 0.0
+            superstructureTelemetry[10] = marvin.floor.velocityRps
+            superstructureTelemetry[11] = marvin.climber.positionRotations
+            superstructureTelemetry[12] = marvin.climber.targetVoltage
+            superstructureTelemetry[13] = if (marvin.slamtakeActive) 1.0 else 0.0
+            telemetry.putDoubleArray("Superstructure/PackedState", superstructureTelemetry)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
                 val loopCounter = (state.timestampMs / 20) // 50Hz
                 if (loopCounter % 25L == 0L) { // 2Hz
@@ -335,7 +250,7 @@ class ARESRobot : TimedRobot() {
             try {
                 edu.wpi.first.wpilibj.RobotController.getBatteryVoltage()
             } catch (_: Exception) {
-                12.6 // Fallback for simulation environments
+                0.0 // Unknown voltage must fail closed; simulation supplies a valid value.
             }
         }
 
@@ -343,13 +258,18 @@ class ARESRobot : TimedRobot() {
             robot, marvinShooter, marvinIntake, marvinClimber,
             controller, coPilotController, controllerState, coPilotControllerState
         )
-        autoOrchestrator = FRCAutoOrchestrator(
-            robot, sim, marvinShooter, marvinIntake
-        )
+        sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
+        applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
+        FrcAutoCapabilities.register()
+        autoOrchestrator = FRCAutoOrchestrator(robot, sim)
+        autoOrchestrator.publishCatalog()
 
         addPeriodic({
             try {
                 robot.update(controllerState, coPilotControllerState)
+                val tuningEnabled = DriverStation.isTest() || RobotBase.isSimulation()
+                robot.isLiveTuningEnabled = tuningEnabled
+                sysIdController.update(com.areslib.util.RobotClock.currentTimeMillis(), robot.store.state, tuningEnabled)
             } catch (e: Exception) {
                 DriverStation.reportError("Periodic loop exception", false)
                 robot.safeHardware()
@@ -359,29 +279,37 @@ class ARESRobot : TimedRobot() {
 
     private var allianceCheckCounter = 0
 
+    /** Refreshes cached controller snapshots and polls alliance changes while disabled. */
     override fun robotPeriodic() {
         if (DriverStation.isDisabled() && allianceCheckCounter++ % 50 == 0) {
-            /**
-             * Documentation for allianceOpt
-             */
             val allianceOpt = DriverStation.getAlliance()
             if (allianceOpt.isPresent) {
-                /**
-                 * Documentation for alliance
-                 */
                 val alliance = allianceOpt.get()
-                if (alliance != cachedAlliance) {
-                    cachedAlliance = alliance
-                    teleOpController.cachedAlliance = alliance
-                    teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
-                }
+                if (alliance != cachedAlliance) applyAlliance(alliance)
             }
         }
         controller.updateState(controllerState)
         coPilotController.updateState(coPilotControllerState)
     }
 
+    private fun applyAlliance(alliance: DriverStation.Alliance) {
+        cachedAlliance = alliance
+        robot.store.dispatch(
+            RobotAction.SetAlliance(
+                if (alliance == DriverStation.Alliance.Red) {
+                    com.areslib.state.Alliance.RED
+                } else {
+                    com.areslib.state.Alliance.BLUE
+                }
+            )
+        )
+        teleOpController.cachedAlliance = alliance
+        teleOpController.speakerTranslation = if (alliance == DriverStation.Alliance.Red) RED_SPEAKER else BLUE_SPEAKER
+    }
+
     override fun disabledInit() {
+        if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
+        if (::sysIdController.isInitialized) sysIdController.stop()
         controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
         coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
     }
@@ -392,6 +320,7 @@ class ARESRobot : TimedRobot() {
     // ── Teleop ──
 
     override fun teleopInit() {
+        autoOrchestrator.stop()
         teleOpController.teleopInit()
     }
 
@@ -402,6 +331,7 @@ class ARESRobot : TimedRobot() {
     // ── Autonomous ──
 
     override fun autonomousInit() {
+        applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         autoOrchestrator.autonomousInit()
     }
 
@@ -409,35 +339,28 @@ class ARESRobot : TimedRobot() {
         autoOrchestrator.autonomousPeriodic()
     }
 
+    override fun autonomousExit() {
+        autoOrchestrator.stop()
+    }
+
     // ── Simulation ──
 
+    /** Advances dyn4j, dispatches simulated events/ground-truth pose, and publishes 3D state. */
     override fun simulationPeriodic() {
         if (!RobotBase.isSimulation()) return
         val simInstance = sim ?: return
-        /**
-         * Documentation for now
-         */
 
         val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-        /**
-         * Documentation for dt
-         */
         val dt = Math.min(now - lastSimTime, 0.05)
         lastSimTime = now
 
         // Step physics and dispatch any resulting actions (ball intake/shoot)
-        /**
-         * Documentation for actions
-         */
         val actions = simInstance.step(robot.store.state, dt)
         for (action in actions) {
             robot.store.dispatch(action)
         }
 
         // Dispatch pose update so the state has odometry
-        /**
-         * Documentation for poseUpdate
-         */
         val poseUpdate = simInstance.getPoseUpdate()
         robot.store.dispatch(poseUpdate)
 

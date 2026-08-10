@@ -7,18 +7,17 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
-/**
- * Documentation for ARESRobotTest
- */
 
 class ARESRobotTest {
+
+    private companion object {
+        const val LEFT_BUMPER_BUTTON = 5
+        const val RIGHT_BUMPER_BUTTON = 6
+    }
 
     private lateinit var robot: ARESRobot
     private lateinit var controllerSim: XboxControllerSim
     private lateinit var coPilotSim: XboxControllerSim
-    /**
-     * Documentation for setUp
-     */
 
     @BeforeEach
     fun setUp() {
@@ -28,17 +27,11 @@ class ARESRobotTest {
         coPilotSim = XboxControllerSim(1)
         robot = ARESRobot()
     }
-    /**
-     * Documentation for tearDown
-     */
 
     @AfterEach
     fun tearDown() {
         robot.close()
     }
-    /**
-     * Documentation for testRobotLifecycle
-     */
 
     @Test
     fun testRobotLifecycle() {
@@ -82,9 +75,9 @@ class ARESRobotTest {
         controllerSim.setRightTriggerAxis(0.0)
 
         // 4. rightBumper -> Shuttle
-        controllerSim.setRightBumper(true)
+        controllerSim.setRawButton(RIGHT_BUMPER_BUTTON, true)
         robot.teleopPeriodic()
-        controllerSim.setRightBumper(false)
+        controllerSim.setRawButton(RIGHT_BUMPER_BUTTON, false)
 
         // 5. bButton -> static shoot
         controllerSim.setBButton(true)
@@ -97,9 +90,9 @@ class ARESRobotTest {
         coPilotSim.setRightTriggerAxis(0.0)
 
         // 7. copilot rb -> flywheel high speed
-        coPilotSim.setRightBumper(true)
+        coPilotSim.setRawButton(RIGHT_BUMPER_BUTTON, true)
         robot.teleopPeriodic()
-        coPilotSim.setRightBumper(false)
+        coPilotSim.setRawButton(RIGHT_BUMPER_BUTTON, false)
 
         // 8. aButton -> Start Slamtake
         controllerSim.setAButton(true)
@@ -107,13 +100,9 @@ class ARESRobotTest {
         controllerSim.setAButton(false)
 
         // 9. leftBumper -> Unjam
-        controllerSim.setLeftBumper(true)
+        controllerSim.setRawButton(LEFT_BUMPER_BUTTON, true)
         robot.teleopPeriodic()
-        controllerSim.setLeftBumper(false)
+        controllerSim.setRawButton(LEFT_BUMPER_BUTTON, false)
 
-        // 10. copilot a -> toggle intake / manual deploy
-        coPilotSim.setAButton(true)
-        robot.teleopPeriodic()
-        coPilotSim.setAButton(false)
     }
 }

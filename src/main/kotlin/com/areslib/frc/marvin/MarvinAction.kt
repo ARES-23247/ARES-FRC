@@ -2,131 +2,119 @@ package com.areslib.frc.marvin
 
 import com.areslib.action.RobotAction
 
+/** Commands the flywheel target in revolutions per minute (RPM). */
 data class SetFlywheelSpeed @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for rpm
-     */
     val rpm: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Commands cowl position in mechanism rotations, not degrees. */
 data class SetCowlAngle @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for rotations
-     */
     val rotations: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Enables or disables closed-loop flywheel output. */
 data class SetFlywheelActive @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for active
-     */
     val active: Boolean,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Latches whether a game-piece transfer has begun. */
 data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for active
-     */
     val active: Boolean,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Replaces the simulated/estimated game-piece inventory count. */
 data class SetInventoryCount @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for count
-     */
     val count: Int,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Selects the intake's calibrated stowed (`false`) or deployed (`true`) target. */
 data class SetIntakePivot @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for deployed
-     */
     val deployed: Boolean,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Commands intake roller speed in revolutions per second (RPS). */
 data class SetIntakeRollers @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for speedRps
-     */
     val speedRps: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Commands feeder speed in revolutions per second (RPS). */
 data class SetFeederSpeed @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for speedRps
-     */
     val speedRps: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Commands floor-roller speed in revolutions per second (RPS). */
 data class SetFloorSpeed @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for speedRps
-     */
     val speedRps: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Selects climber voltage mode and commands volts. */
 data class SetClimberVoltage @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for volts
-     */
     val volts: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
-data class SetClimberExtension @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for meters
-     */
-    val meters: Double,
+/** Selects climber position mode and commands mechanism rotations. */
+data class SetClimberPositionRotations @kotlin.jvm.JvmOverloads constructor(
+    val rotations: Double,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/**
+ * One loop's cached Marvin mechanism observations.
+ *
+ * This action is created after `HardwareRegistry.refreshAll()`. Validity flags are
+ * independent of numeric samples: a failed flywheel refresh or absent piece detector
+ * must remain invalid even when its cached number looks plausible.
+ *
+ * @property flywheelRpm measured flywheel speed in RPM
+ * @property cowlAngleRotations measured cowl position in mechanism rotations
+ * @property intakeAngle measured intake pivot angle in degrees
+ * @property pieceDetected detector state; meaningful only when [pieceDetectionValid]
+ * @property flywheelVelocityValid whether flywheel RPM was refreshed successfully
+ * @property cowlAngleValid whether cowl position was refreshed successfully
+ * @property intakeAngleValid whether intake position was refreshed successfully
+ * @property pieceDetectionValid whether a physical/configured detector exists and is trustworthy
+ * @property floorVelocityRps measured floor speed in RPS
+ * @property climberPositionRotations measured climber position in mechanism rotations
+ * @property climberPositionValid whether climber position was refreshed successfully
+ * @property floorCurrentAmps cached floor stator current in amperes
+ */
 data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
-    /**
-     * Documentation for flywheelRpm
-     */
     val flywheelRpm: Double,
-    /**
-     * Documentation for cowlAngleRotations
-     */
     val cowlAngleRotations: Double,
-    /**
-     * Documentation for intakeAngle
-     */
     val intakeAngle: Double,
-    /**
-     * Documentation for pieceDetected
-     */
     val pieceDetected: Boolean,
-    /**
-     * Documentation for floorVelocityRps
-     */
+    val flywheelVelocityValid: Boolean = false,
+    val cowlAngleValid: Boolean = false,
+    val intakeAngleValid: Boolean = false,
+    val pieceDetectionValid: Boolean = false,
     val floorVelocityRps: Double = 0.0,
-    /**
-     * Documentation for climberExtensionMeters
-     */
-    val climberExtensionMeters: Double = 0.0,
+    val climberPositionRotations: Double = 0.0,
+    val climberPositionValid: Boolean = false,
     val floorCurrentAmps: Double = 0.0,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Starts the timed deploy/retract slamtake sequence. */
 data class StartSlamtake(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Cancels the slamtake state machine. */
 data class StopSlamtake(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Internal elapsed-time transition for slamtake phase 1 or 2. */
 data class SlamtakeTimerExpired(
     val phase: Int,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
