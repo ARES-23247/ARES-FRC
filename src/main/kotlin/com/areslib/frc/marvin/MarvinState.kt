@@ -26,6 +26,7 @@ data class FlywheelState(
  */
 data class CowlState(
     val angleRotations: Double = 0.0,
+    val angleValid: Boolean = false,
     val targetAngleRotations: Double = 0.0,
     val currentAmps: Double = 0.0
 )
@@ -35,6 +36,7 @@ data class CowlState(
  */
 data class IntakeState(
     val pivotAngleDegrees: Double = 0.0,
+    val pivotAngleValid: Boolean = false,
     val targetAngleDegrees: Double = 0.0,
     val rollerVelocityRps: Double = 0.0,
     val targetRollerVelocityRps: Double = 0.0,
@@ -73,6 +75,8 @@ enum class ClimberControlMode {
 data class ClimberState(
     /** Measured mechanism position in rotations. */
     val positionRotations: Double = 0.0,
+    /** Whether the measured position is fresh and valid this loop. */
+    val positionValid: Boolean = false,
     /** Closed-loop mechanism target in rotations. */
     val targetPositionRotations: Double = 0.0,
     val currentAmps: Double = 0.0,
@@ -139,7 +143,10 @@ data class MarvinState(
     ))
 
     fun withClimberPositionRotations(rotations: Double) = copy(climber = climber.copy(
-        targetPositionRotations = rotations,
+        targetPositionRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
+            MarvinConfig.MechanismLimits.climberMinRotations,
+            MarvinConfig.MechanismLimits.climberMaxRotations
+        ) ?: MarvinConfig.MechanismLimits.climberMinRotations,
         controlMode = ClimberControlMode.POSITION_ROTATIONS
     ))
 }

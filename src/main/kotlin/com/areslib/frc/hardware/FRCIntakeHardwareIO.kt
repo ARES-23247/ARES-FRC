@@ -1,5 +1,6 @@
 package com.areslib.frc.hardware
 
+import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -15,6 +16,7 @@ class FRCIntakeHardwareIO(
     private val pivotMotor: TalonFX,
     private val rollerMotor: TalonFX
 ) : IntakeIO {
+    @Volatile private var cachedPivotAngleValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -74,44 +76,55 @@ class FRCIntakeHardwareIO(
     }
 
     override fun refresh() {
-        pivotPosition.refresh()
-        pivotCurrent.refresh()
-        rollerCurrent.refresh()
+        cachedPivotAngleValid = BaseStatusSignal.refreshAll(pivotPosition).isOK &&
+            pivotPosition.valueAsDouble.isFinite()
+        BaseStatusSignal.refreshAll(pivotCurrent, rollerCurrent)
     }
 
     override fun setPivotAngle(degrees: Double) {
         // Convert degrees to mechanism rotations (1 degree = (1.0 / 360.0) rotations)
         // Feedback.SensorToMechanismRatio handles the internal 4:1 scaling in TalonFX
-        val rotations = degrees / 360.0
+        val safeDegrees = degrees.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeStowedDegrees,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeDeployedDegrees
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeStowedDegrees
+        val rotations = safeDegrees / 360.0
         pivotMotor.setControl(positionRequest.withPosition(rotations))
     }
 
     override fun setPivotAngle(degrees: Double, maxEffortScale: Double) {
-        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setPivotAngle(degrees)
             return
         }
-        val targetRotations = degrees / 360.0
+        val safeDegrees = degrees.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeStowedDegrees,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeDeployedDegrees
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.intakeStowedDegrees
+        val targetRotations = safeDegrees / 360.0
         val errorRotations = targetRotations - pivotPosition.valueAsDouble
         val maxVolts = NOMINAL_VOLTAGE * effortScale
         setPivotVoltage((POSITION_KP_VOLTS_PER_ROTATION * errorRotations).coerceIn(-maxVolts, maxVolts))
     }
 
     override fun setPivotVoltage(volts: Double) {
-        pivotMotor.setControl(voltageRequest.withOutput(volts))
+        pivotMotor.setControl(voltageRequest.withOutput(volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
     }
 
     override fun setRollerVoltage(volts: Double) {
-        rollerMotor.setControl(voltageRequest.withOutput(volts))
+        rollerMotor.setControl(voltageRequest.withOutput(volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
     }
 
     override fun setRollerVelocityRps(rps: Double) {
-        rollerMotor.setControl(velocityRequest.withVelocity(rps))
+        rollerMotor.setControl(velocityRequest.withVelocity(rps.takeIf { it.isFinite() } ?: 0.0))
     }
 
     override val pivotAngleDegrees: Double
         get() = pivotPosition.valueAsDouble * 360.0
+
+    override val pivotAngleValid: Boolean
+        get() = cachedPivotAngleValid
 
     override val pivotCurrentAmps: Double
         get() = pivotCurrent.valueAsDouble

@@ -90,7 +90,7 @@ class Dyn4jSimulation(
         Vector2(MarvinConfig.FieldTargets.blueSpeaker.x, MarvinConfig.FieldTargets.blueSpeaker.y),
         Vector2(MarvinConfig.FieldTargets.redSpeaker.x, MarvinConfig.FieldTargets.redSpeaker.y)
     )
-    private val random = java.util.Random(42L)
+    private val random = java.util.Random(seed)
     private val debug = java.lang.Boolean.getBoolean("ares.debug")
 
     /** Advances all models by [dt] seconds and returns reusable Redux actions for this step. */

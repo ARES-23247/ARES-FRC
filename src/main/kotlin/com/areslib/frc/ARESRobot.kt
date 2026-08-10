@@ -31,6 +31,7 @@ import edu.wpi.first.wpilibj.DriverStation
 
 import com.areslib.frc.robot.FRCAutoOrchestrator
 import com.areslib.frc.robot.FRCTeleOpDriveController
+import com.areslib.frc.robot.FrcSysIdController
 
 /**
  * Current Driver Station alliance in the platform-neutral ARES state model.
@@ -41,6 +42,7 @@ val aresAlliance: com.areslib.state.Alliance
     get() = when (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)) {
         DriverStation.Alliance.Red -> com.areslib.state.Alliance.RED
         DriverStation.Alliance.Blue -> com.areslib.state.Alliance.BLUE
+        else -> com.areslib.state.Alliance.BLUE
     }
 
 /**
@@ -66,10 +68,12 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
+    private lateinit var sysIdController: FrcSysIdController
 
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
     private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
     private val BLUE_SPEAKER = MarvinConfig.FieldTargets.blueSpeaker
+    private val superstructureTelemetry = DoubleArray(14)
 
     // Simulation timing
     private var lastSimTime = 0.0
@@ -179,7 +183,7 @@ class ARESRobot : TimedRobot() {
         robot.store.actionListener = { action ->
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
                 val encPositions = DoubleArray(4)
-                swerveIO?.getEncoderPositions(encPositions)
+                swerveIO.getEncoderPositions(encPositions)
                 val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
                 val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
                 val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
@@ -215,23 +219,21 @@ class ARESRobot : TimedRobot() {
         robot.telemetryManager.customPublishers.add { state, telemetry ->
             val marvin = state.superstructure.marvin
             // Log Marvin state
-            val telemetryArray = doubleArrayOf(
-                marvin.flywheel.velocityRpm,
-                marvin.flywheel.targetVelocityRpm,
-                marvin.cowl.angleRotations,
-                marvin.cowl.targetAngleRotations,
-                marvin.intake.pivotAngleDegrees,
-                marvin.intake.targetAngleDegrees,
-                if (marvin.intake.isDeployed) 1.0 else 0.0,
-                marvin.intake.rollerVelocityRps,
-                marvin.feeder.velocityRps,
-                if (marvin.feeder.gamePieceDetected) 1.0 else 0.0,
-                marvin.floor.velocityRps,
-                marvin.climber.positionRotations,
-                marvin.climber.targetVoltage,
-                if (marvin.slamtakeActive) 1.0 else 0.0
-            )
-            telemetry.putDoubleArray("Superstructure/PackedState", telemetryArray)
+            superstructureTelemetry[0] = marvin.flywheel.velocityRpm
+            superstructureTelemetry[1] = marvin.flywheel.targetVelocityRpm
+            superstructureTelemetry[2] = marvin.cowl.angleRotations
+            superstructureTelemetry[3] = marvin.cowl.targetAngleRotations
+            superstructureTelemetry[4] = marvin.intake.pivotAngleDegrees
+            superstructureTelemetry[5] = marvin.intake.targetAngleDegrees
+            superstructureTelemetry[6] = if (marvin.intake.isDeployed) 1.0 else 0.0
+            superstructureTelemetry[7] = marvin.intake.rollerVelocityRps
+            superstructureTelemetry[8] = marvin.feeder.velocityRps
+            superstructureTelemetry[9] = if (marvin.feeder.gamePieceDetected) 1.0 else 0.0
+            superstructureTelemetry[10] = marvin.floor.velocityRps
+            superstructureTelemetry[11] = marvin.climber.positionRotations
+            superstructureTelemetry[12] = marvin.climber.targetVoltage
+            superstructureTelemetry[13] = if (marvin.slamtakeActive) 1.0 else 0.0
+            telemetry.putDoubleArray("Superstructure/PackedState", superstructureTelemetry)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
                 val loopCounter = (state.timestampMs / 20) // 50Hz
                 if (loopCounter % 25L == 0L) { // 2Hz
@@ -247,7 +249,7 @@ class ARESRobot : TimedRobot() {
             try {
                 edu.wpi.first.wpilibj.RobotController.getBatteryVoltage()
             } catch (_: Exception) {
-                12.6 // Fallback for simulation environments
+                0.0 // Unknown voltage must fail closed; simulation supplies a valid value.
             }
         }
 
@@ -255,6 +257,7 @@ class ARESRobot : TimedRobot() {
             robot, marvinShooter, marvinIntake, marvinClimber,
             controller, coPilotController, controllerState, coPilotControllerState
         )
+        sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
         applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
         autoOrchestrator = FRCAutoOrchestrator(
             robot, sim, marvinShooter, marvinIntake
@@ -263,6 +266,9 @@ class ARESRobot : TimedRobot() {
         addPeriodic({
             try {
                 robot.update(controllerState, coPilotControllerState)
+                val tuningEnabled = DriverStation.isTest() || RobotBase.isSimulation()
+                robot.isLiveTuningEnabled = tuningEnabled
+                sysIdController.update(com.areslib.util.RobotClock.currentTimeMillis(), robot.store.state, tuningEnabled)
             } catch (e: Exception) {
                 DriverStation.reportError("Periodic loop exception", false)
                 robot.safeHardware()
@@ -292,6 +298,7 @@ class ARESRobot : TimedRobot() {
     }
 
     override fun disabledInit() {
+        if (::sysIdController.isInitialized) sysIdController.stop()
         controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
         coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
     }

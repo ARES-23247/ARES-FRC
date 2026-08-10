@@ -2,6 +2,7 @@ package com.areslib.frc.sim.io
 
 import com.areslib.frc.hardware.CowlIO
 import com.areslib.frc.Dyn4jSimulation
+import com.areslib.frc.marvin.MarvinConfig
 
 /**
  * Simulation boundary for cowl mechanism rotations.
@@ -12,19 +13,28 @@ import com.areslib.frc.Dyn4jSimulation
  */
 class SimulatedCowlIO(private val sim: Dyn4jSimulation) : CowlIO {
     override fun setTargetAngle(rotations: Double) {
-        val targetDegrees = rotations * 32.0
+        val targetDegrees = safeTarget(rotations) * DEGREES_PER_ROTATION
         val error = targetDegrees - sim.simCowlAngle
         sim.simCowlVoltage = (error * 0.5).coerceIn(-12.0, 12.0)
     }
     override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
-        val targetDegrees = rotations * 32.0
+        val targetDegrees = safeTarget(rotations) * DEGREES_PER_ROTATION
         val error = targetDegrees - sim.simCowlAngle
-        val maxVolts = 12.0 * maxEffortScale.coerceIn(0.0, 1.0)
+        val safeScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        val maxVolts = 12.0 * safeScale
         sim.simCowlVoltage = (error * 0.5).coerceIn(-maxVolts, maxVolts)
     }
     override fun setAppliedVoltage(volts: Double) {
-        sim.simCowlVoltage = volts.coerceIn(-12.0, 12.0)
+        sim.simCowlVoltage = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
     }
-    override val angleRotations: Double get() = sim.simCowlAngle / 32.0
+    override val angleRotations: Double get() = sim.simCowlAngle / DEGREES_PER_ROTATION
+    override val angleValid: Boolean get() = angleRotations.isFinite()
     override val currentAmps: Double get() = Math.abs(sim.simCowlVoltage) * 0.2
+
+    private fun safeTarget(rotations: Double): Double =
+        rotations.takeIf { it.isFinite() }?.coerceIn(0.0, MarvinConfig.cowlMaxRotations) ?: 0.0
+
+    private companion object {
+        const val DEGREES_PER_ROTATION = 32.0
+    }
 }

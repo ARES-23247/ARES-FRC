@@ -70,7 +70,7 @@ class MarvinSuperstructureSafetyTest {
     }
 
     @Test
-    fun brownoutPreservesPositionTargetsWhileScalingVelocityAndVoltage() {
+    fun brownoutPreservesStateTargetsWhileCollisionArbitrationStowsIntake() {
         val flywheel = RecordingFlywheelIO()
         val cowl = RecordingCowlIO()
         val intake = RecordingIntakeIO()
@@ -84,10 +84,14 @@ class MarvinSuperstructureSafetyTest {
                     flywheel = FlywheelState(targetVelocityRpm = 4_000.0),
                     flywheelActive = true,
                     cowl = CowlState(targetAngleRotations = 1.25),
-                    intake = IntakeState(targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
+                    intake = IntakeState(
+                        pivotAngleValid = true,
+                        targetAngleDegrees = 90.0,
+                        targetRollerVelocityRps = 10.0
+                    ),
                     feeder = FeederState(targetVelocityRps = 8.0),
                     floor = FloorState(targetVelocityRps = 6.0),
-                    climber = ClimberState(targetVoltage = 10.0)
+                    climber = ClimberState(positionValid = true, targetVoltage = 10.0)
                 )
             )
         )
@@ -96,7 +100,7 @@ class MarvinSuperstructureSafetyTest {
 
         assertEquals(1.25, cowl.angleCommand)
         assertEquals(0.4, cowl.effortScale)
-        assertEquals(90.0, intake.pivotAngleCommand)
+        assertEquals(0.0, intake.pivotAngleCommand)
         assertEquals(0.4, intake.pivotEffortScale)
         assertEquals(1_600.0, flywheel.velocityRpmCommand)
         assertEquals(4.0, intake.rollerVelocityCommand)
@@ -119,17 +123,85 @@ class MarvinSuperstructureSafetyTest {
             superstructure = SuperstructureState(
                 custom = MarvinState(
                     climber = ClimberState(
+                        positionValid = true,
                         controlMode = ClimberControlMode.POSITION_ROTATIONS,
                         targetPositionRotations = 7.5
-                    )
+                    ),
+                    intake = IntakeState(pivotAngleValid = true)
                 )
             )
         )
 
         subsystem.writeOutputs(state, 0.35)
 
-        assertEquals(7.5, climber.positionCommandRotations)
+        assertEquals(MarvinConfig.MechanismLimits.climberMaxRotations, climber.positionCommandRotations)
         assertEquals(0.35, climber.effortScale)
         assertTrue(climber.voltageCommand.isNaN())
+    }
+
+    @Test
+    fun climberWaitsForMeasuredIntakeClearanceThenRunsWithoutMutatingRequestedIntake() {
+        val intake = RecordingIntakeIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(
+            RecordingFlywheelIO(), RecordingCowlIO(), intake,
+            RecordingFeederIO(), RecordingFloorIO(), climber
+        )
+        val extendedIntakeState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        targetAngleDegrees = 90.0,
+                        pivotAngleDegrees = 90.0,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(positionValid = true, targetVoltage = 8.0)
+                )
+            )
+        )
+
+        subsystem.writeOutputs(extendedIntakeState, 1.0)
+
+        assertEquals(0.0, intake.pivotAngleCommand)
+        assertEquals(0.0, climber.voltageCommand)
+        assertEquals(90.0, extendedIntakeState.superstructure.marvin.intake.targetAngleDegrees)
+
+        val clearedState = extendedIntakeState.copy(
+            superstructure = extendedIntakeState.superstructure.copy(
+                custom = extendedIntakeState.superstructure.marvin.copy(
+                    intake = extendedIntakeState.superstructure.marvin.intake.copy(pivotAngleDegrees = 0.0)
+                )
+            )
+        )
+        subsystem.writeOutputs(clearedState, 1.0)
+
+        assertEquals(8.0, climber.voltageCommand)
+    }
+
+    @Test
+    fun staleCollisionSensorsBlockBothMechanismsUntilFresh() {
+        val intake = RecordingIntakeIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(
+            RecordingFlywheelIO(), RecordingCowlIO(), intake,
+            RecordingFeederIO(), RecordingFloorIO(), climber
+        )
+        val staleState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(targetAngleDegrees = 90.0, pivotAngleValid = false),
+                    climber = ClimberState(
+                        targetVoltage = 8.0,
+                        positionRotations = 0.0,
+                        positionValid = false
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(staleState, 1.0)
+
+        assertEquals(0.0, intake.pivotAngleCommand)
+        assertEquals(0.0, climber.voltageCommand)
     }
 }

@@ -6,7 +6,8 @@ import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.geometry.Vector2
 import com.areslib.frc.FlyingBall
-import com.areslib.frc.marvin.MarvinConfig
+import com.areslib.state.RobotFieldDocument
+import java.io.File
 
 /**
  * Owns the Dyn4j world and its mutable body collections.
@@ -15,7 +16,7 @@ import com.areslib.frc.marvin.MarvinConfig
  * when a field configuration is rebuilt; all other bodies are replaced and the grounded-piece
  * index is repopulated. Dyn4j integration must occur through [step] so callers use a single `dt`.
  */
-class Dyn4jPhysicsWorld(seed: Long) {
+class Dyn4jPhysicsWorld(@Suppress("UNUSED_PARAMETER") seed: Long) {
 
     val world = World<Body>()
     val robotBody = Body()
@@ -35,8 +36,19 @@ class Dyn4jPhysicsWorld(seed: Long) {
         robotBody.translate(2.0, 2.0)
         world.addBody(robotBody)
 
-        com.areslib.frc.sim.field.FrcFieldBuilder.buildFrcField(world)
-        spawnFuel(seed)
+        val fieldFile = listOf(
+            File("src/main/deploy/paths/field.json"),
+            File("../ARES-FRC/src/main/deploy/paths/field.json")
+        ).firstOrNull(File::isFile)
+        if (fieldFile != null) {
+            buildWorld(RobotFieldDocument.decode(fieldFile.readText()))
+        } else {
+            com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(
+                world,
+                com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
+                com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
+            )
+        }
     }
 
     /** Advances the physics world by [dt] seconds. */
@@ -53,17 +65,10 @@ class Dyn4jPhysicsWorld(seed: Long) {
             }
         }
         balls.clear()
+        flyingBalls.clear()
 
-        val width = if (config.fieldType == com.areslib.state.FieldType.FRC) {
-            com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
-        } else {
-            com.areslib.math.coordinate.CoordinateTransformers.FTC_FIELD_SIZE
-        }
-        val height = if (config.fieldType == com.areslib.state.FieldType.FRC) {
-            com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
-        } else {
-            com.areslib.math.coordinate.CoordinateTransformers.FTC_FIELD_SIZE
-        }
+        val width = config.resolvedWidthMeters
+        val height = config.resolvedHeightMeters
 
         com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(world, width, height)
         com.areslib.sim.field.FieldObstacleLoader.loadObstacles(world, config.obstacles)
@@ -82,59 +87,4 @@ class Dyn4jPhysicsWorld(seed: Long) {
         robotBody.isAtRest = false
     }
 
-    private fun spawnFuel(seed: Long) {
-        val width = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
-        val height = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
-        val ballRadius = 0.0635
-
-        val spawnPoints = mutableListOf<Vector2>()
-
-        val rHub = 1.6
-        val angles = doubleArrayOf(Math.PI / 4.0, 3.0 * Math.PI / 4.0, 5.0 * Math.PI / 4.0, 7.0 * Math.PI / 4.0)
-        
-        val blueHubX = MarvinConfig.FieldTargets.blueSpeaker.x
-        val blueHubY = MarvinConfig.FieldTargets.blueSpeaker.y
-        for (angle in angles) {
-            spawnPoints.add(Vector2(blueHubX + rHub * Math.cos(angle), blueHubY + rHub * Math.sin(angle)))
-        }
-
-        val redHubX = MarvinConfig.FieldTargets.redSpeaker.x
-        val redHubY = MarvinConfig.FieldTargets.redSpeaker.y
-        for (angle in angles) {
-            spawnPoints.add(Vector2(redHubX + rHub * Math.cos(angle), redHubY + rHub * Math.sin(angle)))
-        }
-
-        val bottomTrenchY = 0.7
-        val bottomTrenchX = doubleArrayOf(5.5, 7.0, 8.5, 10.0)
-        for (x in bottomTrenchX) {
-            spawnPoints.add(Vector2(x, bottomTrenchY))
-        }
-
-        val topTrenchY = height - 0.7
-        val topTrenchX = doubleArrayOf(6.5, 8.0, 9.5, 11.0)
-        for (x in topTrenchX) {
-            spawnPoints.add(Vector2(x, topTrenchY))
-        }
-
-        val centerX = width / 2.0
-        val centerYs = doubleArrayOf(1.8, 2.4, 3.0, 3.6, 4.4, 5.0, 5.6, 6.2)
-        for (y in centerYs) {
-            spawnPoints.add(Vector2(centerX, y))
-        }
-
-        for (point in spawnPoints) {
-            val ball = Body()
-            val fixture = ball.addFixture(Geometry.createCircle(ballRadius))
-            fixture.friction = 0.6
-            fixture.restitution = 0.4
-            fixture.density = 5.92
-            ball.setMass(MassType.NORMAL)
-            ball.linearDamping = 2.0
-            ball.angularDamping = 2.0
-            ball.translate(point.x, point.y)
-            world.addBody(ball)
-            balls.add(ball)
-        }
-        if (debug) println("Spawned exactly ${balls.size} structured cargo/fuel pieces.")
-    }
 }

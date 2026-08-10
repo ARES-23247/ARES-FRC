@@ -73,7 +73,8 @@ class FRCAutoOrchestrator(
                     aresAlliance,
                     com.areslib.math.coordinate.FieldSymmetry.MIRRORED,
                     fieldLength = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
-                    fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH
+                    fieldWidth = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH,
+                    fieldOrigin = com.areslib.math.coordinate.FieldOrigin.CORNER
                 )
                 activePath = path
                 buildProfileTimeline(path)

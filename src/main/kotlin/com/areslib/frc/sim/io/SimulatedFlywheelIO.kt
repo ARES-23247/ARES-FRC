@@ -11,11 +11,12 @@ import com.areslib.frc.Dyn4jSimulation
  */
 class SimulatedFlywheelIO(private val sim: Dyn4jSimulation) : FlywheelIO {
     override fun setVelocityRpm(rpm: Double) {
-        val error = rpm - sim.flywheelSim.velocityRpm
+        val target = rpm.takeIf { it.isFinite() }?.coerceIn(0.0, 6000.0) ?: 0.0
+        val error = target - sim.flywheelSim.velocityRpm
         sim.simFlywheelVoltage = (error * 0.003).coerceIn(-12.0, 12.0)
     }
     override fun setAppliedVoltage(volts: Double) {
-        sim.simFlywheelVoltage = volts.coerceIn(-12.0, 12.0)
+        sim.simFlywheelVoltage = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
     }
     override val velocityRpm: Double get() = sim.flywheelSim.velocityRpm
     override val velocityValid: Boolean get() = true

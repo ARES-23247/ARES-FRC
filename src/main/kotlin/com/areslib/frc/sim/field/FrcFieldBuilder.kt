@@ -4,7 +4,6 @@ import org.dyn4j.dynamics.Body
 import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.world.World
-import com.areslib.frc.marvin.MarvinConfig
 
 /** Builds static Dyn4j collision bodies in blue-origin field meters. */
 object FrcFieldBuilder {
@@ -12,8 +11,9 @@ object FrcFieldBuilder {
     /**
      * Builds the season simulation layout using canonical FRC field extents.
      *
-     * The interior bodies are simulator collision approximations, not authoritative FIRST field
-     * drawings; autonomous field constants remain defined separately in [MarvinConfig].
+     * Interior bodies approximate the six 2024 Crescendo Stage uprights using their official
+     * AprilTag anchor coordinates. Speakers, amps, and sources are integrated into the perimeter
+     * and are not modeled as fictitious square obstacles inside the playable field.
      */
     fun buildFrcField(world: World<Body>) {
         val width = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH
@@ -25,23 +25,13 @@ object FrcFieldBuilder {
         addWall(world, 0.0, height / 2.0, 0.1, height)     // Left
         addWall(world, width, height / 2.0, 0.1, height)   // Right
 
-        // Hubs (Static scoring centers)
-        addWall(world, MarvinConfig.FieldTargets.blueSpeaker.x, MarvinConfig.FieldTargets.blueSpeaker.y, 1.1938, 1.1938)      // Blue Hub
-        addWall(world, MarvinConfig.FieldTargets.redSpeaker.x, MarvinConfig.FieldTargets.redSpeaker.y, 1.1938, 1.1938) // Red Hub
-
-        // Towers (Climbing truss frames or shield generator columns)
-        addWall(world, width / 2.0 - 1.8, height / 2.0 - 1.8, 0.3, 0.3) // bottom-left tower
-        addWall(world, width / 2.0 - 1.8, height / 2.0 + 1.8, 0.3, 0.3) // top-left tower
-        addWall(world, width / 2.0 + 1.8, height / 2.0 - 1.8, 0.3, 0.3) // bottom-right tower
-        addWall(world, width / 2.0 + 1.8, height / 2.0 + 1.8, 0.3, 0.3) // top-right tower
-
-        // Trench Barriers (Long horizontal boundaries parallel to side walls forming high-speed driving lanes)
-        addWall(world, width / 2.0, 1.45, 3.2, 0.15)      // Bottom Trench Wall
-        addWall(world, width / 2.0, height - 1.45, 3.2, 0.15) // Top Trench Wall
-
-        // Climb Ramps / Stations (Raised climb base blocks at side ends)
-        addWall(world, 2.5, height / 2.0, 0.6, 1.4)       // Blue Climb Base
-        addWall(world, width - 2.5, height / 2.0, 0.6, 1.4) // Red Climb Base
+        // Blue Stage uprights (AprilTags 14, 15, 16) and Red Stage uprights (11, 12, 13).
+        addStagePost(world, 5.3208, 4.1051)
+        addStagePost(world, 4.6413, 4.4983)
+        addStagePost(world, 4.6413, 3.7132)
+        addStagePost(world, 11.9047, 3.7132)
+        addStagePost(world, 11.9047, 4.4983)
+        addStagePost(world, 11.2202, 4.1051)
     }
 
     /** Adds only an axis-aligned boundary of [width] by [height] meters. */
@@ -59,4 +49,14 @@ object FrcFieldBuilder {
         wall.translate(x, y)
         world.addBody(wall)
     }
+
+    private fun addStagePost(world: World<Body>, x: Double, y: Double) {
+        val post = Body()
+        post.addFixture(Geometry.createCircle(STAGE_POST_RADIUS_METERS))
+        post.setMass(MassType.INFINITE)
+        post.translate(x, y)
+        world.addBody(post)
+    }
+
+    private const val STAGE_POST_RADIUS_METERS = 0.18
 }

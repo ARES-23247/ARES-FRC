@@ -3,6 +3,7 @@ package com.areslib.frc.robot
 import com.areslib.math.coordinate.AllianceMirroring
 import com.areslib.math.coordinate.CoordinateTransformers
 import com.areslib.math.coordinate.FieldSymmetry
+import com.areslib.math.coordinate.FieldOrigin
 import com.areslib.math.geometry.Pose2d
 import com.areslib.math.geometry.Rotation2d
 import com.areslib.math.wrapAngle
@@ -35,7 +36,8 @@ class FRCAutoAllianceMirroringContractTest {
             Alliance.RED,
             FieldSymmetry.MIRRORED,
             fieldLength = CoordinateTransformers.FRC_FIELD_LENGTH,
-            fieldWidth = CoordinateTransformers.FRC_FIELD_WIDTH
+            fieldWidth = CoordinateTransformers.FRC_FIELD_WIDTH,
+            fieldOrigin = FieldOrigin.CORNER
         )
         val point = mirrored.points.single()
 

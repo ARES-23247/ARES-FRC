@@ -110,7 +110,6 @@ class FRCTeleOpDriveController(
             val bPressed = controllerState.b
             val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
             val copilotRbPressed = coPilotControllerState.rightBumper
-            var targetFlywheelActive = false
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleRotations
 
@@ -145,20 +144,18 @@ class FRCTeleOpDriveController(
                 else -> rotation
             }
 
-            when {
+            val targetFlywheelActive = when {
                 copilotRtPressed -> {
-                    targetFlywheelActive = true
                     targetFlywheelSpeed = 3350.0
                     targetCowlAngle = 0.5
+                    true
                 }
                 copilotRbPressed -> {
-                    targetFlywheelActive = true
                     targetFlywheelSpeed = 3650.0
                     targetCowlAngle = 1.1
+                    true
                 }
-                else -> {
-                    targetFlywheelActive = false
-                }
+                else -> false
             }
 
             // Dispatch flywheel & cowl changes only

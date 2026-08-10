@@ -5,6 +5,7 @@ import com.ctre.phoenix6.controls.Follower
 import com.ctre.phoenix6.controls.VelocityVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
+import com.ctre.phoenix6.configs.TalonFXConfiguration
 
 /**
  * Four-motor TalonFX flywheel IO on `CAN2`, arranged as opposed master/follower pairs.
@@ -102,14 +103,39 @@ class FRCFlywheelHardwareIO(
     }
 
     override fun setVelocityRpm(rpm: Double) {
-        val rps = rpm / 60.0
+        val rps = rpm.takeIf { it.isFinite() && it >= 0.0 }?.div(60.0) ?: 0.0
         leftMaster.setControl(velocityRequest.withVelocity(rps))
         rightMaster.setControl(velocityRequest.withVelocity(rps))
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        leftMaster.setControl(voltageRequest.withOutput(volts))
-        rightMaster.setControl(voltageRequest.withOutput(volts))
+        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(0.0, 12.0) ?: 0.0
+        leftMaster.setControl(voltageRequest.withOutput(safeVolts))
+        rightMaster.setControl(voltageRequest.withOutput(safeVolts))
+    }
+
+    override fun configureVelocityController(
+        gains: com.areslib.control.tuning.PIDFCoefficients,
+        feedforward: com.areslib.control.tuning.SimpleFeedforwardCoeffs
+    ) {
+        val radiansPerRotation = 2.0 * Math.PI
+        val kP = gains.kP * radiansPerRotation
+        val kI = gains.kI * radiansPerRotation
+        val kD = gains.kD * radiansPerRotation
+        val kV = feedforward.kV * radiansPerRotation
+        val kA = feedforward.kA * radiansPerRotation
+        if (!listOf(kP, kI, kD, kV, kA, feedforward.kS).all { it.isFinite() && it >= 0.0 }) return
+        for (motor in listOf(leftMaster, leftFollower, rightMaster, rightFollower)) {
+            val config = TalonFXConfiguration()
+            if (!motor.configurator.refresh(config).isOK) continue
+            config.Slot0.kP = kP
+            config.Slot0.kI = kI
+            config.Slot0.kD = kD
+            config.Slot0.kS = feedforward.kS
+            config.Slot0.kV = kV
+            config.Slot0.kA = kA
+            motor.configurator.apply(config)
+        }
     }
 
     override val velocityRpm: Double

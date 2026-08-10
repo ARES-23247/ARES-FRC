@@ -1,5 +1,6 @@
 package com.areslib.frc.hardware
 
+import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -17,6 +18,7 @@ import com.ctre.phoenix6.signals.NeutralModeValue
 class FRCClimberHardwareIO(
     private val motor: TalonFX
 ) : ClimberIO {
+    @Volatile private var cachedPositionValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -58,31 +60,44 @@ class FRCClimberHardwareIO(
     }
 
     override fun refresh() {
-        climberPosition.refresh()
-        climberCurrent.refresh()
+        cachedPositionValid = BaseStatusSignal.refreshAll(climberPosition).isOK &&
+            climberPosition.valueAsDouble.isFinite()
+        BaseStatusSignal.refreshAll(climberCurrent)
     }
 
     override fun setTargetPositionRotations(rotations: Double) {
-        motor.setControl(positionRequest.withPosition(rotations))
+        val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations
+        motor.setControl(positionRequest.withPosition(safeRotations))
     }
 
     override fun setTargetPositionRotations(rotations: Double, maxEffortScale: Double) {
-        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setTargetPositionRotations(rotations)
             return
         }
-        val error = rotations - positionRotations
+        val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
+            com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
+        ) ?: com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations
+        val error = safeRotations - positionRotations
         val maxVolts = NOMINAL_VOLTAGE * effortScale
         setAppliedVoltage((POSITION_KP_VOLTS_PER_ROTATION * error).coerceIn(-maxVolts, maxVolts))
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        motor.setControl(voltageRequest.withOutput(safeVolts))
     }
 
     override val positionRotations: Double
         get() = climberPosition.valueAsDouble
+
+    override val positionValid: Boolean
+        get() = cachedPositionValid
 
     override val currentAmps: Double
         get() = climberCurrent.valueAsDouble

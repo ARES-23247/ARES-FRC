@@ -79,18 +79,31 @@ object MarvinReducer {
             is SuperstructureSensorUpdate -> {
                 var updatedMarvin = currentMarvin
 
+                val flywheelVelocityValid = action.flywheelVelocityValid && action.flywheelRpm.isFinite()
                 if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0 ||
-                    updatedMarvin.flywheel.velocityValid != action.flywheelVelocityValid) {
+                    updatedMarvin.flywheel.velocityValid != flywheelVelocityValid) {
                     updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(
-                        velocityRpm = if (action.flywheelVelocityValid) action.flywheelRpm else 0.0,
-                        velocityValid = action.flywheelVelocityValid
+                        velocityRpm = if (flywheelVelocityValid) action.flywheelRpm else 0.0,
+                        velocityValid = flywheelVelocityValid
                     ))
                 }
-                if (Math.abs(updatedMarvin.cowl.angleRotations - action.cowlAngleRotations) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(angleRotations = action.cowlAngleRotations))
+                val cowlAngleValid = action.cowlAngleValid && action.cowlAngleRotations.isFinite()
+                val cowlAngle = if (cowlAngleValid) action.cowlAngleRotations else 0.0
+                if (Math.abs(updatedMarvin.cowl.angleRotations - cowlAngle) > 0.005 ||
+                    updatedMarvin.cowl.angleValid != cowlAngleValid) {
+                    updatedMarvin = updatedMarvin.copy(cowl = updatedMarvin.cowl.copy(
+                        angleRotations = cowlAngle,
+                        angleValid = cowlAngleValid
+                    ))
                 }
-                if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - action.intakeAngle) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(pivotAngleDegrees = action.intakeAngle))
+                val intakeAngleValid = action.intakeAngleValid && action.intakeAngle.isFinite()
+                val intakeAngle = if (intakeAngleValid) action.intakeAngle else 0.0
+                if (Math.abs(updatedMarvin.intake.pivotAngleDegrees - intakeAngle) > 0.005 ||
+                    updatedMarvin.intake.pivotAngleValid != intakeAngleValid) {
+                    updatedMarvin = updatedMarvin.copy(intake = updatedMarvin.intake.copy(
+                        pivotAngleDegrees = intakeAngle,
+                        pivotAngleValid = intakeAngleValid
+                    ))
                 }
                 if (!action.pieceDetectionValid) {
                     if (updatedMarvin.feeder.pieceDetectionValid || updatedMarvin.feeder.gamePieceDetected) {
@@ -119,14 +132,22 @@ object MarvinReducer {
                         updatedMarvin = updatedMarvin.copy(inventoryCount = (updatedMarvin.inventoryCount - 1).coerceAtLeast(0))
                     }
                 }
-                if (Math.abs(updatedMarvin.floor.velocityRps - action.floorVelocityRps) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = action.floorVelocityRps))
+                val floorVelocityRps = action.floorVelocityRps.takeIf { it.isFinite() } ?: 0.0
+                if (Math.abs(updatedMarvin.floor.velocityRps - floorVelocityRps) > 0.005) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(velocityRps = floorVelocityRps))
                 }
-                if (Math.abs(updatedMarvin.floor.currentAmps - action.floorCurrentAmps) > 0.05) {
-                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = action.floorCurrentAmps))
+                val floorCurrentAmps = action.floorCurrentAmps.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+                if (Math.abs(updatedMarvin.floor.currentAmps - floorCurrentAmps) > 0.05) {
+                    updatedMarvin = updatedMarvin.copy(floor = updatedMarvin.floor.copy(currentAmps = floorCurrentAmps))
                 }
-                if (Math.abs(updatedMarvin.climber.positionRotations - action.climberPositionRotations) > 0.005) {
-                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(positionRotations = action.climberPositionRotations))
+                val climberPositionValid = action.climberPositionValid && action.climberPositionRotations.isFinite()
+                val climberPosition = if (climberPositionValid) action.climberPositionRotations else 0.0
+                if (Math.abs(updatedMarvin.climber.positionRotations - climberPosition) > 0.005 ||
+                    updatedMarvin.climber.positionValid != climberPositionValid) {
+                    updatedMarvin = updatedMarvin.copy(climber = updatedMarvin.climber.copy(
+                        positionRotations = climberPosition,
+                        positionValid = climberPositionValid
+                    ))
                 }
 
                 if (updatedMarvin.slamtakeActive) {

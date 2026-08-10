@@ -31,6 +31,7 @@ class MarvinShooterSubsystem(private val store: Store) {
     private val feederController = MarvinFeederController(store)
     
     private val scratchSpeeds = ChassisSpeeds(0.0, 0.0, 0.0)
+    private val staticShotResult = ShotResult()
     
     private var lastVx = 0.0
     private var lastVy = 0.0
@@ -132,17 +133,17 @@ class MarvinShooterSubsystem(private val store: Store) {
         currentPose: Pose2d,
         targetTranslation: Translation2d
     ): Double {
-        val dist = kotlin.math.hypot(currentPose.x - targetTranslation.x, currentPose.y - targetTranslation.y)
-        val targetRpm = shotSetup.interpolateRpm(dist)
-        val targetCowlRotations = shotSetup.interpolateCowlRotations(dist)
+        scratchSpeeds.vxMetersPerSecond = 0.0
+        scratchSpeeds.vyMetersPerSecond = 0.0
+        scratchSpeeds.omegaRadiansPerSecond = 0.0
+        shotSetup.calculate(currentPose, scratchSpeeds, targetTranslation, staticShotResult)
+        val targetRpm = staticShotResult.targetFlywheelRpm
+        val targetCowlRotations = staticShotResult.targetCowlAngleRotations
         
         flywheelController.spinUp(targetRpm)
         cowlController.setCowlAngleRotations(targetCowlRotations)
         
-        var targetHeadingRad = Math.atan2(targetTranslation.y - currentPose.y, targetTranslation.x - currentPose.x)
-        if (MarvinConfig.SHOT_CONFIG.shooterFacesRearward) {
-            targetHeadingRad = com.areslib.math.wrapAngle(targetHeadingRad + Math.PI)
-        }
+        val targetHeadingRad = staticShotResult.robotTargetHeadingRad
         val headingError = targetHeadingRad - currentPose.heading.radians
         val wrappedError = com.areslib.math.wrapAngle(headingError)
         val rotation = wrappedError * AIM_KP

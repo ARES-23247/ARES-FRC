@@ -67,6 +67,10 @@ The checked-in baseline is `src/main/deploy/swerve_offsets.json`, with keys:
 
 The runtime robot may write `/home/lvuser/swerve_offsets_runtime.json`. The `fetchOffsets` task copies that file over the checked-in deploy JSON from `lvuser@10.232.47.2`.
 
+Before the first fetch, connect once with `ssh lvuser@10.232.47.2 true` and verify the RoboRIO
+fingerprint. The task requires a trusted `known_hosts` entry and fails on unknown or changed host
+keys.
+
 Treat `fetchOffsets` as a calibration update:
 
 1. Put the robot in a mechanically known calibration state.

@@ -80,9 +80,12 @@ data class SetClimberPositionRotations @kotlin.jvm.JvmOverloads constructor(
  * @property intakeAngle measured intake pivot angle in degrees
  * @property pieceDetected detector state; meaningful only when [pieceDetectionValid]
  * @property flywheelVelocityValid whether flywheel RPM was refreshed successfully
+ * @property cowlAngleValid whether cowl position was refreshed successfully
+ * @property intakeAngleValid whether intake position was refreshed successfully
  * @property pieceDetectionValid whether a physical/configured detector exists and is trustworthy
  * @property floorVelocityRps measured floor speed in RPS
  * @property climberPositionRotations measured climber position in mechanism rotations
+ * @property climberPositionValid whether climber position was refreshed successfully
  * @property floorCurrentAmps cached floor stator current in amperes
  */
 data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
@@ -91,9 +94,12 @@ data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
     val intakeAngle: Double,
     val pieceDetected: Boolean,
     val flywheelVelocityValid: Boolean = false,
+    val cowlAngleValid: Boolean = false,
+    val intakeAngleValid: Boolean = false,
     val pieceDetectionValid: Boolean = false,
     val floorVelocityRps: Double = 0.0,
     val climberPositionRotations: Double = 0.0,
+    val climberPositionValid: Boolean = false,
     val floorCurrentAmps: Double = 0.0,
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction

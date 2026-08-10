@@ -116,4 +116,44 @@ class MarvinControlAndFreshnessRegressionTest {
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
         assertEquals(0.0, store.state.superstructure.marvin.floor.targetVelocityRps)
     }
+
+    @Test
+    fun `position freshness clears stale collision observations and recovers`() {
+        val store = newStore()
+
+        store.dispatch(SuperstructureSensorUpdate(
+            flywheelRpm = 0.0,
+            cowlAngleRotations = 1.0,
+            cowlAngleValid = true,
+            intakeAngle = 45.0,
+            intakeAngleValid = true,
+            pieceDetected = false,
+            climberPositionRotations = 0.5,
+            climberPositionValid = true,
+            timestampMs = 1_000L
+        ))
+        assertTrue(store.state.superstructure.marvin.cowl.angleValid)
+        assertTrue(store.state.superstructure.marvin.intake.pivotAngleValid)
+        assertTrue(store.state.superstructure.marvin.climber.positionValid)
+
+        store.dispatch(SuperstructureSensorUpdate(
+            flywheelRpm = 0.0,
+            cowlAngleRotations = Double.NaN,
+            cowlAngleValid = true,
+            intakeAngle = 45.0,
+            intakeAngleValid = false,
+            pieceDetected = false,
+            climberPositionRotations = 0.5,
+            climberPositionValid = false,
+            timestampMs = 1_020L
+        ))
+
+        val stale = store.state.superstructure.marvin
+        assertFalse(stale.cowl.angleValid)
+        assertFalse(stale.intake.pivotAngleValid)
+        assertFalse(stale.climber.positionValid)
+        assertEquals(0.0, stale.cowl.angleRotations)
+        assertEquals(0.0, stale.intake.pivotAngleDegrees)
+        assertEquals(0.0, stale.climber.positionRotations)
+    }
 }

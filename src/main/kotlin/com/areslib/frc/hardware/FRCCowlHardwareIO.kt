@@ -1,6 +1,7 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.marvin.MarvinConfig
+import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.PositionVoltage
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
@@ -18,6 +19,7 @@ import com.ctre.phoenix6.signals.NeutralModeValue
 class FRCCowlHardwareIO(
     private val motor: TalonFX
 ) : CowlIO {
+    @Volatile private var cachedAngleValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -59,22 +61,26 @@ class FRCCowlHardwareIO(
     }
 
     override fun refresh() {
-        cowlPosition.refresh()
-        cowlCurrent.refresh()
+        cachedAngleValid = BaseStatusSignal.refreshAll(cowlPosition).isOK &&
+            cowlPosition.valueAsDouble.isFinite()
+        BaseStatusSignal.refreshAll(cowlCurrent)
     }
 
     override fun setTargetAngle(rotations: Double) {
-        // Use target cowl angle directly
-        motor.setControl(positionRequest.withPosition(rotations))
+        motor.setControl(positionRequest.withPosition(safeTarget(rotations)))
     }
 
     override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
-        val effortScale = maxEffortScale.coerceIn(0.0, 1.0)
+        val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setTargetAngle(rotations)
             return
         }
-        val error = rotations - angleRotations
+        if (!angleValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
+        val error = safeTarget(rotations) - angleRotations
         val staticVolts = when {
             error > POSITION_EPSILON_ROTATIONS -> POSITION_KS_VOLTS
             error < -POSITION_EPSILON_ROTATIONS -> -POSITION_KS_VOLTS
@@ -85,14 +91,22 @@ class FRCCowlHardwareIO(
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        motor.setControl(voltageRequest.withOutput(
+            volts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
+        ))
     }
 
     override val angleRotations: Double
         get() = cowlPosition.valueAsDouble
 
+    override val angleValid: Boolean
+        get() = cachedAngleValid
+
     override val currentAmps: Double
         get() = cowlCurrent.valueAsDouble
+
+    private fun safeTarget(rotations: Double): Double =
+        rotations.takeIf { it.isFinite() }?.coerceIn(0.0, MarvinConfig.cowlMaxRotations) ?: 0.0
 
     private companion object {
         const val POSITION_KP_VOLTS_PER_ROTATION = 20.0

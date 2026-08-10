@@ -2,6 +2,7 @@ package com.areslib.frc.sim.io
 
 import com.areslib.frc.Dyn4jSimulation
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SimulatedSafetyContractTest {
@@ -61,5 +62,24 @@ class SimulatedSafetyContractTest {
         assertEquals(0.0, sim.simFeederVoltage, 1e-9)
         assertEquals(0.0, sim.simFloorVoltage, 1e-9)
         assertEquals(0.0, sim.simClimberVoltage, 1e-9)
+    }
+
+    @Test
+    fun `non-finite simulated commands fail closed and physical targets clamp`() {
+        val sim = Dyn4jSimulation(seed = 42L)
+
+        sim.cowlIO.setTargetAngle(Double.NaN, Double.NaN)
+        sim.intakeIO.setPivotAngle(Double.POSITIVE_INFINITY, Double.NaN)
+        sim.climberIO.setTargetPositionRotations(Double.NEGATIVE_INFINITY, Double.NaN)
+        sim.flywheelIO.setVelocityRpm(Double.NaN)
+        sim.feederIO.setAppliedVoltage(Double.NaN)
+        sim.floorIO.setAppliedVoltage(Double.POSITIVE_INFINITY)
+
+        assertTrue(sim.simCowlVoltage.isFinite())
+        assertEquals(0.0, sim.simIntakePivotVoltage, 1e-9)
+        assertEquals(0.0, sim.simClimberVoltage, 1e-9)
+        assertEquals(0.0, sim.simFlywheelVoltage, 1e-9)
+        assertEquals(0.0, sim.simFeederVoltage, 1e-9)
+        assertEquals(0.0, sim.simFloorVoltage, 1e-9)
     }
 }

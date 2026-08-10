@@ -48,7 +48,9 @@ class FRCFloorHardwareIO(
      * (FLOOR_KV * rps * brownoutScale), so no TalonFX Slot0 PID gains are configured.
      */
     override fun setAppliedVoltage(volts: Double) {
-        motor.setControl(voltageRequest.withOutput(volts))
+        motor.setControl(voltageRequest.withOutput(
+            volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        ))
     }
 
     override val velocityRps: Double
