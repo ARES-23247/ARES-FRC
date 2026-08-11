@@ -134,8 +134,18 @@ class ARESRobot : TimedRobot() {
             )
             swerveIO = FRCSwerveHardwareIO(ctreDrivetrain)
 
-            val limelightShooter = FrcLimelightIO("limelight-shooter")
-            val limelightBack = FrcLimelightIO("limelight-back")
+            // Each Limelight retains its independently surveyed robot-space transform from
+            // its own web UI. Passing no pose is intentional: never overwrite either camera
+            // with a shared placeholder extrinsic.
+            val crescendoTagIds = IntArray(16) { it + 1 }
+            val limelightShooter = FrcLimelightIO(
+                tableName = "limelight-shooter",
+                validFiducialIds = crescendoTagIds
+            )
+            val limelightBack = FrcLimelightIO(
+                tableName = "limelight-back",
+                validFiducialIds = crescendoTagIds
+            )
             visionIO = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
 
             flywheelIO = FRCFlywheelHardwareIO(leftMasterFX, leftFollowerFX, rightMasterFX, rightFollowerFX)
