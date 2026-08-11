@@ -17,7 +17,8 @@ import com.ctre.phoenix6.signals.NeutralModeValue
  */
 class FRCClimberHardwareIO(
     private val motor: TalonFX
-) : ClimberIO {
+) : ClimberIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
     @Volatile private var cachedPositionValid = false
 
     private val positionRequest = PositionVoltage(0.0)
@@ -31,7 +32,7 @@ class FRCClimberHardwareIO(
         setUpdateFrequencies(50.0, climberPosition)
         setUpdateFrequencies(10.0, climberCurrent)
 
-        listOf(motor).applyConfig {
+        configurationValid = listOf(motor).applyMechanismConfigChecked("Climber") {
             // Neutral mode and inversions
             MotorOutput.NeutralMode = NeutralModeValue.Brake
             MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive
@@ -66,6 +67,10 @@ class FRCClimberHardwareIO(
     }
 
     override fun setTargetPositionRotations(rotations: Double) {
+        if (!configurationValid || !positionValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
             com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
             com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
@@ -75,6 +80,10 @@ class FRCClimberHardwareIO(
 
     override fun setTargetPositionRotations(rotations: Double, maxEffortScale: Double) {
         val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        if (!configurationValid || !positionValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setTargetPositionRotations(rotations)
             return
@@ -89,7 +98,8 @@ class FRCClimberHardwareIO(
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        val requestedVolts = if (configurationValid) volts else 0.0
+        val safeVolts = requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
         motor.setControl(voltageRequest.withOutput(safeVolts))
     }
 

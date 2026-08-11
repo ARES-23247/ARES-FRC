@@ -6,6 +6,7 @@ import com.areslib.frc.generated.GeneratedAresProject
 import com.areslib.frc.marvin.MarvinReducer
 import com.areslib.frc.marvin.MarvinState
 import com.areslib.frc.marvin.SetFlywheelSpeed
+import com.areslib.frc.marvin.SetCowlAngle
 import com.areslib.frc.marvin.SuperstructureSensorUpdate
 import com.areslib.frc.marvin.marvin
 import com.areslib.math.coordinate.CoordinateTransformers
@@ -132,10 +133,14 @@ class FrcNativeAutoContractTest {
         val robot = newRobot(Alliance.BLUE)
         val ready = FrcAutoCapabilities.conditionShooterReady()
         robot.store.dispatch(SetFlywheelSpeed(4_000.0))
-        robot.store.dispatch(sensorUpdate(valid = false))
+        robot.store.dispatch(SetCowlAngle(0.5))
+        robot.store.dispatch(sensorUpdate(flywheelValid = false, cowlValid = true))
         assertFalse(ready(robot.store.state))
 
-        robot.store.dispatch(sensorUpdate(valid = true))
+        robot.store.dispatch(sensorUpdate(flywheelValid = true, cowlValid = false))
+        assertFalse(ready(robot.store.state))
+
+        robot.store.dispatch(sensorUpdate(flywheelValid = true, cowlValid = true))
         assertTrue(ready(robot.store.state))
 
         val feedTask = FrcAutoCapabilities.actionShooterFeedWhenReady()
@@ -146,12 +151,13 @@ class FrcNativeAutoContractTest {
         assertNotNull(GeneratedAresProject.runtimeBindings(FrcAutoCapabilities))
     }
 
-    private fun sensorUpdate(valid: Boolean) = SuperstructureSensorUpdate(
+    private fun sensorUpdate(flywheelValid: Boolean, cowlValid: Boolean) = SuperstructureSensorUpdate(
         flywheelRpm = 4_000.0,
-        cowlAngleRotations = 0.0,
+        cowlAngleRotations = 0.5,
         intakeAngle = 0.0,
         pieceDetected = false,
-        flywheelVelocityValid = valid
+        flywheelVelocityValid = flywheelValid,
+        cowlAngleValid = cowlValid
     )
 
     private fun newRobot(alliance: Alliance): FrcSwerveRobot = FrcSwerveRobot(

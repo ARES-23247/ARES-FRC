@@ -13,7 +13,8 @@ import com.ctre.phoenix6.hardware.TalonFX
  */
 class FRCFeederHardwareIO(
     private val motor: TalonFX
-) : FeederIO {
+) : FeederIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
 
     private val voltageRequest = VoltageOut(0.0)
 
@@ -23,7 +24,7 @@ class FRCFeederHardwareIO(
         motor.optimizeBusUtilization()
         setUpdateFrequencies(10.0, feederCurrent)
 
-        listOf(motor).applyConfig {
+        configurationValid = listOf(motor).applyMechanismConfigChecked("Feeder") {
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
             Feedback.SensorToMechanismRatio = 4.0 // 4:1 feeder gear reduction
@@ -46,8 +47,9 @@ class FRCFeederHardwareIO(
      * by [com.areslib.frc.marvin.MarvinSuperstructure] (FEEDER_KV * rps * brownoutScale).
      */
     override fun setAppliedVoltage(volts: Double) {
+        val requestedVolts = if (configurationValid) volts else 0.0
         motor.setControl(voltageRequest.withOutput(
-            volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+            requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
         ))
     }
 

@@ -20,7 +20,8 @@ class FRCFlywheelHardwareIO(
     private val leftFollower: TalonFX,
     private val rightMaster: TalonFX,
     private val rightFollower: TalonFX
-) : FlywheelIO {
+) : FlywheelIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
     @Volatile private var cachedVelocityValid = false
 
     private val velocityRequest = VelocityVoltage(0.0)
@@ -44,11 +45,17 @@ class FRCFlywheelHardwareIO(
         setUpdateFrequencies(4.0, leftMasterTemp, rightMasterTemp)
 
         // Configure followers as opposed to their respective masters
-        leftFollower.setControl(Follower(leftMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed))
-        rightFollower.setControl(Follower(rightMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed))
+        val leftFollowerConfigured = leftFollower.setControl(
+            Follower(leftMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed)
+        ).isOK
+        val rightFollowerConfigured = rightFollower.setControl(
+            Follower(rightMaster.deviceID, com.ctre.phoenix6.signals.MotorAlignmentValue.Opposed)
+        ).isOK
+        if (!leftFollowerConfigured) reportConfigurationFailure("Flywheel left follower request failed")
+        if (!rightFollowerConfigured) reportConfigurationFailure("Flywheel right follower request failed")
 
         // Enforce exact physical configurations matching SystemConstants.java
-        listOf(leftMaster, leftFollower).applyConfig {
+        val leftConfigured = listOf(leftMaster, leftFollower).applyMechanismConfigChecked("Flywheel left pair") {
             Slot0.kP = 0.5
             Slot0.kI = 0.0
             Slot0.kD = 0.0
@@ -67,7 +74,7 @@ class FRCFlywheelHardwareIO(
             CurrentLimits.StatorCurrentLimit = 120.0
         }
         
-        listOf(rightMaster, rightFollower).applyConfig {
+        val rightConfigured = listOf(rightMaster, rightFollower).applyMechanismConfigChecked("Flywheel right pair") {
             Slot0.kP = 0.5
             Slot0.kI = 0.0
             Slot0.kD = 0.0
@@ -85,8 +92,8 @@ class FRCFlywheelHardwareIO(
             CurrentLimits.StatorCurrentLimitEnable = true
             CurrentLimits.StatorCurrentLimit = 120.0
         }
-
-
+        configurationValid = leftFollowerConfigured && rightFollowerConfigured &&
+            leftConfigured && rightConfigured
     }
 
 
@@ -103,13 +110,19 @@ class FRCFlywheelHardwareIO(
     }
 
     override fun setVelocityRpm(rpm: Double) {
+        if (!configurationValid) {
+            leftMaster.setControl(voltageRequest.withOutput(0.0))
+            rightMaster.setControl(voltageRequest.withOutput(0.0))
+            return
+        }
         val rps = rpm.takeIf { it.isFinite() && it >= 0.0 }?.div(60.0) ?: 0.0
         leftMaster.setControl(velocityRequest.withVelocity(rps))
         rightMaster.setControl(velocityRequest.withVelocity(rps))
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(0.0, 12.0) ?: 0.0
+        val requestedVolts = if (configurationValid) volts else 0.0
+        val safeVolts = requestedVolts.takeIf { it.isFinite() }?.coerceIn(0.0, 12.0) ?: 0.0
         leftMaster.setControl(voltageRequest.withOutput(safeVolts))
         rightMaster.setControl(voltageRequest.withOutput(safeVolts))
     }

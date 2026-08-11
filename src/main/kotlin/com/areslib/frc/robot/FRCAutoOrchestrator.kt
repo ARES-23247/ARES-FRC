@@ -10,8 +10,7 @@ import com.areslib.frc.generatedruntime.FrcGeneratedRoutineCapabilities
 import com.areslib.frc.generatedruntime.FrcGeneratedControlTaskScheduler
 import com.areslib.frc.generatedruntime.FrcGeneratedControllerPorts
 import com.areslib.frc.generatedruntime.requireFrcRoutinePoseInsideField
-import com.areslib.frc.marvin.SetClimberVoltage
-import com.areslib.frc.marvin.StopSlamtake
+import com.areslib.frc.marvin.SetMechanismSafetyInhibit
 import com.areslib.math.geometry.Pose2d
 import com.areslib.routine.AutonomousCatalogEntry
 import com.areslib.routine.RoutineManager
@@ -294,9 +293,7 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
 
     private fun failSafeStop() {
         robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
-        FrcAutoCapabilities.allStopActions().forEach(robot.store::dispatch)
-        robot.store.dispatch(SetClimberVoltage(0.0))
-        robot.store.dispatch(StopSlamtake())
+        robot.store.dispatch(SetMechanismSafetyInhibit(true))
         robot.safeHardware()
     }
 

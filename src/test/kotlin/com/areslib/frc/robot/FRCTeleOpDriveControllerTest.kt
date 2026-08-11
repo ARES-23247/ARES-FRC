@@ -1,10 +1,9 @@
 package com.areslib.frc.robot
 
 import com.areslib.frc.FrcSwerveRobot
-import com.areslib.frc.marvin.MarvinClimberSubsystem
-import com.areslib.frc.marvin.MarvinIntakeSubsystem
-import com.areslib.frc.marvin.MarvinShooterSubsystem
-import com.areslib.frc.marvin.marvin
+import com.areslib.frc.marvin.*
+import com.areslib.state.RobotState
+import com.areslib.state.SuperstructureState
 import com.areslib.telemetry.GamepadState
 import edu.wpi.first.wpilibj.DriverStation
 import edu.wpi.first.wpilibj.XboxController
@@ -29,7 +28,13 @@ class FRCTeleOpDriveControllerTest {
     @BeforeEach
     fun setUp() {
         assert(HAL.initialize(500, 0))
-        robot = FrcSwerveRobot(isSimulation = true)
+        robot = FrcSwerveRobot(
+            isSimulation = true,
+            initialState = RobotState(
+                superstructure = SuperstructureState(custom = MarvinState())
+            ),
+            reducer = MarvinReducer::reduce
+        )
         
         marvinShooter = MarvinShooterSubsystem(robot.store)
         marvinIntake = MarvinIntakeSubsystem(robot.store)
@@ -149,5 +154,44 @@ class FRCTeleOpDriveControllerTest {
         assertEquals(0.0, marvin.intake.targetRollerVelocityRps)
         assertEquals(0.0, marvin.floor.targetVelocityRps)
         assertEquals(0.0, marvin.feeder.targetVelocityRps)
+    }
+
+    @Test
+    fun xLockStillProcessesMechanismReleaseAndClearsTransferLatch() {
+        robot.store.dispatch(SetFlywheelSpeed(4_000.0))
+        robot.store.dispatch(SetFlywheelActive(true))
+        robot.store.dispatch(SetIntakeRollers(10.0))
+        robot.store.dispatch(SetFloorSpeed(10.0))
+        robot.store.dispatch(SetFeederSpeed(10.0))
+        robot.store.dispatch(SetTransferActive(true))
+        coPilotControllerState.x = true
+
+        teleOpController.teleopPeriodic()
+
+        val state = robot.store.state
+        assertTrue(state.drive.isXLock)
+        assertFalse(state.superstructure.marvin.flywheelActive)
+        assertFalse(state.superstructure.marvin.transferActive)
+        assertEquals(0.0, state.superstructure.marvin.flywheel.targetVelocityRpm)
+        assertEquals(0.0, state.superstructure.marvin.intake.targetRollerVelocityRps)
+        assertEquals(0.0, state.superstructure.marvin.floor.targetVelocityRps)
+        assertEquals(0.0, state.superstructure.marvin.feeder.targetVelocityRps)
+    }
+
+    @Test
+    fun controllerFailureLatchesAtomicAllStopAndRejectsLaterSetpoints() {
+        robot.store.dispatch(SetFlywheelSpeed(4_000.0))
+        robot.store.dispatch(SetFlywheelActive(true))
+        robot.store.dispatch(SetFeederSpeed(10.0))
+
+        teleOpController.latchControllerAllStop("test controller", IllegalStateException("boom"))
+
+        assertTrue(robot.store.state.superstructure.marvin.mechanismSafetyInhibited)
+        assertFalse(robot.store.state.superstructure.marvin.flywheelActive)
+        assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
+        robot.store.dispatch(SetFlywheelSpeed(5_000.0))
+        robot.store.dispatch(SetFeederSpeed(12.0))
+        assertEquals(0.0, robot.store.state.superstructure.marvin.flywheel.targetVelocityRpm)
+        assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
     }
 }

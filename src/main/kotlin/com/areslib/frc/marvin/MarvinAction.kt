@@ -26,6 +26,18 @@ data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/**
+ * Atomically zeros and optionally latches every drivetrain and Marvin mechanism command.
+ *
+ * While [inhibited] is true the reducer ignores later mechanism setpoint actions, so a
+ * controller exception cannot be undone by a stale/generated command on the next frame.
+ * Mode initialization may clear the latch only after platform hardware health is rechecked.
+ */
+data class SetMechanismSafetyInhibit @kotlin.jvm.JvmOverloads constructor(
+    val inhibited: Boolean,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
 /** Replaces the simulated/estimated game-piece inventory count. */
 data class SetInventoryCount @kotlin.jvm.JvmOverloads constructor(
     val count: Int,

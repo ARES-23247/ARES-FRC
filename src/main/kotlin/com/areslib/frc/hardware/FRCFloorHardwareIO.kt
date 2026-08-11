@@ -13,7 +13,8 @@ import com.ctre.phoenix6.hardware.TalonFX
  */
 class FRCFloorHardwareIO(
     private val motor: TalonFX
-) : FloorIO {
+) : FloorIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
 
     private val voltageRequest = VoltageOut(0.0)
 
@@ -25,7 +26,7 @@ class FRCFloorHardwareIO(
         setUpdateFrequencies(20.0, floorVelocity)
         setUpdateFrequencies(10.0, floorCurrent)
 
-        listOf(motor).applyConfig {
+        configurationValid = listOf(motor).applyMechanismConfigChecked("Floor roller") {
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive
             Feedback.SensorToMechanismRatio = 1.0
@@ -48,8 +49,9 @@ class FRCFloorHardwareIO(
      * (FLOOR_KV * rps * brownoutScale), so no TalonFX Slot0 PID gains are configured.
      */
     override fun setAppliedVoltage(volts: Double) {
+        val requestedVolts = if (configurationValid) volts else 0.0
         motor.setControl(voltageRequest.withOutput(
-            volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+            requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
         ))
     }
 

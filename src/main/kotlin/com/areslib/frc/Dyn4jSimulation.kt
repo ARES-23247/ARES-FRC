@@ -38,8 +38,8 @@ class FlyingBall(
  * Dyn4j owns the planar robot and grounded pieces while [FlyingBall] supplies the vertical axis
  * for launched pieces. Field X/Y are blue-origin meters, headings are CCW-positive radians, and
  * [step] receives seconds. Public IO adapters expose the same units and validity contracts as the
- * RoboRIO hardware adapters; the optional feeder detector defaults to unavailable so tests do not
- * silently treat synthetic `false` as a trusted no-piece reading.
+ * RoboRIO hardware adapters. The optional feeder detector defaults to unavailable, in which case
+ * collection emits an explicit inventory action instead of silently losing the collected piece.
  *
  * The mutable `sim*` fields are the private simulation bus shared with adapters in `sim.io`.
  * Callers should command and observe the typed IO properties instead of mutating those fields.
@@ -158,7 +158,11 @@ class Dyn4jSimulation(
                 if (dist < 0.5) {
                     physicsWorld.world.removeBody(ball)
                     physicsWorld.balls.removeAt(i)
-                    simFeederPieceDetected = true
+                    if (feederPieceDetectorConfigured) {
+                        simFeederPieceDetected = true
+                    } else {
+                        actions.add(SetInventoryCount(state.superstructure.marvin.inventoryCount + 1, timestamp))
+                    }
                     if (debug) println("BALL INGESTED!")
                     break
                 }

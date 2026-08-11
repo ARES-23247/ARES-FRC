@@ -18,7 +18,8 @@ import com.ctre.phoenix6.signals.NeutralModeValue
  */
 class FRCCowlHardwareIO(
     private val motor: TalonFX
-) : CowlIO {
+) : CowlIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
     @Volatile private var cachedAngleValid = false
 
     private val positionRequest = PositionVoltage(0.0)
@@ -32,7 +33,7 @@ class FRCCowlHardwareIO(
         setUpdateFrequencies(50.0, cowlPosition)
         setUpdateFrequencies(10.0, cowlCurrent)
 
-        listOf(motor).applyConfig {
+        configurationValid = listOf(motor).applyMechanismConfigChecked("Cowl") {
             // Neutral mode and inversions
             MotorOutput.NeutralMode = NeutralModeValue.Brake
             MotorOutput.Inverted = InvertedValue.Clockwise_Positive
@@ -67,17 +68,21 @@ class FRCCowlHardwareIO(
     }
 
     override fun setTargetAngle(rotations: Double) {
+        if (!configurationValid || !angleValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         motor.setControl(positionRequest.withPosition(safeTarget(rotations)))
     }
 
     override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
         val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
-        if (effortScale >= FULL_EFFORT_THRESHOLD) {
-            setTargetAngle(rotations)
+        if (!configurationValid || !angleValid) {
+            setAppliedVoltage(0.0)
             return
         }
-        if (!angleValid) {
-            setAppliedVoltage(0.0)
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetAngle(rotations)
             return
         }
         val error = safeTarget(rotations) - angleRotations
@@ -91,8 +96,9 @@ class FRCCowlHardwareIO(
     }
 
     override fun setAppliedVoltage(volts: Double) {
+        val requestedVolts = if (configurationValid) volts else 0.0
         motor.setControl(voltageRequest.withOutput(
-            volts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
+            requestedVolts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
         ))
     }
 

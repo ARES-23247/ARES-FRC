@@ -56,6 +56,38 @@ class Dyn4jSimulationTest {
 
     @Suppress("UNCHECKED_CAST")
     @Test
+    fun defaultSimulatorCreditsInventoryWhenACollectedPieceHasNoVirtualDetector() {
+        val sim = Dyn4jSimulation(seed = 42L)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = com.areslib.frc.marvin.MarvinState(inventoryCount = 3)
+            )
+        )
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
+        ballsField.isAccessible = true
+        val balls = ballsField.get(physicsWorld) as MutableList<Body>
+        balls.first().transform.setTranslation(2.0, 2.0)
+        sim.intakeIO.setPivotAngle(90.0)
+        sim.intakeIO.setRollerVoltage(12.0)
+
+        var inventoryAction: com.areslib.frc.marvin.SetInventoryCount? = null
+        for (step in 0 until 60) {
+            inventoryAction = sim.step(state, 0.02)
+                .filterIsInstance<com.areslib.frc.marvin.SetInventoryCount>()
+                .firstOrNull()
+            if (inventoryAction != null) break
+        }
+
+        assertNotNull(inventoryAction, "Default simulation must credit a collected field piece")
+        assertEquals(4, inventoryAction!!.count)
+        assertFalse(sim.feederIO.pieceDetectionValid)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test
     fun testShootingAnd2_5DProjectileMotion() {
         val sim = Dyn4jSimulation(seed = 42L)
         

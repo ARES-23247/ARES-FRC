@@ -35,7 +35,7 @@ deploy {
     targets {
         roborio(getTargetTypeClass('RoboRIO')) {
             // Team number is loaded from frcYear / team config, or we default it
-            team = project.hasProperty('teamNumber') ? project.property('teamNumber') as Integer : 9999
+            team = project.hasProperty('teamNumber') ? project.property('teamNumber') as Integer : 23247
             debug = project.hasProperty('debug') ? project.property('debug') : false
             
             artifacts {

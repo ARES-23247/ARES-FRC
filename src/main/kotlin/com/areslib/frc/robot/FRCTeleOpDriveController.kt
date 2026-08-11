@@ -15,6 +15,8 @@ import com.areslib.frc.marvin.SetFlywheelActive
 import com.areslib.frc.marvin.SetFlywheelSpeed
 import com.areslib.frc.marvin.SetIntakePivot
 import com.areslib.frc.marvin.SetIntakeRollers
+import com.areslib.frc.marvin.SetMechanismSafetyInhibit
+import com.areslib.frc.marvin.SetTransferActive
 import com.areslib.frc.marvin.StartSlamtake
 import com.areslib.frc.marvin.StopSlamtake
 import com.areslib.math.geometry.Translation2d
@@ -33,7 +35,8 @@ import edu.wpi.first.wpilibj.XboxController
  * so driver-forward remains away from the alliance wall. The controller dispatches only changed
  * setpoints on the 20 ms robot loop and never reads mechanism hardware directly.
  *
- * Command priority is intentionally explicit: copilot X-lock returns before mechanism handling;
+ * Command priority is intentionally explicit: copilot X-lock owns only the drivetrain while
+ * mechanism release handling continues;
  * driver shooting owns automatic aim; unjam overrides slamtake and manual intake; an active
  * slamtake owns its mechanism targets until the reducer ends it.
  */
@@ -50,6 +53,7 @@ class FRCTeleOpDriveController(
     private var intakeDeployed = false
     private var lastBeached = false
     private var rumbleStartTimestampMs: Long = 0
+    private var controllerFaultLatched = false
     private val shotResult = ShotResult()
 
     // Pre-allocated shuttle targets in blue-origin field meters; index 1 is currently selected.
@@ -76,8 +80,9 @@ class FRCTeleOpDriveController(
     /** Active alliance speaker target in blue-origin field coordinates, in meters. */
     var speakerTranslation = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker
 
-    /** Lifecycle hook retained for symmetry with [teleopPeriodic]; no reset is currently needed. */
+    /** Clears the local controller-fault guard; the robot shell separately validates hardware health. */
     fun teleopInit() {
+        controllerFaultLatched = false
     }
 
     /**
@@ -88,6 +93,10 @@ class FRCTeleOpDriveController(
      * the path follower as the sole drivetrain owner for that frame.
      */
     fun drivePeriodic() {
+        if (controllerFaultLatched) {
+            robot.safeHardware()
+            return
+        }
         try {
             if (coPilotControllerState.x) {
                 robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
@@ -101,13 +110,16 @@ class FRCTeleOpDriveController(
             val rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
             robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
         } catch (error: Exception) {
-            DriverStation.reportError("Exception in drivePeriodic: ${error.message}", false)
-            robot.safeHardware()
+            latchControllerAllStop("drivePeriodic", error)
         }
     }
 
     /** Processes one cached 20 ms input snapshot and emits drive/mechanism setpoints. */
     fun teleopPeriodic() {
+        if (controllerFaultLatched) {
+            robot.safeHardware()
+            return
+        }
         try {
             val marvin = robot.store.state.superstructure.marvin
 
@@ -125,10 +137,7 @@ class FRCTeleOpDriveController(
             val currentPose = robot.store.state.drive.poseEstimator.estimatedPose
 
             // ── Copilot Swerve Lock Override ──
-            if (coPilotControllerState.x) {
-                robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
-                return
-            }
+            val xLockRequested = coPilotControllerState.x
 
             // ── Driver / Copilot Shooting Triggers ──
             val rtPressed = controllerState.rightTrigger > 0.5f
@@ -136,6 +145,10 @@ class FRCTeleOpDriveController(
             val bPressed = controllerState.b
             val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
             val copilotRbPressed = coPilotControllerState.rightBumper
+            val shootingRequested = rtPressed || rbPressed || bPressed
+            if (!shootingRequested && marvin.transferActive) {
+                robot.store.dispatch(SetTransferActive(false))
+            }
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleRotations
 
@@ -204,8 +217,12 @@ class FRCTeleOpDriveController(
                 }
             }
 
-            // Apply drive command
-            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
+            // Apply drive command without skipping mechanism processing while X-locked.
+            if (xLockRequested) {
+                robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
+            } else {
+                robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
+            }
 
             // ── A Button: Start Slamtake Sequence ──
             val aPressed = controllerState.a
@@ -269,24 +286,26 @@ class FRCTeleOpDriveController(
                         targetFloorSpeed = 0.0
                         targetFeederSpeed = 0.0
                     } else {
-                        targetFloorSpeed = marvin.floor.targetVelocityRps
-                        targetFeederSpeed = marvin.feeder.targetVelocityRps
+                        val latestMarvin = robot.store.state.superstructure.marvin
+                        targetFloorSpeed = latestMarvin.floor.targetVelocityRps
+                        targetFeederSpeed = latestMarvin.feeder.targetVelocityRps
                     }
                 }
             }
 
             // Only dispatch changes to avoid hot-path Redux allocations
             if (!isSlamtakeActive) {
-                if (marvin.intake.isDeployed != targetPivot) {
+                val latestMarvin = robot.store.state.superstructure.marvin
+                if (latestMarvin.intake.isDeployed != targetPivot) {
                     robot.store.dispatch(SetIntakePivot(deployed = targetPivot))
                 }
-                if (marvin.intake.targetRollerVelocityRps != targetIntakeRollers) {
+                if (latestMarvin.intake.targetRollerVelocityRps != targetIntakeRollers) {
                     robot.store.dispatch(SetIntakeRollers(targetIntakeRollers))
                 }
-                if (marvin.floor.targetVelocityRps != targetFloorSpeed) {
+                if (latestMarvin.floor.targetVelocityRps != targetFloorSpeed) {
                     robot.store.dispatch(SetFloorSpeed(targetFloorSpeed))
                 }
-                if (marvin.feeder.targetVelocityRps != targetFeederSpeed) {
+                if (latestMarvin.feeder.targetVelocityRps != targetFeederSpeed) {
                     robot.store.dispatch(SetFeederSpeed(targetFeederSpeed))
                 }
             }
@@ -321,8 +340,14 @@ class FRCTeleOpDriveController(
                 coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
             }
         } catch (e: Exception) {
-            DriverStation.reportError("Exception in teleopPeriodic: ${e.message}", false)
-            robot.safeHardware()
+            latchControllerAllStop("teleopPeriodic", e)
         }
+    }
+
+    internal fun latchControllerAllStop(source: String, error: Exception) {
+        controllerFaultLatched = true
+        runCatching { robot.store.dispatch(SetMechanismSafetyInhibit(true)) }
+        DriverStation.reportError("Exception in $source: ${error.message}", false)
+        robot.safeHardware()
     }
 }

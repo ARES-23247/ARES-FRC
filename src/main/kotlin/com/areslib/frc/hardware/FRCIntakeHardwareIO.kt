@@ -15,7 +15,8 @@ import com.ctre.phoenix6.hardware.TalonFX
 class FRCIntakeHardwareIO(
     private val pivotMotor: TalonFX,
     private val rollerMotor: TalonFX
-) : IntakeIO {
+) : IntakeIO, FrcMechanismConfigurationStatus {
+    override val configurationValid: Boolean
     @Volatile private var cachedPivotAngleValid = false
 
     private val positionRequest = PositionVoltage(0.0)
@@ -34,7 +35,7 @@ class FRCIntakeHardwareIO(
         pivotCurrent.setUpdateFrequency(10.0)
         rollerCurrent.setUpdateFrequency(10.0)
 
-        listOf(pivotMotor).applyConfig {
+        val pivotConfigured = listOf(pivotMotor).applyMechanismConfigChecked("Intake pivot") {
             Slot0.kP = 24.0
             Slot0.kI = 0.0
             Slot0.kD = 0.0
@@ -58,7 +59,7 @@ class FRCIntakeHardwareIO(
             SoftwareLimitSwitch.ReverseSoftLimitThreshold = 0.0
         }
 
-        listOf(rollerMotor).applyConfig {
+        val rollerConfigured = listOf(rollerMotor).applyMechanismConfigChecked("Intake roller") {
             Slot0.kP = 0.5
             Slot0.kI = 2.0
             Slot0.kD = 0.0
@@ -73,6 +74,7 @@ class FRCIntakeHardwareIO(
             CurrentLimits.StatorCurrentLimitEnable = true
             CurrentLimits.StatorCurrentLimit = 40.0
         }
+        configurationValid = pivotConfigured && rollerConfigured
     }
 
     override fun refresh() {
@@ -82,6 +84,10 @@ class FRCIntakeHardwareIO(
     }
 
     override fun setPivotAngle(degrees: Double) {
+        if (!configurationValid || !pivotAngleValid) {
+            setPivotVoltage(0.0)
+            return
+        }
         // Convert degrees to mechanism rotations (1 degree = (1.0 / 360.0) rotations)
         // Feedback.SensorToMechanismRatio handles the internal 4:1 scaling in TalonFX
         val safeDegrees = degrees.takeIf { it.isFinite() }?.coerceIn(
@@ -94,6 +100,10 @@ class FRCIntakeHardwareIO(
 
     override fun setPivotAngle(degrees: Double, maxEffortScale: Double) {
         val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        if (!configurationValid || !pivotAngleValid) {
+            setPivotVoltage(0.0)
+            return
+        }
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setPivotAngle(degrees)
             return
@@ -109,15 +119,18 @@ class FRCIntakeHardwareIO(
     }
 
     override fun setPivotVoltage(volts: Double) {
-        pivotMotor.setControl(voltageRequest.withOutput(volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
+        val requestedVolts = if (configurationValid) volts else 0.0
+        pivotMotor.setControl(voltageRequest.withOutput(requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
     }
 
     override fun setRollerVoltage(volts: Double) {
-        rollerMotor.setControl(voltageRequest.withOutput(volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
+        val requestedVolts = if (configurationValid) volts else 0.0
+        rollerMotor.setControl(voltageRequest.withOutput(requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0))
     }
 
     override fun setRollerVelocityRps(rps: Double) {
-        rollerMotor.setControl(velocityRequest.withVelocity(rps.takeIf { it.isFinite() } ?: 0.0))
+        val requestedRps = if (configurationValid) rps else 0.0
+        rollerMotor.setControl(velocityRequest.withVelocity(requestedRps.takeIf { it.isFinite() } ?: 0.0))
     }
 
     override val pivotAngleDegrees: Double

@@ -16,7 +16,8 @@ import com.areslib.control.assist.ShotSetup
  * SOTM uses measured field-frame chassis velocity rather than joystick intent. Field
  * positions are meters, headings are CCW-positive radians, flywheel targets are RPM,
  * and every cowl value is a mechanism rotation. Rearward-facing aim follows
- * [MarvinConfig.SHOT_CONFIG]. Feeding remains closed until both heading and fresh RPM gates pass.
+ * [MarvinConfig.SHOT_CONFIG]. Feeding remains closed until heading, fresh RPM, and fresh cowl
+ * position gates all pass.
  *
  * **Performance Guarantees:**
  * - Mutable [scratchSpeeds] and caller-owned [ShotResult] keep periodic calculation allocation-free.
@@ -119,8 +120,9 @@ class MarvinShooterSubsystem(private val store: Store) {
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
         val rpmAligned = flywheelController.isRpmAligned(shotResult.targetFlywheelRpm)
+        val cowlReady = cowlController.isAngleAligned(targetCowlRotations)
         
-        feederController.updateFeeders(rpmAligned, headingAligned, runFloorRollers)
+        feederController.updateFeeders(rpmAligned, headingAligned, cowlReady, runFloorRollers)
         
         return rotation
     }
@@ -150,8 +152,9 @@ class MarvinShooterSubsystem(private val store: Store) {
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
         val rpmAligned = flywheelController.isRpmAligned(targetRpm)
+        val cowlReady = cowlController.isAngleAligned(targetCowlRotations)
         
-        feederController.updateFeeders(rpmAligned, headingAligned, false)
+        feederController.updateFeeders(rpmAligned, headingAligned, cowlReady, false)
         
         return rotation
     }

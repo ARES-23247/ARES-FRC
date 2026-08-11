@@ -52,7 +52,7 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     val SHOOTER_FEED_WHEN_READY = NamedCommandDescriptor(
         key = CommandKey("shooter.feedWhenReady"),
         displayName = "Shoot when ready",
-        description = "Waits up to two seconds for fresh aligned flywheel RPM, then feeds the note.",
+        description = "Waits up to two seconds for fresh aligned flywheel RPM and cowl position, then feeds the note.",
         category = "Shooter"
     )
     val SHOOTER_STOP = NamedCommandDescriptor(
@@ -186,9 +186,14 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
 
     internal fun flywheelIsReady(state: RobotState): Boolean {
         val flywheel = state.superstructure.marvin.flywheel
+        val cowl = state.superstructure.marvin.cowl
         return flywheel.velocityValid &&
             flywheel.targetVelocityRpm > MINIMUM_READY_RPM &&
-            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE
+            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE &&
+            cowl.angleValid &&
+            cowl.angleRotations.isFinite() &&
+            cowl.targetAngleRotations.isFinite() &&
+            kotlin.math.abs(cowl.angleRotations - cowl.targetAngleRotations) <= COWL_TOLERANCE_ROTATIONS
     }
 
     private const val AUTO_SHOT_RPM = 4_000.0
@@ -196,5 +201,6 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     private const val FLOOR_ROLLER_RPS = 10.0
     private const val MINIMUM_READY_RPM = 100.0
     private const val RPM_TOLERANCE = 150.0
+    private const val COWL_TOLERANCE_ROTATIONS = 0.05
     private const val FEED_READY_TIMEOUT_MS = 2_000L
 }

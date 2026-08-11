@@ -23,24 +23,26 @@ class MarvinSuperstructureSafetyTest {
     private class RecordingCowlIO : CowlIO {
         var angleCommand = Double.NaN
         var effortScale = Double.NaN
+        var voltageCommand = Double.NaN
         override fun setTargetAngle(rotations: Double) { angleCommand = rotations }
         override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
             angleCommand = rotations
             effortScale = maxEffortScale
         }
-        override fun setAppliedVoltage(volts: Double) = Unit
+        override fun setAppliedVoltage(volts: Double) { voltageCommand = volts }
     }
 
     private class RecordingIntakeIO : IntakeIO {
         var pivotAngleCommand = Double.NaN
         var rollerVelocityCommand = Double.NaN
         var pivotEffortScale = Double.NaN
+        var pivotVoltageCommand = Double.NaN
         override fun setPivotAngle(degrees: Double) { pivotAngleCommand = degrees }
         override fun setPivotAngle(degrees: Double, maxEffortScale: Double) {
             pivotAngleCommand = degrees
             pivotEffortScale = maxEffortScale
         }
-        override fun setPivotVoltage(volts: Double) = Unit
+        override fun setPivotVoltage(volts: Double) { pivotVoltageCommand = volts }
         override fun setRollerVoltage(volts: Double) = Unit
         override fun setRollerVelocityRps(rps: Double) { rollerVelocityCommand = rps }
     }
@@ -83,7 +85,11 @@ class MarvinSuperstructureSafetyTest {
                 custom = MarvinState(
                     flywheel = FlywheelState(targetVelocityRpm = 4_000.0),
                     flywheelActive = true,
-                    cowl = CowlState(targetAngleRotations = 1.25),
+                    cowl = CowlState(
+                        angleRotations = 1.25,
+                        angleValid = true,
+                        targetAngleRotations = 1.25
+                    ),
                     intake = IntakeState(
                         pivotAngleValid = true,
                         targetAngleDegrees = 90.0,
@@ -179,19 +185,22 @@ class MarvinSuperstructureSafetyTest {
     }
 
     @Test
-    fun staleCollisionSensorsBlockBothMechanismsUntilFresh() {
+    fun stalePositionFeedbackZerosPositionOutputsUntilFresh() {
+        val cowl = RecordingCowlIO()
         val intake = RecordingIntakeIO()
         val climber = RecordingClimberIO()
         val subsystem = MarvinSuperstructure(
-            RecordingFlywheelIO(), RecordingCowlIO(), intake,
+            RecordingFlywheelIO(), cowl, intake,
             RecordingFeederIO(), RecordingFloorIO(), climber
         )
         val staleState = RobotState(
             superstructure = SuperstructureState(
                 custom = MarvinState(
+                    cowl = CowlState(targetAngleRotations = 1.0, angleValid = false),
                     intake = IntakeState(targetAngleDegrees = 90.0, pivotAngleValid = false),
                     climber = ClimberState(
-                        targetVoltage = 8.0,
+                        controlMode = ClimberControlMode.POSITION_ROTATIONS,
+                        targetPositionRotations = 1.0,
                         positionRotations = 0.0,
                         positionValid = false
                     )
@@ -201,7 +210,35 @@ class MarvinSuperstructureSafetyTest {
 
         subsystem.writeOutputs(staleState, 1.0)
 
-        assertEquals(0.0, intake.pivotAngleCommand)
+        assertTrue(cowl.angleCommand.isNaN())
+        assertEquals(0.0, cowl.voltageCommand)
+        assertTrue(intake.pivotAngleCommand.isNaN())
+        assertEquals(0.0, intake.pivotVoltageCommand)
+        assertEquals(0.0, climber.voltageCommand)
+        assertTrue(climber.positionCommandRotations.isNaN())
+    }
+
+    @Test
+    fun latchedSafetyInhibitWritesOnlyZeroEffortOutputs() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(mechanismSafetyInhibited = true)
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(0.0, cowl.voltageCommand)
+        assertEquals(0.0, intake.pivotVoltageCommand)
+        assertEquals(0.0, feeder.voltageCommand)
+        assertEquals(0.0, floor.voltageCommand)
         assertEquals(0.0, climber.voltageCommand)
     }
 }

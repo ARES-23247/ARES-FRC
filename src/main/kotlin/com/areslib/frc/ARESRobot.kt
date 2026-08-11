@@ -52,6 +52,15 @@ val aresAlliance: com.areslib.state.Alliance
         else -> com.areslib.state.Alliance.BLUE
     }
 
+/** Returns false when any real mechanism adapter reports failed one-time configuration. */
+internal fun mechanismsConfigured(vararg devices: Any): Boolean {
+    for (device in devices) {
+        val status = device as? com.areslib.frc.hardware.FrcMechanismConfigurationStatus ?: continue
+        if (!status.configurationValid) return false
+    }
+    return true
+}
+
 /**
  * WPILib lifecycle and dependency-composition root for Marvin XIX.
  *
@@ -85,10 +94,14 @@ class ARESRobot : TimedRobot() {
     private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
     private val BLUE_SPEAKER = MarvinConfig.FieldTargets.blueSpeaker
     private val superstructureTelemetry = DoubleArray(14)
+    private val swerveCalibrationSamples = SwerveOffsetCalibrationSampleCache()
+    private val calibrationEncoderPositions = DoubleArray(SwerveOffsetCalibrationSampleCache.MODULE_COUNT)
+    private var mechanismConfigurationValid = true
 
     // Simulation timing
     private var lastSimTime = 0.0
     private val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
+    private var powerDistribution: edu.wpi.first.wpilibj.PowerDistribution? = null
 
 
     /** Constructs IO, the composed reducer/store, subsystem lifecycle, and mode controllers. */
@@ -108,6 +121,16 @@ class ARESRobot : TimedRobot() {
         val climberIO: ClimberIO
 
         if (isReal) {
+            powerDistribution = try {
+                edu.wpi.first.wpilibj.PowerDistribution()
+            } catch (error: Exception) {
+                DriverStation.reportError(
+                    "ARES: PowerDistribution initialization failed; using cached motor-current fallback: " +
+                        error.message,
+                    false
+                )
+                null
+            }
             // can2Bus is already defined as a class property
             val leftMasterFX = com.ctre.phoenix6.hardware.TalonFX(9, can2Bus)
             val leftFollowerFX = com.ctre.phoenix6.hardware.TalonFX(10, can2Bus)
@@ -169,6 +192,10 @@ class ARESRobot : TimedRobot() {
             climberIO = simInstance.climberIO
         }
 
+        mechanismConfigurationValid = mechanismsConfigured(
+            flywheelIO, cowlIO, intakeIO, feederIO, floorIO, climberIO
+        )
+
         // Register subsystems to HardwareRegistry so they are refreshed/logged automatically
         com.areslib.hardware.HardwareRegistry.registerDevice("Flywheel", flywheelIO)
         com.areslib.hardware.HardwareRegistry.registerDevice("Cowl", cowlIO)
@@ -203,22 +230,30 @@ class ARESRobot : TimedRobot() {
 
         robot.store.actionListener = { action ->
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
-                val encPositions = DoubleArray(4)
-                swerveIO.getEncoderPositions(encPositions)
-                val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
-                val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
-                val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
-                    frontLeft = activeOffsets.frontLeft - encPositions[0],
-                    frontRight = activeOffsets.frontRight - encPositions[1],
-                    backLeft = activeOffsets.backLeft - encPositions[2],
-                    backRight = activeOffsets.backRight - encPositions[3]
-                )
-                com.areslib.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
-                    newOffsets,
-                    robot.telemetryManager.dataLoggingTelemetry
-                )
+                val nowMs = com.areslib.util.RobotClock.currentTimeMillis()
+                if (swerveCalibrationSamples.copyFresh(nowMs, calibrationEncoderPositions)) {
+                    val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
+                    val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
+                    val newOffsets = com.areslib.drivetrain.SwerveOffsetData(
+                        frontLeft = activeOffsets.frontLeft - calibrationEncoderPositions[0],
+                        frontRight = activeOffsets.frontRight - calibrationEncoderPositions[1],
+                        backLeft = activeOffsets.backLeft - calibrationEncoderPositions[2],
+                        backRight = activeOffsets.backRight - calibrationEncoderPositions[3]
+                    )
+                    com.areslib.drivetrain.SwerveOffsetManager.saveRuntimeOffsets(
+                        newOffsets,
+                        robot.telemetryManager.dataLoggingTelemetry
+                    )
+                } else {
+                    val message = "Swerve offset calibration rejected: four fresh, finite, plausible " +
+                        "absolute-encoder readings are required"
+                    robot.telemetry.putString("Calibration/Swerve/Error", message)
+                    DriverStation.reportError(message, false)
+                }
             }
         }
+
+        applyMechanismSafetyPolicy("initialization")
 
         // Generated subsystem DSL participates in the same lifecycle as handwritten mechanisms.
         GeneratedSubsystemRegistry.createAll(isReal).forEach(robot::registerSubsystem)
@@ -276,6 +311,14 @@ class ARESRobot : TimedRobot() {
                 0.0 // Unknown voltage must fail closed; simulation supplies a valid value.
             }
         }
+        if (isReal) {
+            robot.totalCurrentSupplier = {
+                powerDistribution?.totalCurrent ?: Double.NaN
+            }
+            robot.brownedOutSupplier = {
+                edu.wpi.first.wpilibj.RobotController.isBrownedOut()
+            }
+        }
 
         teleOpController = FRCTeleOpDriveController(
             robot, marvinShooter, marvinIntake, marvinClimber,
@@ -291,12 +334,18 @@ class ARESRobot : TimedRobot() {
         addPeriodic({
             try {
                 robot.update(controllerState, coPilotControllerState)
+                if (swerveIO != null) {
+                    swerveCalibrationSamples.record(
+                        swerveIO,
+                        com.areslib.util.RobotClock.currentTimeMillis()
+                    )
+                }
                 val tuningEnabled = DriverStation.isTest() || RobotBase.isSimulation()
                 robot.isLiveTuningEnabled = tuningEnabled
                 sysIdController.update(com.areslib.util.RobotClock.currentTimeMillis(), robot.store.state, tuningEnabled)
             } catch (e: Exception) {
                 DriverStation.reportError("Periodic loop exception", false)
-                robot.safeHardware()
+                latchMechanismAllStop()
             }
         }, 0.02, 0.005)
     }
@@ -347,20 +396,26 @@ class ARESRobot : TimedRobot() {
     override fun teleopInit() {
         autoOrchestrator.stop()
         teleOpController.teleopInit()
+        applyMechanismSafetyPolicy("teleop initialization")
         generatedControllerBindings?.cancel()
     }
 
     override fun teleopPeriodic() {
-        val generatedBindings = generatedControllerBindings
-        if (generatedBindings == null) {
-            teleOpController.teleopPeriodic()
-        } else {
-            generatedBindings.update()
-            // Generated bindings own mechanisms. Legacy stick drive remains the explicit drive
-            // owner unless a generated routine is actively following a path.
-            if (!autoOrchestrator.generatedRoutineOwnsDrive()) {
-                teleOpController.drivePeriodic()
+        try {
+            val generatedBindings = generatedControllerBindings
+            if (generatedBindings == null) {
+                teleOpController.teleopPeriodic()
+            } else {
+                generatedBindings.update()
+                // Generated bindings own mechanisms. Legacy stick drive remains the explicit drive
+                // owner unless a generated routine is actively following a path.
+                if (!autoOrchestrator.generatedRoutineOwnsDrive()) {
+                    teleOpController.drivePeriodic()
+                }
             }
+        } catch (error: Exception) {
+            DriverStation.reportError("Teleop controller exception: ${error.message}", false)
+            latchMechanismAllStop()
         }
     }
 
@@ -400,6 +455,7 @@ class ARESRobot : TimedRobot() {
 
     override fun autonomousInit() {
         generatedControllerBindings?.cancel()
+        applyMechanismSafetyPolicy("autonomous initialization")
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         autoOrchestrator.autonomousInit()
     }
@@ -417,6 +473,7 @@ class ARESRobot : TimedRobot() {
     override fun testInit() {
         generatedControllerBindings?.cancel()
         autoOrchestrator.stop()
+        applyMechanismSafetyPolicy("test initialization")
         robot.swerveDrive.brake()
         localizationCalibration?.close()
         calibrationButtonState.fill(false)
@@ -478,6 +535,45 @@ class ARESRobot : TimedRobot() {
         val rising = pressed && !calibrationButtonState[index]
         calibrationButtonState[index] = pressed
         return rising
+    }
+
+    private fun applyMechanismSafetyPolicy(source: String) {
+        robot.store.dispatch(SetMechanismSafetyInhibit(!mechanismConfigurationValid))
+        robot.telemetry.putBoolean("Safety/MechanismConfigurationValid", mechanismConfigurationValid)
+        if (!mechanismConfigurationValid) {
+            DriverStation.reportError(
+                "ARES: mechanism configuration invalid during $source; outputs remain inhibited",
+                false
+            )
+            robot.safeHardware()
+        }
+    }
+
+    private fun latchMechanismAllStop() {
+        runCatching { robot.store.dispatch(SetMechanismSafetyInhibit(true)) }
+        robot.safeHardware()
+    }
+
+    override fun close() {
+        var failure: Throwable? = null
+        try {
+            if (::robot.isInitialized) robot.close()
+        } catch (error: Throwable) {
+            failure = error
+        }
+        try {
+            powerDistribution?.close()
+        } catch (error: Throwable) {
+            failure?.addSuppressed(error) ?: run { failure = error }
+        } finally {
+            powerDistribution = null
+        }
+        try {
+            super.close()
+        } catch (error: Throwable) {
+            failure?.addSuppressed(error) ?: run { failure = error }
+        }
+        failure?.let { throw it }
     }
 
     // ── Simulation ──

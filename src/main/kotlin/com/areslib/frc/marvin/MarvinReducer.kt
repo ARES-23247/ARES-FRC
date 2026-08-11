@@ -32,7 +32,34 @@ object MarvinReducer {
 
         // Then apply Marvin specific state updates
         val currentMarvin = nextState.superstructure.marvin
-        val nextMarvin = when (action) {
+        val nextMarvin = when {
+            action is SetMechanismSafetyInhibit -> if (action.inhibited) {
+                currentMarvin.copy(
+                    flywheel = currentMarvin.flywheel.copy(targetVelocityRpm = 0.0),
+                    cowl = currentMarvin.cowl.copy(targetAngleRotations = 0.0),
+                    intake = currentMarvin.intake.copy(
+                        targetAngleDegrees = 0.0,
+                        targetRollerVelocityRps = 0.0,
+                        isDeployed = false
+                    ),
+                    feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
+                    climber = currentMarvin.climber.copy(
+                        targetPositionRotations = 0.0,
+                        targetVoltage = 0.0,
+                        controlMode = ClimberControlMode.VOLTAGE
+                    ),
+                    floor = currentMarvin.floor.copy(targetVelocityRps = 0.0),
+                    slamtakeActive = false,
+                    slamtakePhase = 0,
+                    flywheelActive = false,
+                    transferActive = false,
+                    mechanismSafetyInhibited = true
+                )
+            } else {
+                currentMarvin.copy(mechanismSafetyInhibited = false)
+            }
+            currentMarvin.mechanismSafetyInhibited && action.isMechanismSetpointAction() -> null
+            else -> when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
             is SetIntakePivot -> currentMarvin.withIntakePivot(action.deployed)
@@ -163,6 +190,24 @@ object MarvinReducer {
                 updatedMarvin
             }
             else -> null
+            }
+        }
+
+        val outputsInhibited = nextMarvin?.mechanismSafetyInhibited
+            ?: currentMarvin.mechanismSafetyInhibited
+        if (outputsInhibited) {
+            nextState = nextState.copy(
+                drive = nextState.drive.copy(
+                    xVelocityMetersPerSecond = 0.0,
+                    yVelocityMetersPerSecond = 0.0,
+                    angularVelocityRadiansPerSecond = 0.0,
+                    driveMode = com.areslib.state.DriveMode.TELEOP,
+                    headingLockTargetRadians = null,
+                    positionLockX = null,
+                    positionLockY = null,
+                    isXLock = false
+                )
+            )
         }
 
         if (nextMarvin != null) {
@@ -172,5 +217,21 @@ object MarvinReducer {
         }
 
         return nextState
+    }
+
+    private fun RobotAction.isMechanismSetpointAction(): Boolean = when (this) {
+        is SetFlywheelSpeed,
+        is SetCowlAngle,
+        is SetIntakePivot,
+        is SetIntakeRollers,
+        is SetFeederSpeed,
+        is SetFloorSpeed,
+        is SetClimberVoltage,
+        is SetClimberPositionRotations,
+        is SetFlywheelActive,
+        is SetTransferActive,
+        is StartSlamtake,
+        is SlamtakeTimerExpired -> true
+        else -> false
     }
 }

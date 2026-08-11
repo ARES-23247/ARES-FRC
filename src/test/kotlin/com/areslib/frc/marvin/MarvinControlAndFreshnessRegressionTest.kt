@@ -50,39 +50,64 @@ class MarvinControlAndFreshnessRegressionTest {
     fun `flywheel freshness and heading interlocks fail closed then recover`() {
         val store = newStore()
         val flywheel = MarvinFlywheelController(store)
+        val cowl = MarvinCowlController(store)
         val feeder = MarvinFeederController(store)
 
         store.dispatch(SetFlywheelSpeed(4_000.0, 1_000L))
+        store.dispatch(SetCowlAngle(0.5, 1_000L))
         store.dispatch(
             SuperstructureSensorUpdate(
                 flywheelRpm = 4_000.0,
-                cowlAngleRotations = 0.0,
+                cowlAngleRotations = 0.5,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = true,
+                cowlAngleValid = false,
                 timestampMs = 1_000L
             )
         )
 
         assertTrue(flywheel.isRpmAligned(4_000.0))
-        feeder.updateFeeders(rpmAligned = true, headingAligned = false, runFloorRollers = true)
+        assertFalse(cowl.isAngleAligned(0.5))
+        feeder.updateFeeders(rpmAligned = true, headingAligned = true, cowlReady = false, runFloorRollers = true)
         assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
         assertEquals(0.0, store.state.superstructure.marvin.floor.targetVelocityRps)
 
-        feeder.updateFeeders(rpmAligned = true, headingAligned = true, runFloorRollers = true)
+        store.dispatch(
+            SuperstructureSensorUpdate(
+                flywheelRpm = 4_000.0,
+                cowlAngleRotations = 0.5,
+                intakeAngle = 0.0,
+                pieceDetected = false,
+                flywheelVelocityValid = true,
+                cowlAngleValid = true,
+                timestampMs = 1_020L
+            )
+        )
+        assertTrue(cowl.isAngleAligned(0.5))
+        feeder.updateFeeders(rpmAligned = true, headingAligned = true, cowlReady = true, runFloorRollers = true)
+        assertTrue(store.state.superstructure.marvin.transferActive)
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.floor.targetVelocityRps)
+
+        // Once authorized, a transfer finishes even if alignment moves out of tolerance.
+        feeder.updateFeeders(rpmAligned = false, headingAligned = false, cowlReady = false, runFloorRollers = true)
+        assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
+        feeder.stop()
+        assertFalse(store.state.superstructure.marvin.transferActive)
+        assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
 
         // A failed refresh can carry the same numeric sample as the last good loop.
         // Validity must still force the observation to zero and close the feeder gate.
         store.dispatch(
             SuperstructureSensorUpdate(
                 flywheelRpm = 4_000.0,
-                cowlAngleRotations = 0.0,
+                cowlAngleRotations = 0.5,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = false,
-                timestampMs = 1_020L
+                cowlAngleValid = true,
+                timestampMs = 1_040L
             )
         )
 
@@ -92,6 +117,7 @@ class MarvinControlAndFreshnessRegressionTest {
         feeder.updateFeeders(
             rpmAligned = flywheel.isRpmAligned(4_000.0),
             headingAligned = true,
+            cowlReady = cowl.isAngleAligned(0.5),
             runFloorRollers = true
         )
         assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
@@ -100,21 +126,70 @@ class MarvinControlAndFreshnessRegressionTest {
         store.dispatch(
             SuperstructureSensorUpdate(
                 flywheelRpm = 4_000.0,
-                cowlAngleRotations = 0.0,
+                cowlAngleRotations = 0.5,
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = true,
-                timestampMs = 1_040L
+                cowlAngleValid = true,
+                timestampMs = 1_060L
             )
         )
         assertTrue(flywheel.isRpmAligned(4_000.0))
         feeder.updateFeeders(
             rpmAligned = flywheel.isRpmAligned(4_000.0),
             headingAligned = true,
+            cowlReady = cowl.isAngleAligned(0.5),
             runFloorRollers = false
         )
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
         assertEquals(0.0, store.state.superstructure.marvin.floor.targetVelocityRps)
+    }
+
+    @Test
+    fun `latched all stop atomically zeros and blocks mechanism rearming until cleared`() {
+        val store = newStore()
+        store.dispatch(SetFlywheelSpeed(4_000.0))
+        store.dispatch(SetFlywheelActive(true))
+        store.dispatch(SetCowlAngle(1.0))
+        store.dispatch(SetIntakePivot(true))
+        store.dispatch(SetIntakeRollers(10.0))
+        store.dispatch(SetFeederSpeed(8.0))
+        store.dispatch(SetFloorSpeed(8.0))
+        store.dispatch(SetClimberVoltage(6.0))
+        store.dispatch(SetTransferActive(true))
+        store.dispatch(com.areslib.action.RobotAction.JoystickDriveIntent(2.0, -1.0, 0.5))
+
+        store.dispatch(SetMechanismSafetyInhibit(true))
+
+        val stopped = store.state.superstructure.marvin
+        assertTrue(stopped.mechanismSafetyInhibited)
+        assertFalse(stopped.flywheelActive)
+        assertFalse(stopped.transferActive)
+        assertFalse(stopped.intake.isDeployed)
+        assertEquals(0.0, stopped.flywheel.targetVelocityRpm)
+        assertEquals(0.0, stopped.intake.targetRollerVelocityRps)
+        assertEquals(0.0, stopped.feeder.targetVelocityRps)
+        assertEquals(0.0, stopped.floor.targetVelocityRps)
+        assertEquals(0.0, stopped.climber.targetVoltage)
+        assertEquals(0.0, store.state.drive.xVelocityMetersPerSecond)
+        assertEquals(0.0, store.state.drive.yVelocityMetersPerSecond)
+        assertEquals(0.0, store.state.drive.angularVelocityRadiansPerSecond)
+
+        store.dispatch(SetFlywheelSpeed(5_000.0))
+        store.dispatch(SetFlywheelActive(true))
+        store.dispatch(SetFeederSpeed(10.0))
+        store.dispatch(com.areslib.action.RobotAction.JoystickDriveIntent(3.0, 2.0, 1.0))
+        assertEquals(0.0, store.state.superstructure.marvin.flywheel.targetVelocityRpm)
+        assertFalse(store.state.superstructure.marvin.flywheelActive)
+        assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
+        assertEquals(0.0, store.state.drive.xVelocityMetersPerSecond)
+        assertEquals(0.0, store.state.drive.yVelocityMetersPerSecond)
+        assertEquals(0.0, store.state.drive.angularVelocityRadiansPerSecond)
+
+        store.dispatch(SetMechanismSafetyInhibit(false))
+        store.dispatch(SetFlywheelSpeed(5_000.0))
+        assertFalse(store.state.superstructure.marvin.mechanismSafetyInhibited)
+        assertEquals(5_000.0, store.state.superstructure.marvin.flywheel.targetVelocityRpm)
     }
 
     @Test

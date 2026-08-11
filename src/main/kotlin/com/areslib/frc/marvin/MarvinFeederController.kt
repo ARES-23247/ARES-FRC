@@ -28,8 +28,17 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
      * A transfer already in progress is allowed to finish even if alignment moves out
      * of tolerance. [runFloorRollers] controls whether the floor mirrors feeder speed.
      */
-    fun updateFeeders(rpmAligned: Boolean, headingAligned: Boolean, runFloorRollers: Boolean = false) {
-        val speed = if ((headingAligned && rpmAligned) || transferActive) {
+    fun updateFeeders(
+        rpmAligned: Boolean,
+        headingAligned: Boolean,
+        cowlReady: Boolean,
+        runFloorRollers: Boolean = false
+    ) {
+        val canStartTransfer = headingAligned && rpmAligned && cowlReady
+        if (canStartTransfer && !transferActive) {
+            store.dispatch(SetTransferActive(true))
+        }
+        val speed = if (canStartTransfer || transferActive) {
             MarvinConfig.FEEDER_SHOOT_SPEED_RPS
         } else {
             0.0

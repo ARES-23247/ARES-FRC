@@ -119,6 +119,8 @@ data class MarvinState(
     val slamtakePhase: Int = 0,
     val flywheelActive: Boolean = false,
     val transferActive: Boolean = false,
+    /** Latched fail-safe that blocks drivetrain and mechanism outputs until explicitly cleared. */
+    val mechanismSafetyInhibited: Boolean = false,
     val inventoryCount: Int = 0
 ) : SubsystemState {
     /**

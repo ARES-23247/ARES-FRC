@@ -1,5 +1,27 @@
 package com.areslib.frc.hardware
 
-// Compatibility source marker: applyConfig and setUpdateFrequencies are supplied by
-// ARESLib's com.areslib.frc.hardware package. Keep season hardware imports unchanged;
-// do not reintroduce local implementations that diverge from the shared caching/config path.
+import com.ctre.phoenix6.configs.TalonFXConfiguration
+import com.ctre.phoenix6.hardware.TalonFX
+import edu.wpi.first.wpilibj.DriverStation
+
+/** Exposes whether one-time mechanism configuration completed successfully. */
+interface FrcMechanismConfigurationStatus {
+    val configurationValid: Boolean
+}
+
+/**
+ * Adds mechanism context to ARESLib's checked Talon configuration result.
+ */
+internal fun Iterable<TalonFX>.applyMechanismConfigChecked(
+    mechanismName: String,
+    block: TalonFXConfiguration.() -> Unit
+): Boolean {
+    val applied = applyConfigChecked(block = block)
+    if (!applied) reportConfigurationFailure("$mechanismName configuration failed")
+    return applied
+}
+
+internal fun reportConfigurationFailure(message: String) {
+    runCatching { DriverStation.reportError("ARES: $message; mechanism outputs inhibited", false) }
+        .onFailure { System.err.println("ARES: $message; mechanism outputs inhibited") }
+}
