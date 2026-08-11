@@ -134,4 +134,20 @@ class FRCTeleOpDriveControllerTest {
         val speed = Math.hypot(vx, vy)
         assertTrue(speed <= 6.5)
     }
+
+    @Test
+    fun driveOnlyAuthorityDoesNotDispatchLegacyMechanisms() {
+        controllerState.leftStickY = -1.0f
+        controllerState.leftTrigger = 1.0f
+        controllerState.a = true
+
+        teleOpController.drivePeriodic()
+
+        assertNotEquals(0.0, robot.store.state.drive.xVelocityMetersPerSecond)
+        val marvin = robot.store.state.superstructure.marvin
+        assertFalse(marvin.slamtakeActive)
+        assertEquals(0.0, marvin.intake.targetRollerVelocityRps)
+        assertEquals(0.0, marvin.floor.targetVelocityRps)
+        assertEquals(0.0, marvin.feeder.targetVelocityRps)
+    }
 }

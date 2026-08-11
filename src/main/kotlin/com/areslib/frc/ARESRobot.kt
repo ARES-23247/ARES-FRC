@@ -33,6 +33,11 @@ import com.areslib.frc.robot.FRCAutoOrchestrator
 import com.areslib.frc.robot.FrcAutoCapabilities
 import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.frc.robot.FrcSysIdController
+import com.areslib.frc.vision.FrcLocalizationCalibrationSession
+import com.areslib.frc.vision.FrcVisionTracker
+import com.areslib.frc.generatedruntime.FrcControllerBindingHost
+import com.areslib.frc.generated.GeneratedAresProject
+import com.areslib.frc.generatedruntime.selectDefaultGeneratedControlScheme
 
 /**
  * Current Driver Station alliance in the platform-neutral ARES state model.
@@ -70,6 +75,10 @@ class ARESRobot : TimedRobot() {
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
     private lateinit var sysIdController: FrcSysIdController
+    private var generatedControllerBindings: FrcControllerBindingHost? = null
+    private var localizationCalibration: FrcLocalizationCalibrationSession? = null
+    private var localizationVisionTracker: FrcVisionTracker? = null
+    private val calibrationButtonState = BooleanArray(12)
 
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
     private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
@@ -263,6 +272,7 @@ class ARESRobot : TimedRobot() {
         FrcAutoCapabilities.register()
         autoOrchestrator = FRCAutoOrchestrator(robot, sim)
         autoOrchestrator.publishCatalog()
+        installGeneratedControllerBindingsFromProject()
 
         addPeriodic({
             try {
@@ -310,6 +320,7 @@ class ARESRobot : TimedRobot() {
     override fun disabledInit() {
         if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
         if (::sysIdController.isInitialized) sysIdController.stop()
+        generatedControllerBindings?.cancel()
         controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
         coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
     }
@@ -322,15 +333,59 @@ class ARESRobot : TimedRobot() {
     override fun teleopInit() {
         autoOrchestrator.stop()
         teleOpController.teleopInit()
+        generatedControllerBindings?.cancel()
     }
 
     override fun teleopPeriodic() {
-        teleOpController.teleopPeriodic()
+        val generatedBindings = generatedControllerBindings
+        if (generatedBindings == null) {
+            teleOpController.teleopPeriodic()
+        } else {
+            generatedBindings.update()
+            // Generated bindings own mechanisms. Legacy stick drive remains the explicit drive
+            // owner unless a generated routine is actively following a path.
+            if (!autoOrchestrator.generatedRoutineOwnsDrive()) {
+                teleOpController.drivePeriodic()
+            }
+        }
+    }
+
+    private fun installGeneratedControllerBindingsFromProject() {
+        val schemeId = selectDefaultGeneratedControlScheme(GeneratedAresProject.knownControlSchemeIds)
+        if (schemeId == null) {
+            robot.telemetry.putString("ARES/Controls/Source", "legacy")
+            return
+        }
+        runCatching { autoOrchestrator.createControllerBindingHost(schemeId) }
+            .onSuccess { host ->
+                installGeneratedControllerBindings(host)
+                robot.telemetry.putString("ARES/Controls/Source", "generated:$schemeId")
+            }
+            .onFailure { error ->
+                installGeneratedControllerBindings(null)
+                val message = "Generated controls '$schemeId' were rejected; using legacy: " +
+                    (error.message ?: error::class.java.simpleName)
+                robot.telemetry.putString("ARES/Controls/Error", message)
+                DriverStation.reportWarning(message, false)
+            }
+    }
+
+    /**
+     * Installs a complete generated scheme at the platform boundary.
+     *
+     * The generated catalog currently declares no schemes, so production retains the proven
+     * hardcoded controller. Once code generation emits a complete graph, robot initialization can
+     * install it here without mixing duplicate actions from two teleop owners.
+     */
+    internal fun installGeneratedControllerBindings(host: FrcControllerBindingHost?) {
+        generatedControllerBindings?.cancel()
+        generatedControllerBindings = host
     }
 
     // ── Autonomous ──
 
     override fun autonomousInit() {
+        generatedControllerBindings?.cancel()
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         autoOrchestrator.autonomousInit()
     }
@@ -341,6 +396,74 @@ class ARESRobot : TimedRobot() {
 
     override fun autonomousExit() {
         autoOrchestrator.stop()
+    }
+
+    // ── Localization calibration (Driver Station Test mode) ──
+
+    override fun testInit() {
+        generatedControllerBindings?.cancel()
+        autoOrchestrator.stop()
+        robot.swerveDrive.brake()
+        localizationCalibration?.close()
+        calibrationButtonState.fill(false)
+        val tracker = robot.visionTracker as? FrcVisionTracker
+        localizationVisionTracker = tracker
+        localizationCalibration = FrcLocalizationCalibrationSession(
+            store = robot.store,
+            swerveIO = robot.swerveDrivetrainIO,
+            measurementsProvider = { tracker?.visionInputs?.measurements ?: emptyList() }
+        )
+    }
+
+    override fun testPeriodic() {
+        val calibration = localizationCalibration ?: return
+        teleOpController.drivePeriodic()
+        val timestampMs = com.areslib.util.RobotClock.currentTimeMillis()
+        val pov = controller.pov
+
+        if (calibrationRising(0, controller.aButton)) calibration.toggleContinuousRecording()
+        if (calibrationRising(1, controller.bButton)) calibration.cycleTestType()
+        localizationVisionTracker?.fusionEnabled = when (calibration.testType) {
+            com.areslib.math.estimation.LocalizationCalibrationTestType.ODOMETRY_TRANSLATION,
+            com.areslib.math.estimation.LocalizationCalibrationTestType.ODOMETRY_ROTATION -> false
+            else -> true
+        }
+        if (calibrationRising(2, controller.xButton)) calibration.markStart(timestampMs)
+        if (calibrationRising(3, controller.yButton)) calibration.markEnd(timestampMs)
+        if (calibrationRising(4, controller.backButton)) calibration.zeroTruth()
+        if (calibrationRising(5, controller.startButton)) calibration.seedPoseToTruth(timestampMs)
+        if (calibrationRising(6, controller.leftBumperButton)) {
+            calibration.adjustTruth(deltaHeading = -Math.toRadians(5.0))
+        }
+        if (calibrationRising(7, controller.rightBumperButton)) {
+            calibration.adjustTruth(deltaHeading = Math.toRadians(5.0))
+        }
+        if (calibrationRising(8, pov == 0)) calibration.adjustTruth(deltaY = 0.05)
+        if (calibrationRising(9, pov == 180)) calibration.adjustTruth(deltaY = -0.05)
+        if (calibrationRising(10, pov == 270)) calibration.adjustTruth(deltaX = -0.05)
+        if (calibrationRising(11, pov == 90)) calibration.adjustTruth(deltaX = 0.05)
+
+        calibration.periodic(timestampMs)
+        robot.telemetry.putString("Calibration/Localization/TestType", calibration.testType.name)
+        robot.telemetry.putNumber("Calibration/Localization/RunId", calibration.runId.toDouble())
+        robot.telemetry.putBoolean("Calibration/Localization/Recording", calibration.continuousRecording)
+        robot.telemetry.putNumber("Calibration/Localization/TruthX", calibration.truthX)
+        robot.telemetry.putNumber("Calibration/Localization/TruthY", calibration.truthY)
+        robot.telemetry.putNumber("Calibration/Localization/TruthHeadingRad", calibration.truthHeading)
+        robot.telemetry.putNumber("Calibration/Localization/DroppedSamples", calibration.droppedSampleCount.toDouble())
+    }
+
+    override fun testExit() {
+        localizationVisionTracker?.fusionEnabled = true
+        localizationVisionTracker = null
+        localizationCalibration?.close()
+        localizationCalibration = null
+    }
+
+    private fun calibrationRising(index: Int, pressed: Boolean): Boolean {
+        val rising = pressed && !calibrationButtonState[index]
+        calibrationButtonState[index] = pressed
+        return rising
     }
 
     // ── Simulation ──

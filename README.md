@@ -50,6 +50,10 @@ Run these commands from this directory in PowerShell:
 # Compile and run all JUnit 5 tests
 .\gradlew.bat test
 
+# Regenerate and verify Kotlin compiled from the offline .ares project
+.\gradlew.bat generateAresProject
+.\gradlew.bat verifyAresProject
+
 # Start WPILib desktop simulation
 .\gradlew.bat simulateJava
 
@@ -85,11 +89,12 @@ cd ..\ARESLib-Kotlin
 | Path | Purpose |
 |---|---|
 | `.ares-robot.json` | Offline project identity used by Analytics workspace discovery |
+| `.ares/` | Canonical routines, autonomous/action catalogs, controller profiles, and control schemes |
 | `src/main/kotlin/com/areslib/frc/ARESRobot.kt` | `TimedRobot` lifecycle and real/sim composition root |
 | `src/main/kotlin/com/areslib/frc/robot/` | Teleop drive and autonomous orchestration |
 | `src/main/kotlin/com/areslib/frc/marvin/` | Season state, actions, reducer, facades, and mechanism controllers |
 | `src/main/kotlin/com/areslib/frc/hardware/` | Marvin XIX TalonFX IO bindings |
 | `src/main/kotlin/com/areslib/frc/sim/` | dyn4j physics, simulated IO, field construction, and telemetry |
-| `src/main/deploy/ares/` | Native autos and offline action catalog copied to the RoboRIO |
+| `src/main/kotlin/com/areslib/frc/generated/` | Deterministic checked-in Kotlin generated from `.ares/` |
 | `src/main/deploy/paths/` | Canonical field geometry consumed by simulation and Analytics |
 | `src/test/kotlin/` | Lifecycle, reducer, IO, simulation, and autonomous regression tests |

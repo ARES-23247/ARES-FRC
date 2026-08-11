@@ -10,6 +10,7 @@ import com.areslib.frc.marvin.SetFlywheelSpeed
 import com.areslib.frc.marvin.SetIntakePivot
 import com.areslib.frc.marvin.SetIntakeRollers
 import com.areslib.frc.marvin.SetTransferActive
+import com.areslib.frc.generated.GeneratedAresProjectCapabilities
 import com.areslib.pathing.CommandKey
 import com.areslib.pathing.NamedCommandDescriptor
 import com.areslib.pathing.NamedCommands
@@ -17,13 +18,13 @@ import com.areslib.sequencer.Task
 import com.areslib.state.RobotState
 
 /**
- * Marvin actions available to native ARES autos and the visual editor.
+ * Marvin actions available to generated ARES routines and legacy import markers.
  *
- * This catalog is the source-level counterpart of `src/main/deploy/ares/auto-capabilities.json`.
- * Every factory creates a fresh task because task lifecycle state may never be shared between
- * marker invocations or autonomous runs.
+ * The checked-in `.ares/action-catalog.json` drives generated type safety. These descriptors keep
+ * the existing named-marker adapter discoverable during migration. Every factory creates a fresh
+ * task because task lifecycle state may never be shared between marker invocations or runs.
  */
-object FrcAutoCapabilities {
+object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     val INTAKE_COLLECT = NamedCommandDescriptor(
         key = CommandKey("intake.collect"),
         displayName = "Collect note",
@@ -72,38 +73,40 @@ object FrcAutoCapabilities {
 
     /** Registers or replaces all FRC autonomous task factories. */
     fun register() {
-        NamedCommands.register(INTAKE_COLLECT) {
-            InstantAutoActionsTask(INTAKE_COLLECT.displayName) {
-                listOf(
-                    SetIntakePivot(deployed = true),
-                    SetIntakeRollers(INTAKE_ROLLER_RPS),
-                    SetFloorSpeed(FLOOR_ROLLER_RPS)
-                )
-            }
-        }
-        NamedCommands.register(INTAKE_STOP) {
-            InstantAutoActionsTask(INTAKE_STOP.displayName) {
-                listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0))
-            }
-        }
-        NamedCommands.register(INTAKE_STOW) {
-            InstantAutoActionsTask(INTAKE_STOW.displayName) {
-                listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0), SetIntakePivot(deployed = false))
-            }
-        }
-        NamedCommands.register(SHOOTER_PREPARE) {
-            InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
-                listOf(
-                    SetFlywheelSpeed(AUTO_SHOT_RPM),
-                    SetFlywheelActive(active = true)
-                )
-            }
-        }
-        NamedCommands.register(SHOOTER_FEED_WHEN_READY) { FeedWhenReadyTask() }
-        NamedCommands.register(SHOOTER_STOP) {
-            InstantAutoActionsTask(SHOOTER_STOP.displayName, ::shooterStopActions)
-        }
+        NamedCommands.register(INTAKE_COLLECT) { actionIntakeCollect() }
+        NamedCommands.register(INTAKE_STOP) { actionIntakeStop() }
+        NamedCommands.register(INTAKE_STOW) { actionIntakeStow() }
+        NamedCommands.register(SHOOTER_PREPARE) { actionShooterPrepare() }
+        NamedCommands.register(SHOOTER_FEED_WHEN_READY) { actionShooterFeedWhenReady() }
+        NamedCommands.register(SHOOTER_STOP) { actionShooterStop() }
     }
+
+    override fun actionIntakeCollect(): Task = InstantAutoActionsTask(INTAKE_COLLECT.displayName) {
+        listOf(
+            SetIntakePivot(deployed = true),
+            SetIntakeRollers(INTAKE_ROLLER_RPS),
+            SetFloorSpeed(FLOOR_ROLLER_RPS)
+        )
+    }
+
+    override fun actionIntakeStop(): Task = InstantAutoActionsTask(INTAKE_STOP.displayName) {
+        listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0))
+    }
+
+    override fun actionIntakeStow(): Task = InstantAutoActionsTask(INTAKE_STOW.displayName) {
+        listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0), SetIntakePivot(deployed = false))
+    }
+
+    override fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
+        listOf(SetFlywheelSpeed(AUTO_SHOT_RPM), SetFlywheelActive(active = true))
+    }
+
+    override fun actionShooterFeedWhenReady(): Task = FeedWhenReadyTask()
+
+    override fun actionShooterStop(): Task =
+        InstantAutoActionsTask(SHOOTER_STOP.displayName, ::shooterStopActions)
+
+    override fun conditionShooterReady(): (RobotState) -> Boolean = ::flywheelIsReady
 
     internal fun allStopActions(): List<RobotAction> = buildList {
         addAll(shooterStopActions())
@@ -179,12 +182,13 @@ object FrcAutoCapabilities {
             super.releaseRuntimeState()
         }
 
-        private fun flywheelIsReady(state: RobotState): Boolean {
-            val flywheel = state.superstructure.marvin.flywheel
-            return flywheel.velocityValid &&
-                flywheel.targetVelocityRpm > MINIMUM_READY_RPM &&
-                kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE
-        }
+    }
+
+    internal fun flywheelIsReady(state: RobotState): Boolean {
+        val flywheel = state.superstructure.marvin.flywheel
+        return flywheel.velocityValid &&
+            flywheel.targetVelocityRpm > MINIMUM_READY_RPM &&
+            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE
     }
 
     private const val AUTO_SHOT_RPM = 4_000.0

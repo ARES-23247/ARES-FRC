@@ -80,6 +80,32 @@ class FRCTeleOpDriveController(
     fun teleopInit() {
     }
 
+    /**
+     * Runs only the legacy drivetrain owner for a generated mechanism-control scheme.
+     *
+     * This deliberately excludes shooting assists and every mechanism dispatch. A generated
+     * routine containing a drive step suppresses this method at the ARESRobot boundary, leaving
+     * the path follower as the sole drivetrain owner for that frame.
+     */
+    fun drivePeriodic() {
+        try {
+            if (coPilotControllerState.x) {
+                robot.drive.joystickDrive(0.0, 0.0, 0.0, isXLock = true)
+                return
+            }
+            val allianceScale = if (cachedAlliance == DriverStation.Alliance.Red) -1.0 else 1.0
+            val forward = MathUtil.applyDeadband(-controllerState.leftStickY.toDouble(), 0.1) *
+                4.5 * allianceScale
+            val strafe = MathUtil.applyDeadband(-controllerState.leftStickX.toDouble(), 0.1) *
+                4.5 * allianceScale
+            val rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
+            robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
+        } catch (error: Exception) {
+            DriverStation.reportError("Exception in drivePeriodic: ${error.message}", false)
+            robot.safeHardware()
+        }
+    }
+
     /** Processes one cached 20 ms input snapshot and emits drive/mechanism setpoints. */
     fun teleopPeriodic() {
         try {

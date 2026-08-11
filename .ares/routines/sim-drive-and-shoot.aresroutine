@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "documentId": "sim-drive-and-shoot",
+  "revision": 1,
+  "name": "Simulation Drive and Shoot",
+  "description": "Exercises field motion, markers, readiness gating, and safe cleanup.",
+  "steps": [
+    {
+      "kind": "DRIVE_TO",
+      "arguments": {},
+      "drive": {
+        "target": {"xMeters":3.6,"yMeters":2.65,"headingRadians":0.0},
+        "motionPresetKey": "safe",
+        "markers": [
+          {"progress":0.1,"actionKey":"shooter.prepare"},
+          {"progress":0.45,"actionKey":"intake.collect"}
+        ],
+        "duringActionKeys": [],
+        "arrivalActionKeys": ["shooter.feedWhenReady"]
+      },
+      "children": [],
+      "elseChildren": []
+    },
+    {"kind":"WAIT","arguments":{},"durationSeconds":0.5,"children":[],"elseChildren":[]},
+    {"kind":"ACTION","actionKey":"shooter.stop","arguments":{},"children":[],"elseChildren":[]},
+    {"kind":"ACTION","actionKey":"intake.stow","arguments":{},"children":[],"elseChildren":[]}
+  ]
+}

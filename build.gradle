@@ -25,6 +25,10 @@ application {
     mainClass = ROBOT_MAIN_CLASS
 }
 
+configurations {
+    aresCodegen
+}
+
 // Define my targets (RoboRIO) and artifacts (deployable files)
 // This is added by GradleRIO's backing project Embedder.
 deploy {
@@ -71,6 +75,8 @@ dependencies {
         exclude group: 'edu.wpi.first.hal'
     }
     implementation 'com.areslib:frc-hardware:1.0-SNAPSHOT'
+    aresCodegen 'com.areslib:core:1.0-SNAPSHOT'
+    aresCodegen 'com.google.code.gson:gson:2.10.1'
     implementation 'org.dyn4j:dyn4j:4.2.2'
     
     implementation wpi.java.deps.wpilib()
@@ -183,4 +189,35 @@ task fetchOffsets {
             println "ARES Swerve: Failed to fetch offsets from 10.232.47.2. Deploy baseline intact. Error: ${e.message}"
         }
     }
+}
+
+// Canonical `.ares` documents are the source of truth. Generated Kotlin is committed so robot
+// builds remain offline and deterministic; compilation fails if a GUI/document edit is stale.
+def generatedAresSource = file("src/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt")
+
+tasks.register("generateAresProject", JavaExec) {
+    group = "ARES"
+    description = "Generate checked-in Kotlin from the offline .ares project documents."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC"
+}
+
+tasks.register("verifyAresProject", JavaExec) {
+    group = "verification"
+    description = "Fail when generated ARES Kotlin does not match the checked-in project documents."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC",
+        "--check"
+}
+
+tasks.named("compileKotlin").configure {
+    dependsOn tasks.named("verifyAresProject")
 }

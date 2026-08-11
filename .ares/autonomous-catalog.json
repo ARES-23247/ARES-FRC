@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "projectId": "team23247-marvin-xix",
+  "revision": 1,
+  "defaultEntryId": "do-nothing",
+  "entries": [
+    {"entryId":"do-nothing","displayName":"Do Nothing","description":"Safe fallback; hold position and run no mechanisms.","routineId":"do-nothing","startingPose":{"xMeters":0.5,"yMeters":0.5,"headingRadians":0.0},"authoredAlliance":"BLUE","mirrorForOppositeAlliance":true,"sortOrder":0,"enabled":true},
+    {"entryId":"sim-drive-and-shoot","displayName":"Simulation Drive and Shoot","description":"Drive, prepare, collect, feed, and stop.","routineId":"sim-drive-and-shoot","startingPose":{"xMeters":2.0,"yMeters":2.0,"headingRadians":0.0},"authoredAlliance":"BLUE","mirrorForOppositeAlliance":true,"sortOrder":1,"enabled":true}
+  ]
+}
