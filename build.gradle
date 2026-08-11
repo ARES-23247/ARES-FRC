@@ -194,6 +194,8 @@ task fetchOffsets {
 // Canonical `.ares` documents are the source of truth. Generated Kotlin is committed so robot
 // builds remain offline and deterministic; compilation fails if a GUI/document edit is stale.
 def generatedAresSource = file("src/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt")
+def generatedSubsystemSource = file("src/main/kotlin/com/areslib/frc/generated/subsystems")
+def generatedSubsystemTests = file("src/test/kotlin/com/areslib/frc/generated/subsystems")
 
 tasks.register("generateAresProject", JavaExec) {
     group = "ARES"
@@ -203,7 +205,10 @@ tasks.register("generateAresProject", JavaExec) {
     args "--project", projectDir.absolutePath,
         "--output", generatedAresSource.absolutePath,
         "--package", "com.areslib.frc.generated",
-        "--platform", "FRC"
+        "--platform", "FRC",
+        "--subsystems-output", generatedSubsystemSource.absolutePath,
+        "--subsystems-test-output", generatedSubsystemTests.absolutePath,
+        "--subsystems-package", "com.areslib.frc.generated.subsystems"
 }
 
 tasks.register("verifyAresProject", JavaExec) {
@@ -215,6 +220,9 @@ tasks.register("verifyAresProject", JavaExec) {
         "--output", generatedAresSource.absolutePath,
         "--package", "com.areslib.frc.generated",
         "--platform", "FRC",
+        "--subsystems-output", generatedSubsystemSource.absolutePath,
+        "--subsystems-test-output", generatedSubsystemTests.absolutePath,
+        "--subsystems-package", "com.areslib.frc.generated.subsystems",
         "--check"
 }
 

@@ -37,6 +37,7 @@ import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
 import com.areslib.frc.generatedruntime.FrcControllerBindingHost
 import com.areslib.frc.generated.GeneratedAresProject
+import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
 import com.areslib.frc.generatedruntime.selectDefaultGeneratedControlScheme
 
 /**
@@ -218,6 +219,9 @@ class ARESRobot : TimedRobot() {
                 )
             }
         }
+
+        // Generated subsystem DSL participates in the same lifecycle as handwritten mechanisms.
+        GeneratedSubsystemRegistry.createAll(isReal).forEach(robot::registerSubsystem)
 
         // 5. Create and register the MarvinSuperstructure subsystem
         val superstructureSubsystem = MarvinSuperstructure(
