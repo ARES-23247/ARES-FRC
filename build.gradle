@@ -35,7 +35,7 @@ deploy {
     targets {
         roborio(getTargetTypeClass('RoboRIO')) {
             // Team number is loaded from frcYear / team config, or we default it
-            team = project.hasProperty('teamNumber') ? project.property('teamNumber') as Integer : 9999
+            team = project.hasProperty('teamNumber') ? project.property('teamNumber') as Integer : 23247
             debug = project.hasProperty('debug') ? project.property('debug') : false
             
             artifacts {
@@ -179,14 +179,40 @@ task fetchOffsets {
     group = "ARES Swerve"
     doLast {
         def targetFile = file("src/main/deploy/swerve_offsets.json")
+        def targetPath = targetFile.toPath()
+        def temporaryPath = java.nio.file.Files.createTempFile(targetPath.parent, "swerve_offsets_", ".json")
         println "ARES Swerve: Fetching runtime swerve offsets from 10.232.47.2..."
         try {
             exec {
-                commandLine "scp", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes", "lvuser@10.232.47.2:/home/lvuser/swerve_offsets_runtime.json", targetFile.path
+                commandLine "scp", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
+                    "lvuser@10.232.47.2:/home/lvuser/swerve_offsets_runtime.json", temporaryPath.toString()
             }
-            println "ARES Swerve: Successfully fetched runtime swerve offsets to ${targetFile.path}!"
+            def parsed = new groovy.json.JsonSlurper().parse(temporaryPath.toFile())
+            def requiredKeys = ["frontLeft", "frontRight", "backLeft", "backRight"] as Set
+            if (!(parsed instanceof Map) || parsed.keySet() != requiredKeys) {
+                throw new GradleException("Expected exactly ${requiredKeys.sort()} in fetched offset JSON")
+            }
+            requiredKeys.each { key ->
+                def value = parsed[key]
+                if (!(value instanceof Number) || !Double.isFinite(value.doubleValue()) ||
+                    Math.abs(value.doubleValue()) > 1.0d) {
+                    throw new GradleException("Offset '${key}' must be a finite rotation within [-1, 1]")
+                }
+            }
+            java.nio.file.Files.move(
+                temporaryPath,
+                targetPath,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+            println "ARES Swerve: Validated and atomically installed offsets at ${targetFile.path}."
         } catch (Exception e) {
-            println "ARES Swerve: Failed to fetch offsets from 10.232.47.2. Deploy baseline intact. Error: ${e.message}"
+            throw new GradleException(
+                "ARES Swerve: fetch/validation failed; deploy baseline remains intact: ${e.message}",
+                e
+            )
+        } finally {
+            java.nio.file.Files.deleteIfExists(temporaryPath)
         }
     }
 }

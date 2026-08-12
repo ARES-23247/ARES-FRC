@@ -17,8 +17,15 @@ import com.ctre.phoenix6.signals.NeutralModeValue
  */
 class FRCClimberHardwareIO(
     private val motor: TalonFX
-) : ClimberIO {
+) : ClimberIO, FrcMechanismConfigurationStatus, FrcMechanismHomingStatus, AutoCloseable {
+    private val startupConfigurationValid: Boolean
+    @Volatile private var resetDetected = false
+    override val configurationValid: Boolean
+        get() = startupConfigurationValid && !resetDetected
+    @Volatile override var homed: Boolean = false
+        private set
     @Volatile private var cachedPositionValid = false
+    @Volatile private var cachedCurrentValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -31,7 +38,7 @@ class FRCClimberHardwareIO(
         setUpdateFrequencies(50.0, climberPosition)
         setUpdateFrequencies(10.0, climberCurrent)
 
-        listOf(motor).applyConfig {
+        startupConfigurationValid = listOf(motor).applyMechanismConfigChecked("Climber") {
             // Neutral mode and inversions
             MotorOutput.NeutralMode = NeutralModeValue.Brake
             MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive
@@ -60,12 +67,31 @@ class FRCClimberHardwareIO(
     }
 
     override fun refresh() {
-        cachedPositionValid = BaseStatusSignal.refreshAll(climberPosition).isOK &&
+        if (anyTalonResetOccurred(motor)) {
+            resetDetected = true
+            homed = false
+        }
+        val positionRefreshOk = BaseStatusSignal.refreshAll(climberPosition).isOK
+        cachedPositionValid = homed && positionRefreshOk &&
             climberPosition.valueAsDouble.isFinite()
-        BaseStatusSignal.refreshAll(climberCurrent)
+        cachedCurrentValid = BaseStatusSignal.refreshAll(climberCurrent).isOK &&
+            climberCurrent.valueAsDouble.isFinite() && climberCurrent.valueAsDouble >= 0.0
+    }
+
+    override fun homeAtKnownZero(): Boolean {
+        val stopped = motor.setControl(voltageRequest.withOutput(0.0)).isOK
+        val zeroed = motor.setPosition(0.0).isOK
+        homed = configurationValid && stopped && zeroed
+        cachedPositionValid = false
+        if (!homed) reportConfigurationFailure("Climber zeroing failed")
+        return homed
     }
 
     override fun setTargetPositionRotations(rotations: Double) {
+        if (!configurationValid || !homed || !positionValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         val safeRotations = rotations.takeIf { it.isFinite() }?.coerceIn(
             com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMinRotations,
             com.areslib.frc.marvin.MarvinConfig.MechanismLimits.climberMaxRotations
@@ -75,6 +101,10 @@ class FRCClimberHardwareIO(
 
     override fun setTargetPositionRotations(rotations: Double, maxEffortScale: Double) {
         val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        if (!configurationValid || !homed || !positionValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         if (effortScale >= FULL_EFFORT_THRESHOLD) {
             setTargetPositionRotations(rotations)
             return
@@ -89,7 +119,12 @@ class FRCClimberHardwareIO(
     }
 
     override fun setAppliedVoltage(volts: Double) {
-        val safeVolts = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        val safeRequest = volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+        val requestedVolts = if (
+            configurationValid && homed &&
+            (kotlin.math.abs(safeRequest) <= ZERO_OUTPUT_EPSILON || positionValid)
+        ) safeRequest else 0.0
+        val safeVolts = requestedVolts.coerceIn(-12.0, 12.0)
         motor.setControl(voltageRequest.withOutput(safeVolts))
     }
 
@@ -102,9 +137,15 @@ class FRCClimberHardwareIO(
     override val currentAmps: Double
         get() = climberCurrent.valueAsDouble
 
+    override fun isCurrentReadingValid(readingAmps: Double): Boolean =
+        cachedCurrentValid && readingAmps.isFinite() && readingAmps >= 0.0
+
+    override fun close() = closeTalons(motor)
+
     private companion object {
         const val POSITION_KP_VOLTS_PER_ROTATION = 12.0
         const val NOMINAL_VOLTAGE = 12.0
         const val FULL_EFFORT_THRESHOLD = 0.999
+        const val ZERO_OUTPUT_EPSILON = 1e-9
     }
 }

@@ -1,6 +1,7 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.hardware.FloorIO
+import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
@@ -13,7 +14,12 @@ import com.ctre.phoenix6.hardware.TalonFX
  */
 class FRCFloorHardwareIO(
     private val motor: TalonFX
-) : FloorIO {
+) : FloorIO, FrcMechanismConfigurationStatus, AutoCloseable {
+    private val startupConfigurationValid: Boolean
+    @Volatile private var resetDetected = false
+    override val configurationValid: Boolean
+        get() = startupConfigurationValid && !resetDetected
+    @Volatile private var cachedCurrentValid = false
 
     private val voltageRequest = VoltageOut(0.0)
 
@@ -25,7 +31,7 @@ class FRCFloorHardwareIO(
         setUpdateFrequencies(20.0, floorVelocity)
         setUpdateFrequencies(10.0, floorCurrent)
 
-        listOf(motor).applyConfig {
+        startupConfigurationValid = listOf(motor).applyMechanismConfigChecked("Floor roller") {
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.CounterClockwise_Positive
             Feedback.SensorToMechanismRatio = 1.0
@@ -38,8 +44,10 @@ class FRCFloorHardwareIO(
     }
 
     override fun refresh() {
-        floorVelocity.refresh()
-        floorCurrent.refresh()
+        if (anyTalonResetOccurred(motor)) resetDetected = true
+        BaseStatusSignal.refreshAll(floorVelocity)
+        cachedCurrentValid = BaseStatusSignal.refreshAll(floorCurrent).isOK &&
+            floorCurrent.valueAsDouble.isFinite() && floorCurrent.valueAsDouble >= 0.0
     }
 
     /**
@@ -48,8 +56,9 @@ class FRCFloorHardwareIO(
      * (FLOOR_KV * rps * brownoutScale), so no TalonFX Slot0 PID gains are configured.
      */
     override fun setAppliedVoltage(volts: Double) {
+        val requestedVolts = if (configurationValid) volts else 0.0
         motor.setControl(voltageRequest.withOutput(
-            volts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
+            requestedVolts.takeIf { it.isFinite() }?.coerceIn(-12.0, 12.0) ?: 0.0
         ))
     }
 
@@ -58,4 +67,9 @@ class FRCFloorHardwareIO(
 
     override val currentAmps: Double
         get() = floorCurrent.valueAsDouble
+
+    override fun isCurrentReadingValid(readingAmps: Double): Boolean =
+        cachedCurrentValid && readingAmps.isFinite() && readingAmps >= 0.0
+
+    override fun close() = closeTalons(motor)
 }

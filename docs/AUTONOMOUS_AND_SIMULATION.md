@@ -14,8 +14,6 @@ Canonical source files are checked into this repository:
 .ares/action-catalog.json
 .ares/autonomous-catalog.json
 .ares/routines/<id>.aresroutine
-.ares/controllers/<id>.arescontroller
-.ares/controls/<id>.arescontrols
 ```
 
 `project.json` defines the league, coordinate convention, canonical field dimensions, and bumper
@@ -58,32 +56,23 @@ Before motion, `FRCAutoOrchestrator` performs the following fail-closed prefligh
 3. Check the starting pose and every recursively called drive goal against the field using Marvin's current 0.80 m square bumper
    footprint.
 4. Configure the generated action, condition, and drive factories.
-5. Seed dyn4j, CTRE odometry, and Redux pose from the alliance-adjusted starting pose.
+5. Seed dyn4j, CTRE odometry, and Redux pose from the alliance-adjusted starting pose, except that
+   `do-nothing` deliberately preserves the current localized pose.
 6. Request the routine through the shared deterministic `RoutineManager`.
 
 Any failure before or during execution cancels the task tree, zeros drive and season targets,
 invokes hardware safety, publishes `ARES/Auto/Error`, and latches the run blocked.
 
-Legacy `.aresauto`, PathPlanner, and Choreo files are import compatibility only. New routines are
-compiled into the robot program and are not loaded as loose deploy files at runtime.
+Only the checked-in `.ares/` project and its verified generated Kotlin are supported. Loose
+`.aresauto`, PathPlanner, Choreo, and deploy-time capability files are not loaded at runtime.
 
-## Generated controller bindings
+## Controller ownership
 
-Controller profiles store stable logical names plus independent `DESKTOP_GLFW`, `FTC`, and `FRC`
-raw mappings. Control schemes can bind press/release/hold/repeat, chords, analog values,
-thresholds, and hysteretic zones to catalog actions or routines.
-
-The FRC binding host samples `GenericHID` raw axes and buttons into preallocated input frames, which
-preserves Flydigi Vader 5 Pro extras that WPILib Driver Station actually exposes. `ARESRobot` has a
-single-owner lifecycle hook for installing that host and then uses it instead of the hardcoded
-teleop controller. The current generated project declares no complete control scheme, so robot
-initialization does not install a host yet and hardcoded teleop remains authoritative. When a
-scheme is added, its generated runtimes must be assembled and explicitly installed during robot
-initialization; never run both owners together. Verify the FRC mapping on the Driver Station because
-desktop GLFW raw indexes are not interchangeable.
-
-A macro is just a reusable routine assigned to a controller event. Routine policies support ignore,
-restart, queue, parallel, and toggle/cancel behavior, and mode transitions cancel active bindings.
+This project declares no generated controller scheme. Codegen v4 therefore emits no controller
+runtime API, and `ARESRobot` installs only the explicit Marvin season controller. There is no
+compatibility fallback or dormant binding host. If a controller scheme is added later, its FRC
+adapter, validation, and single-owner lifecycle must be introduced deliberately and verified on the
+Driver Station; desktop GLFW raw indexes are not interchangeable with FRC HID indexes.
 
 ## Available Marvin actions
 
@@ -92,8 +81,8 @@ restart, queue, parallel, and toggle/cancel behavior, and mode transitions cance
 | `intake.collect` | Deploys intake and runs intake/floor rollers. |
 | `intake.stop` | Stops intake/floor rollers without moving the pivot. |
 | `intake.stow` | Stops rollers and retracts the pivot. |
-| `shooter.prepare` | Commands the 4000 RPM autonomous preset. |
-| `shooter.feedWhenReady` | Waits up to 2 s for a fresh RPM sample within 150 RPM, then runs feeder/floor. |
+| `shooter.prepare` | Commands the 4000 RPM and 1.55-rotation cowl autonomous preset. |
+| `shooter.feedWhenReady` | Waits up to 2 s for fresh aligned flywheel/cowl observations, then owns one 450 ms feeder/floor transfer. |
 | `shooter.stop` | Clears flywheel, feeder, floor, and transfer targets. |
 
 Place `shooter.feedWhenReady` in a drive goal's **On arrival** list when the chassis should stop and
@@ -109,9 +98,12 @@ Start WPILib desktop simulation with:
 .\gradlew.bat simulateJava
 ```
 
-Choose a generated entry by setting `SmartDashboard/SelectedAuto`; the repository includes
-`sim-drive-and-shoot`. The simulator runs the production compiler, task executor, Redux actions,
-swerve follower, and mechanism IO against a deterministic dyn4j world.
+Choose a production-generated entry by setting `SmartDashboard/SelectedAuto`. Only match-reviewed
+entries from `.ares/autonomous-catalog.json` appear in that chooser; the checked-in default is the
+safe `do-nothing` routine. The drive-and-shoot scenario lives under `src/test/resources/ares/` and is
+loaded only by automated tests, so simulation scaffolding cannot be selected on a deployed robot.
+Those tests still exercise the production compiler, task executor, Redux actions, swerve follower,
+and mechanism IO against a deterministic dyn4j world.
 
 Before deployment:
 

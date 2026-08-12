@@ -4,17 +4,15 @@ import com.areslib.action.RobotAction
 import com.areslib.frc.Dyn4jSimulation
 import com.areslib.frc.FrcSwerveRobot
 import com.areslib.frc.generated.GeneratedAresProject
-import com.areslib.frc.generatedruntime.FrcControllerBindingHost
-import com.areslib.frc.generatedruntime.FrcControllerBindingSlot
 import com.areslib.frc.generatedruntime.FrcGeneratedRoutineCapabilities
-import com.areslib.frc.generatedruntime.FrcGeneratedControlTaskScheduler
-import com.areslib.frc.generatedruntime.FrcGeneratedControllerPorts
 import com.areslib.frc.generatedruntime.requireFrcRoutinePoseInsideField
-import com.areslib.frc.marvin.SetClimberVoltage
-import com.areslib.frc.marvin.StopSlamtake
+import com.areslib.frc.marvin.SetMechanismSafetyInhibit
+import com.areslib.frc.marvin.LatchMechanismSafetyFault
+import com.areslib.frc.marvin.marvin
 import com.areslib.math.geometry.Pose2d
 import com.areslib.routine.AutonomousCatalogEntry
 import com.areslib.routine.RoutineManager
+import com.areslib.routine.RoutineDocument
 import com.areslib.routine.RoutineRequestResult
 import com.areslib.routine.RoutineStartPolicy
 import com.areslib.routine.RoutineStep
@@ -64,30 +62,33 @@ class FrcAutonomousSelector(
  * Executes one generated ARES routine during the FRC autonomous period.
  *
  * Selection is sampled and locked exactly once in [autonomousInit]. Every routine and autonomous
- * entry is compiled into the robot program; deploy-time `.aresauto`, PathPlanner, and Choreo files
- * are import compatibility only. Missing selections fall back to the generated do-nothing entry,
- * while invalid catalogs, field poses, task compilation, and runtime failures fail closed.
+ * entry is compiled into the robot program; no loose runtime auto format is supported. Missing
+ * selections fall back to the generated do-nothing entry, while invalid catalogs, field poses,
+ * task compilation, and runtime failures fail closed.
  */
 class FRCAutoOrchestrator @JvmOverloads constructor(
     private val robot: FrcSwerveRobot,
     private val sim: Dyn4jSimulation? = null,
-    private val selectionProvider: () -> String = ::dashboardSelection
+    private val selectionProvider: () -> String = ::dashboardSelection,
+    autonomousEntries: List<AutonomousCatalogEntry> = GeneratedAresProject.autonomousEntries,
+    defaultAutonomousEntryId: String? = GeneratedAresProject.DEFAULT_AUTONOMOUS_ENTRY_ID,
+    private val routineDocuments: Map<String, RoutineDocument> = GeneratedAresProject.routines
 ) {
     private val selector = FrcAutonomousSelector(
-        GeneratedAresProject.autonomousEntries,
-        GeneratedAresProject.DEFAULT_AUTONOMOUS_ENTRY_ID
+        autonomousEntries,
+        defaultAutonomousEntryId
     )
     private val capabilities = FrcGeneratedRoutineCapabilities(robot)
     private val routineManager = RoutineManager(
         bindings = GeneratedAresProject.runtimeBindings(capabilities),
         stateProvider = { robot.store.state },
         dispatch = robot.store::dispatch
-    ).also { manager -> manager.replaceDocuments(GeneratedAresProject.routines.values) }
+    ).also { manager -> manager.replaceDocuments(routineDocuments.values) }
 
     private var activeExecutionId: Long? = null
     private var autoFaulted = false
     private var finished = true
-    private var selectedAutoId = GeneratedAresProject.DEFAULT_AUTONOMOUS_ENTRY_ID ?: "do-nothing"
+    private var selectedAutoId = defaultAutonomousEntryId ?: "do-nothing"
     private var status = "Idle"
 
     /** Publishes generated choices and initializes the dashboard selection without robot IO. */
@@ -105,55 +106,19 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
         robot.telemetry.putString("ARES/Auto/Source", "generated:${GeneratedAresProject.CONTENT_SHA256}")
     }
 
-    /**
-     * Creates the complete generated teleop graph around the same routine manager used by auto.
-     * Driver and operator slots map deterministically to DS ports 0 and 1; any other slot fails
-     * installation so robot initialization can retain the legacy controls safely.
-     */
-    fun createControllerBindingHost(schemeId: String): FrcControllerBindingHost {
-        val taskScheduler = FrcGeneratedControlTaskScheduler(
-            stateProvider = { robot.store.state },
-            dispatch = robot.store::dispatch
-        )
-        val runtimes = GeneratedAresProject.createControllerRuntimes(
-            schemeId = schemeId,
-            registry = capabilities,
-            routineManager = routineManager,
-            taskSink = taskScheduler
-        )
-        require(runtimes.isNotEmpty()) { "Generated scheme '$schemeId' has no controller slots" }
-        val slots = runtimes.entries.sortedBy { it.key }.map { (slotId, runtime) ->
-            FrcControllerBindingSlot(
-                slotId = slotId,
-                port = FrcGeneratedControllerPorts.resolve(slotId),
-                runtime = runtime
-            )
-        }
-        return FrcControllerBindingHost(
-            slots = slots,
-            afterBindingsUpdate = {
-                taskScheduler.update()
-                routineManager.update()
-            },
-            afterBindingsCancel = {
-                taskScheduler.cancel()
-                routineManager.cancelAll("Generated controls cancelled")
-            }
-        )
-    }
-
-    /** True while a controller-started routine owns a generated drive step. */
-    fun generatedRoutineOwnsDrive(): Boolean {
-        val executions = robot.store.state.routineState.executions
-        if (executions.isEmpty()) return false
-        return executions.values.any { it.activeStepKind == "DRIVE_TO" }
-    }
-
     /** Locks, validates, alliance-transforms, seeds, and requests the selected generated routine. */
     fun autonomousInit() {
         cancelActive("Autonomous reinitialized")
+        stopAndXLockDrive()
         autoFaulted = false
         finished = false
+
+        if (robot.store.state.superstructure.marvin.let {
+                it.mechanismSafetyInhibited || it.mechanismSafetyFaultLatched
+            }) {
+            abort(MECHANISM_SAFETY_BLOCK_REASON)
+            return
+        }
 
         try {
             val selection = selector.resolve(selectionProvider())
@@ -169,7 +134,9 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
                 )
             }
 
-            seedPose(capabilities.transform(entry.startingPose))
+            if (shouldSeedAutonomousPose(entry.entryId)) {
+                seedPose(capabilities.transform(entry.startingPose))
+            }
             when (val result = routineManager.request(entry.routineId, RoutineStartPolicy.RESTART_EXISTING)) {
                 is RoutineRequestResult.Accepted -> activeExecutionId = result.executionId
                 is RoutineRequestResult.AlreadyRunning -> activeExecutionId = result.executionId
@@ -178,7 +145,7 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
                 )
             }
             setStatus(if (selection.usedFallback) "Running safe fallback" else "Running")
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             abort("Preflight failed: ${error.message ?: error::class.java.simpleName}")
         }
     }
@@ -186,6 +153,12 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
     /** Advances the single shared routine manager and observes its Redux terminal lifecycle. */
     fun autonomousPeriodic() {
         if (finished || autoFaulted) return
+        if (robot.store.state.superstructure.marvin.let {
+                it.mechanismSafetyInhibited || it.mechanismSafetyFaultLatched
+            }) {
+            abort(MECHANISM_SAFETY_BLOCK_REASON)
+            return
+        }
         val executionId = activeExecutionId ?: run {
             abort("Autonomous routine was not armed")
             return
@@ -214,7 +187,7 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
                 RoutineExecutionStatus.REQUESTED,
                 RoutineExecutionStatus.RUNNING -> abort("Routine left the active set before completion")
             }
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             abort("Runtime failed: ${error.message ?: error::class.java.simpleName}")
         }
     }
@@ -239,7 +212,7 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
         autoFaulted = true
         finished = true
         cancelActive(message)
-        failSafeStop()
+        failSafeStop(message)
         setStatus("Blocked")
         robot.telemetry.putString("ARES/Auto/Error", message)
         runCatching { edu.wpi.first.wpilibj.DriverStation.reportError("ARES auto: $message", false) }
@@ -266,14 +239,14 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
     }
 
     private fun validateFieldBounds(entry: AutonomousCatalogEntry) {
-        require(GeneratedAresProject.routines.containsKey(entry.routineId)) {
+        require(routineDocuments.containsKey(entry.routineId)) {
             "Entry '${entry.entryId}' references missing routine '${entry.routineId}'"
         }
         requireFrcRoutinePoseInsideField(capabilities.transform(entry.startingPose), "starting pose")
         val visited = mutableSetOf<String>()
         fun validateRoutine(routineId: String) {
             if (!visited.add(routineId)) return
-            val routine = requireNotNull(GeneratedAresProject.routines[routineId]) {
+            val routine = requireNotNull(routineDocuments[routineId]) {
                 "Routine '$routineId' does not exist"
             }
             fun validateStep(step: RoutineStep, path: String) {
@@ -292,12 +265,21 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
         validateRoutine(entry.routineId)
     }
 
-    private fun failSafeStop() {
-        robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
-        FrcAutoCapabilities.allStopActions().forEach(robot.store::dispatch)
-        robot.store.dispatch(SetClimberVoltage(0.0))
-        robot.store.dispatch(StopSlamtake())
+    private fun failSafeStop(faultReason: String? = null) {
+        stopAndXLockDrive()
+        robot.store.dispatch(
+            if (faultReason == null) {
+                SetMechanismSafetyInhibit(true)
+            } else {
+                LatchMechanismSafetyFault("Autonomous fault: $faultReason")
+            }
+        )
         robot.safeHardware()
+    }
+
+    private fun stopAndXLockDrive() {
+        robot.drive.joystickDrive(0.0, 0.0, 0.0, isFieldCentric = false)
+        robot.swerveDrive.brake()
     }
 
     private fun setStatus(value: String) {
@@ -319,6 +301,7 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
         const val SMART_DASHBOARD_TABLE = "SmartDashboard"
         const val SELECTED_AUTO_ENTRY = "SelectedAuto"
         const val AVAILABLE_AUTOS_ENTRY = "AvailableAutos"
+        const val MECHANISM_SAFETY_BLOCK_REASON = "Mechanism safety is inhibited; autonomous start is blocked"
 
         fun dashboardSelection(): String = runCatching {
             edu.wpi.first.networktables.NetworkTableInstance.getDefault()
@@ -328,3 +311,6 @@ class FRCAutoOrchestrator @JvmOverloads constructor(
         }.getOrDefault(GeneratedAresProject.DEFAULT_AUTONOMOUS_ENTRY_ID ?: "do-nothing")
     }
 }
+
+/** The fail-safe routine intentionally leaves the operator's existing localization untouched. */
+internal fun shouldSeedAutonomousPose(entryId: String): Boolean = entryId != "do-nothing"

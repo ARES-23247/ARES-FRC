@@ -40,7 +40,8 @@ class MarvinMeasuredSotmRegressionTest {
                 drive = DriveState(
                     xVelocityMetersPerSecond = commandedVx,
                     yVelocityMetersPerSecond = commandedVy,
-                    angularVelocityRadiansPerSecond = commandedOmega
+                    angularVelocityRadiansPerSecond = commandedOmega,
+                    measuredMotionValid = true
                 ),
                 superstructure = SuperstructureState(custom = MarvinState())
             )
@@ -105,6 +106,43 @@ class MarvinMeasuredSotmRegressionTest {
             kotlin.math.abs(actual.virtualTargetX - stationaryVirtualTargetX) > 1e-6,
             "A real measured chassis velocity must move the SOTM virtual target"
         )
+    }
+
+    @Test
+    fun `SOTM stops shooter and feeder when measured motion becomes invalid`() {
+        val store = Store(
+            RobotState(
+                drive = DriveState(measuredMotionValid = true),
+                superstructure = SuperstructureState(custom = MarvinState())
+            )
+        ) { state, action -> MarvinReducer.reduce(state, action) }
+        val shooter = MarvinShooterSubsystem(store)
+        val pose = Pose2d(3.0, 2.0, Rotation2d(0.35))
+        val target = Translation2d(0.0, 5.547868)
+        val result = ShotResult()
+
+        shooter.updateShootOnTheMove(pose, target, result)
+        assertTrue(store.state.superstructure.marvin.flywheelActive)
+
+        store.dispatch(
+            RobotAction.PoseUpdate(
+                xMeters = pose.x,
+                yMeters = pose.y,
+                headingRadians = pose.heading.radians,
+                timestampMs = 1_020L,
+                motionMeasurementsValid = false,
+                imuMeasurementsValid = true,
+                isExternalEstimate = true
+            )
+        )
+        val rotation = shooter.updateShootOnTheMove(pose, target, result)
+
+        assertEquals(0.0, rotation)
+        assertEquals(0.0, result.targetFlywheelRpm)
+        assertEquals(0.0, result.targetCowlAngleRotations)
+        assertEquals(false, store.state.superstructure.marvin.flywheelActive)
+        assertEquals(0.0, store.state.superstructure.marvin.flywheel.targetVelocityRpm)
+        assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
     }
 
     private fun assertShotEquals(expected: ShotResult, actual: ShotResult) {

@@ -62,15 +62,13 @@ not included in the 56-file `src` inventory.
   mechanism rotations, roller RPS, and single-refresh read ownership; removed an unused import.
 - `src/main/kotlin/com/areslib/frc/hardware/SeasonInterfaces.kt` — made the shared-interface aliases
   unambiguous by aliasing imports explicitly and noted that units/safe defaults live in ARESLib.
-- `src/main/kotlin/com/areslib/frc/hardware/TalonFXExtensions.kt` — replaced a stale generated-style
-  comment with the compatibility-source intent.
+- `src/main/kotlin/com/areslib/frc/hardware/TalonFXExtensions.kt` — centralized checked Talon
+  configuration, homing/tuning status, and close ownership.
 
 ### Marvin state, reducers, and controllers
 
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinAction.kt` — documented action units, timestamps,
   freshness bits, cached sensor-snapshot ownership, and slamtake phase semantics.
-- `src/main/kotlin/com/areslib/frc/marvin/MarvinClimberSubsystem.kt` — documented explicit voltage
-  versus position modes and corrected motor-rotation wording to mechanism rotations.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinConfig.kt` — documented every shot-table unit,
   rearward aim convention, cowl travel, and official blue-origin speaker coordinates.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinControllerBase.kt` — documented shared Redux ownership.
@@ -81,8 +79,7 @@ not included in the 56-file `src` inventory.
   flattened equivalent feeder/floor dispatch branches.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinFlywheelController.kt` — documented RPM targets,
   stop/re-command semantics, and fail-closed readiness; removed an unused import.
-- `src/main/kotlin/com/areslib/frc/marvin/MarvinIntakeSubsystem.kt` — distinguished logical deploy
-  state from measured pivot degrees and documented roller RPS.
+- Obsolete intake/climber facade layers were removed; teleop dispatches their Redux actions directly.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinReducer.kt` — replaced an inaccurate zero-allocation
   claim with the reducer's actual deadband/freshness contract and documented pure composition.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinShooterFacade.kt` — documented measured field-frame
@@ -96,8 +93,8 @@ not included in the 56-file `src` inventory.
 
 ### Teleop and autonomous orchestration
 
-- `src/main/kotlin/com/areslib/frc/robot/FRCAutoOrchestrator.kt` — reduced orchestration to native
-  `.aresauto` resolution, field-footprint preflight, alliance transformation, shared compilation,
+- `src/main/kotlin/com/areslib/frc/robot/FRCAutoOrchestrator.kt` — reduced orchestration to compiled
+  `.ares` catalog resolution, field-footprint preflight, alliance transformation, shared compilation,
   deterministic task execution, pose seeding, telemetry, and fail-safe lifecycle cleanup.
 - `src/main/kotlin/com/areslib/frc/robot/FRCTeleOpDriveController.kt` — documented meters/radians,
   red-alliance translation rotation, cached input ownership, command priority, Redux synchronization,
@@ -111,8 +108,8 @@ not included in the 56-file `src` inventory.
   quaternion ordering, reusable buffers, high-water growth, and stale-entry clearing.
 - `src/main/kotlin/com/areslib/frc/sim/Dyn4jSwerveModuleSim.kt` — documented robot-to-world velocity
   rotation, CCW angular units, force ownership, and reuse of the force vector.
-- `src/main/kotlin/com/areslib/frc/sim/field/FrcFieldBuilder.kt` — documented canonical field extents
-  and explicitly labeled interior collision bodies as approximations rather than official drawings.
+- `src/main/kotlin/com/areslib/frc/sim/field/FrcFieldBuilder.kt` — retains only canonical field-wall
+  construction; obsolete hardcoded interior approximations were removed.
 - `src/main/kotlin/com/areslib/frc/sim/io/SimulatedClimberIO.kt` — documented mechanism rotations and
   geometry-preserving effort scaling.
 - `src/main/kotlin/com/areslib/frc/sim/io/SimulatedCowlIO.kt` — documented public rotations, internal
@@ -141,7 +138,8 @@ not included in the 56-file `src` inventory.
   timeout, and execution through the production native runner.
 - `src/test/kotlin/com/areslib/frc/robot/FRCTeleOpDriveControllerTest.kt` — renamed claims to match
   chassis-command coverage and clarified where field-frame transformation occurs.
-- `src/test/kotlin/com/areslib/frc/sim/field/FrcFieldBuilderTest.kt` — removed generated placeholders.
+- `src/test/kotlin/com/areslib/frc/sim/field/FrcFieldGeometryContractTest.kt` — verifies canonical
+  official field extents and the 0.80 m bumper fixture.
 - `src/test/kotlin/com/areslib/frc/sim/io/SimulatedIOTest.kt` — corrected the cowl feedback assertion
   to compare internal degrees with public mechanism rotations and removed placeholders.
 
@@ -158,47 +156,10 @@ not included in the 56-file `src` inventory.
 - `src/test/kotlin/com/areslib/frc/sim/field/FrcFieldGeometryContractTest.kt`
 - `src/test/kotlin/com/areslib/frc/sim/io/SimulatedSafetyContractTest.kt`
 
-## Suspected behavior defects intentionally not changed
+## Follow-up status
 
-These findings need design/behavior decisions and were kept outside this readability-only pass.
-
-1. **High — no reciprocal climber/intake collision interlock.**
-   `src/main/kotlin/com/areslib/frc/marvin/MarvinSuperstructure.kt:75` writes the requested intake
-   pivot directly and line 86 independently selects climber output mode. The reducer test previously
-   claimed a CBF had moved to `MarvinShooterFacade`, but that facade contains no climber/intake
-   constraint. A simultaneous stow and extension request can therefore reach both IO boundaries.
-   Minimal fix: enforce the calibrated collision envelope once at the output boundary, using cached
-   measured geometry and explicit safe fallback, then add reciprocal direction tests.
-
-2. **High — the default Dyn4j interior layout is not a Crescendo field.**
-   `src/main/kotlin/com/areslib/frc/sim/field/FrcFieldBuilder.kt:28` onward installs hubs, four towers,
-   trench barriers, and climb bases; `Dyn4jPhysicsWorld.kt:92` onward spawns pieces around hubs and
-   trenches. Those are not official 2024 Crescendo structures or note locations, so collision and
-   autonomous simulation can validate against the wrong environment. Minimal fix: build the stage,
-   sources, subwoofers, and initial notes from official Crescendo dimensions, preferably through a
-   data-driven field configuration.
-
-3. **Medium — static and moving shot geometry use different origins.**
-   `src/main/kotlin/com/areslib/frc/marvin/MarvinShooterFacade.kt:135` computes static lookup distance
-   from robot center and manually reconstructs rearward heading, while SOTM delegates shooter
-   offsets and delay compensation to `ShotSetup`. Switching modes at the same stationary pose can
-   therefore change RPM/cowl/heading. Minimal fix: use `ShotSetup.calculate` with zero chassis speeds
-   and a retained `ShotResult` for the static path as well.
-
-4. **Medium — the simulation constructor seed does not seed every random stream.**
-   `src/main/kotlin/com/areslib/frc/Dyn4jSimulation.kt:93` always creates `Random(42L)` even though the
-   constructor accepts `seed` and passes it to the physics world. Different requested seeds produce
-   identical scoring ejection randomness. Minimal fix: construct this random source with `seed` and
-   add same-seed/different-seed determinism tests.
-
-5. **Medium — a 50 Hz telemetry publisher allocates on every robot loop.**
-   `src/main/kotlin/com/areslib/frc/ARESRobot.kt:218` creates a new `doubleArrayOf` for packed
-   superstructure telemetry on every store update, contrary to the workspace zero-GC loop contract.
-   Minimal fix: retain a fixed `DoubleArray`, overwrite its slots, and publish that buffer if the
-   telemetry implementation copies synchronously (otherwise use an ownership-safe pool).
-
-6. **Low — rebuilding a simulation field does not clear airborne pieces.**
-   `src/main/kotlin/com/areslib/frc/sim/Dyn4jPhysicsWorld.kt:49` removes Dyn4j bodies and clears
-   grounded `balls`, but leaves `flyingBalls` intact. A runtime field rebuild can carry projectiles
-   from the previous field into the new one. Minimal fix: clear `flyingBalls` in `buildWorld` and add
-   a rebuild-state regression.
+The behavior defects recorded by the dated readability pass were resolved in the subsequent full
+safety audit: reciprocal climber/intake arbitration now fails closed on stale geometry; hardcoded
+non-Crescendo interior obstacles were removed; static and moving shots share `ShotSetup`; simulator
+randomness honors the constructor seed; packed telemetry reuses a fixed buffer; and field rebuilds
+clear both grounded and airborne pieces.

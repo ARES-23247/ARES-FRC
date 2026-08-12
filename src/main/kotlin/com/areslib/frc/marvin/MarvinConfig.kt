@@ -9,6 +9,16 @@ object MarvinConfig {
     const val ROBOT_BUMPER_LENGTH_METERS = 0.80
     const val ROBOT_BUMPER_WIDTH_METERS = 0.80
 
+    /** Surveyed mechanism envelopes in the robot frame (+X forward, +Y left). */
+    object MechanismGeometry {
+        const val INTAKE_CAPTURE_MIN_X_METERS = 0.25
+        const val INTAKE_CAPTURE_MAX_X_METERS = 0.65
+        const val INTAKE_CAPTURE_HALF_WIDTH_METERS = 0.40
+        const val SHOOTER_EXIT_X_METERS = -0.45
+        const val SHOOTER_EXIT_Y_METERS = -0.055626
+        const val SHOOTER_EXIT_HEIGHT_METERS = 0.60
+    }
+
     /**
      * Feeder transfer speed (RPS) commanded when a shot is fired. Matches the aligned
      * run speed used by [MarvinFeederController.updateFeeders] so autonomous and teleop
@@ -44,8 +54,8 @@ object MarvinConfig {
      * the aim solution to add pi radians to the field bearing.
      */
     val SHOT_CONFIG = ShotConfig(
-        shooterOffsetX = -0.044704,
-        shooterOffsetY = -0.055626,
+        shooterOffsetX = MechanismGeometry.SHOOTER_EXIT_X_METERS,
+        shooterOffsetY = MechanismGeometry.SHOOTER_EXIT_Y_METERS,
         tofKeys = doubleArrayOf(1.24, 2.0, 3.0, 4.0, 5.6),
         tofValues = doubleArrayOf(0.128, 0.212, 0.345, 0.481, 0.795),
         shotKeys = doubleArrayOf(

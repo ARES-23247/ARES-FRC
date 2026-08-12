@@ -3,7 +3,7 @@
   "documentId": "sim-drive-and-shoot",
   "revision": 1,
   "name": "Simulation Drive and Shoot",
-  "description": "Exercises field motion, markers, readiness gating, and safe cleanup.",
+  "description": "Test-only fixture for field motion, markers, readiness gating, and safe cleanup.",
   "steps": [
     {
       "kind": "DRIVE_TO",

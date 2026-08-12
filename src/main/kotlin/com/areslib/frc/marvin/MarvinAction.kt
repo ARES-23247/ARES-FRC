@@ -26,6 +26,37 @@ data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/**
+ * Atomically zeros and optionally latches every drivetrain and Marvin mechanism command.
+ *
+ * While [inhibited] is true the reducer ignores later mechanism setpoint actions, so a
+ * controller exception cannot be undone by a stale command on the next frame.
+ * This action represents a temporary inhibit (for example normal Disabled entry). A distinct
+ * [LatchMechanismSafetyFault] survives mode initialization until an explicit Disabled recovery.
+ */
+data class SetMechanismSafetyInhibit @kotlin.jvm.JvmOverloads constructor(
+    val inhibited: Boolean,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+/**
+ * Atomically stops every output and records a fault that normal mode initialization cannot clear.
+ * [reason] is retained for Driver Station and telemetry diagnosis.
+ */
+data class LatchMechanismSafetyFault @kotlin.jvm.JvmOverloads constructor(
+    val reason: String,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+/**
+ * Clears only the persistent fault metadata after an explicit, health-checked Disabled recovery.
+ * The temporary safety inhibit remains asserted until the platform reapplies its health policy.
+ */
+data class ClearMechanismSafetyFault @kotlin.jvm.JvmOverloads constructor(
+    val recoverySource: String,
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
 /** Replaces the simulated/estimated game-piece inventory count. */
 data class SetInventoryCount @kotlin.jvm.JvmOverloads constructor(
     val count: Int,
@@ -80,6 +111,7 @@ data class SetClimberPositionRotations @kotlin.jvm.JvmOverloads constructor(
  * @property intakeAngle measured intake pivot angle in degrees
  * @property pieceDetected detector state; meaningful only when [pieceDetectionValid]
  * @property flywheelVelocityValid whether flywheel RPM was refreshed successfully
+ * @property flywheelAllMotorsAtTarget whether every available flywheel motor is within tolerance
  * @property cowlAngleValid whether cowl position was refreshed successfully
  * @property intakeAngleValid whether intake position was refreshed successfully
  * @property pieceDetectionValid whether a physical/configured detector exists and is trustworthy
@@ -94,6 +126,7 @@ data class SuperstructureSensorUpdate @kotlin.jvm.JvmOverloads constructor(
     val intakeAngle: Double,
     val pieceDetected: Boolean,
     val flywheelVelocityValid: Boolean = false,
+    val flywheelAllMotorsAtTarget: Boolean = false,
     val cowlAngleValid: Boolean = false,
     val intakeAngleValid: Boolean = false,
     val pieceDetectionValid: Boolean = false,

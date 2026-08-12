@@ -9,7 +9,7 @@
 - It creates `FrcSwerveRobot` with `MarvinReducer.reduce`, then registers the season subsystem facades/controllers.
 - It registers the shared update at 20 ms with a 5 ms phase offset.
 
-WPILib mode callbacks remain thin. `FRCTeleOpDriveController` translates cached controller input into drive requests and Redux actions. `FRCAutoOrchestrator` translates a sampled path and event markers into the same APIs. Mechanism state is never mutated directly.
+WPILib mode callbacks remain thin. `FRCTeleOpDriveController` translates cached controller input into drive requests and Redux actions. `FRCAutoOrchestrator` executes the compiled routine/action tree through the same APIs. Mechanism state is never mutated directly.
 
 `MarvinReducer` first calls the ARESLib `rootReducer`, then handles Marvin actions. This ordering is important: core pose, alliance, and power state and season superstructure state advance through one immutable `RobotState`.
 
@@ -21,8 +21,11 @@ The shared `FrcBaseRobot.update()` sequence is the hardware transaction boundary
 2. Robot status, mode, drivetrain, and vision observations are read.
 3. Registered subsystem controllers call `readSensors()` and dispatch observation actions.
 4. Power and brownout limits are calculated.
-5. Subsystems call `writeOutputs()` from the resulting state.
-6. Swerve outputs, telemetry, and logging are updated.
+5. While enabled, subsystems and swerve call `writeOutputs()` from the resulting state. Disabled
+   frames never issue normal writes; the enable-to-disable edge clears drive intent and invokes the
+   physical safety path.
+6. Core, season, power, registry, topology, and platform telemetry are assembled, then the FRC data
+   logger is flushed exactly once so one loop produces one coherent row.
 
 Do not reorder these phases locally. A controller must never command from a mix of this loop's state and a fresh out-of-band hardware read.
 
@@ -40,7 +43,7 @@ The current season layer has two especially important validity signals:
 
 | Signal | Source | Fail-closed behavior |
 |---|---|---|
-| Flywheel `velocityValid` | Refresh status for both master velocity signals | Reducer exposes measured RPM as zero and all “at speed” decisions require validity, a target above 100 RPM, and less than 150 RPM error. A stale value cannot authorize feeding. |
+| Flywheel readiness | Refresh status and RPM agreement for both masters and both followers | Reducer exposes measured RPM as zero when the four-signal snapshot is invalid. All “at speed” decisions additionally require every motor to be individually within 150 RPM of the target, so a healthy average cannot hide one lagging follower. |
 | Feeder `pieceDetectionValid` | Beam-break/detector capability and current reading | Inventory transitions and sensor completion are ignored while invalid. Marvin XIX's physical feeder has no beam break, so physical detection is explicitly invalid rather than permanently “not detected.” |
 
 The reducer preserves the last trusted detector edge through invalid intervals. This prevents a recovered detector from double-counting a piece.
@@ -51,11 +54,27 @@ The slamtake sequence can still operate without a detector: deploy immediately, 
 
 Exceptions in robot, teleop, or autonomous periodic code report to Driver Station and invoke the safe hardware path. Autonomous also zeros drive, shooter, intake roller, climber voltage, and the slamtake sequence before calling `safeHardware()`.
 
+Direct flywheel SysId voltage is authorized only in Test-enabled mode while the verified Talon
+configuration, relative-mechanism homing, fatal-loop latch, mechanism safety latch, and power budget
+are all healthy. Losing any permission during a run stops characterization in that same loop.
+Autonomous performs the same mechanism-safety check before requesting a routine and aborts an active
+routine if the latch asserts later.
+
+Hardware registration includes the CAN2 identity of each mechanism (including every controller in
+multi-motor flywheel/intake groups). `Topology/HardwareMap` is published once after registration is
+complete rather than from the periodic loop.
+
 Brownout/current scaling affects effort, not geometry:
 
 - Voltage, velocity, and swerve requests are scaled.
 - Cowl, intake pivot, and climber position targets remain physical targets; their allowed effort is scaled.
 - Hardware soft limits remain the final motion boundary.
+
+The PDH total-current read is sampled once per loop. Exceptions, non-finite/negative values, and an
+enabled zero-amp reading remain explicitly invalid. Shared power management accepts the registered
+branch-current fallback only when every source is fresh or covered by a fresh aggregate; otherwise
+it reports invalid current and applies the critical 0.40 scale. Unknown current never becomes a
+benign zero.
 
 Never “fix” a brownout by scaling a position target toward zero; that changes the requested mechanism geometry.
 
@@ -72,7 +91,13 @@ Never “fix” a brownout by scaling a position target toward zero; that change
 | Climber position command | Mechanism rotations | Sensor-to-mechanism ratio is 80:1; hardware soft limits are `0.0..1.73` rotations. |
 | Feeder speed | RPS command | TalonFX 20; implemented as open-loop voltage proportional to requested RPS. Shooting uses 10 RPS. |
 
-The code does not run a climber homing sequence. Before relying on a position target, verify that the mechanism encoder zero and soft-limit calibration are correct. Do not pass motor rotations where mechanism rotations are expected.
+The cowl, intake pivot, and climber have relative-only TalonFX references. Real startup leaves all
+mechanism output inhibited even when configuration succeeds. Physically place all three at their
+safe zero stops, then have both operators hold Back+Start together once while Disabled or
+Test-enabled. All zero writes must succeed before the latch clears; restarting the robot invalidates
+the zero. Any Talon reset after configuration also invalidates the configuration latch and requires
+a robot-process restart followed by safe-zero; this prevents operation with reset soft limits or
+feedback ratios. Do not pass motor rotations where mechanism rotations are expected.
 
 ### Shooter authorization
 

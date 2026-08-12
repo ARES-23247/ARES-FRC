@@ -7,9 +7,9 @@ import com.areslib.state.RobotState
 /**
  * Applies proportional force and torque so the Dyn4j chassis tracks Redux drive setpoints.
  *
- * Redux linear velocities are robot-relative meters per second and are rotated into Dyn4j's
- * blue-origin world frame before force application. Angular velocity is CCW-positive radians per
- * second. [forceVector] is reused on every simulation tick to avoid a hot-loop allocation.
+ * Redux linear velocities are interpreted according to `DriveState.isFieldCentric`; field-frame
+ * commands are used directly and robot-frame commands are rotated once into Dyn4j's blue-origin
+ * world. Angular velocity is CCW-positive radians per second. [forceVector] is reused.
  */
 class Dyn4jSwerveModuleSim {
     private val forceVector = Vector2()
@@ -22,8 +22,15 @@ class Dyn4jSwerveModuleSim {
         val heading = robotBody.transform.rotationAngle
         val targetVx = state.drive.xVelocityMetersPerSecond
         val targetVy = state.drive.yVelocityMetersPerSecond
-        val worldVx = targetVx * kotlin.math.cos(heading) - targetVy * kotlin.math.sin(heading)
-        val worldVy = targetVx * kotlin.math.sin(heading) + targetVy * kotlin.math.cos(heading)
+        val worldVx: Double
+        val worldVy: Double
+        if (state.drive.isFieldCentric) {
+            worldVx = targetVx
+            worldVy = targetVy
+        } else {
+            worldVx = targetVx * kotlin.math.cos(heading) - targetVy * kotlin.math.sin(heading)
+            worldVy = targetVx * kotlin.math.sin(heading) + targetVy * kotlin.math.cos(heading)
+        }
         
         val forceX = (worldVx - robotBody.linearVelocity.x) * kpLinear
         val forceY = (worldVy - robotBody.linearVelocity.y) * kpLinear

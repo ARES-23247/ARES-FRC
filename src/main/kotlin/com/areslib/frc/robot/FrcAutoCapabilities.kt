@@ -4,6 +4,7 @@ import com.areslib.action.RobotAction
 import com.areslib.frc.marvin.MarvinConfig
 import com.areslib.frc.marvin.marvin
 import com.areslib.frc.marvin.SetFeederSpeed
+import com.areslib.frc.marvin.SetCowlAngle
 import com.areslib.frc.marvin.SetFloorSpeed
 import com.areslib.frc.marvin.SetFlywheelActive
 import com.areslib.frc.marvin.SetFlywheelSpeed
@@ -18,11 +19,11 @@ import com.areslib.sequencer.Task
 import com.areslib.state.RobotState
 
 /**
- * Marvin actions available to generated ARES routines and legacy import markers.
+ * Marvin actions available to generated ARES routines.
  *
- * The checked-in `.ares/action-catalog.json` drives generated type safety. These descriptors keep
- * the existing named-marker adapter discoverable during migration. Every factory creates a fresh
- * task because task lifecycle state may never be shared between marker invocations or runs.
+ * The checked-in `.ares/action-catalog.json` drives generated type safety. The generated runtime
+ * resolves compiled action keys through this task registry. Every factory creates a fresh task
+ * because task lifecycle state may never be shared between invocations or runs.
  */
 object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     val INTAKE_COLLECT = NamedCommandDescriptor(
@@ -46,13 +47,13 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     val SHOOTER_PREPARE = NamedCommandDescriptor(
         key = CommandKey("shooter.prepare"),
         displayName = "Prepare shooter",
-        description = "Spins the flywheel to the autonomous shooting preset.",
+        description = "Commands the flywheel and cowl to the autonomous shooting preset.",
         category = "Shooter"
     )
     val SHOOTER_FEED_WHEN_READY = NamedCommandDescriptor(
         key = CommandKey("shooter.feedWhenReady"),
         displayName = "Shoot when ready",
-        description = "Waits up to two seconds for fresh aligned flywheel RPM, then feeds the note.",
+        description = "Waits up to two seconds for fresh aligned flywheel RPM and cowl position, then runs one bounded transfer.",
         category = "Shooter"
     )
     val SHOOTER_STOP = NamedCommandDescriptor(
@@ -98,7 +99,11 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     }
 
     override fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
-        listOf(SetFlywheelSpeed(AUTO_SHOT_RPM), SetFlywheelActive(active = true))
+        listOf(
+            SetFlywheelSpeed(AUTO_SHOT_RPM),
+            SetCowlAngle(AUTO_SHOT_COWL_ROTATIONS),
+            SetFlywheelActive(active = true)
+        )
     }
 
     override fun actionShooterFeedWhenReady(): Task = FeedWhenReadyTask()
@@ -107,12 +112,6 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         InstantAutoActionsTask(SHOOTER_STOP.displayName, ::shooterStopActions)
 
     override fun conditionShooterReady(): (RobotState) -> Boolean = ::flywheelIsReady
-
-    internal fun allStopActions(): List<RobotAction> = buildList {
-        addAll(shooterStopActions())
-        add(SetIntakeRollers(0.0))
-        add(SetIntakePivot(deployed = false))
-    }
 
     private fun shooterStopActions(): List<RobotAction> = listOf(
         SetFlywheelSpeed(0.0),
@@ -145,21 +144,26 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     /** Bounded, fail-closed readiness gate for autonomous note transfer. */
     private class FeedWhenReadyTask : Task {
         override val name: String = SHOOTER_FEED_WHEN_READY.displayName
-        private var feedIssued = false
+        private var feedStartElapsedMs = NOT_STARTED
 
         override fun initialize(state: RobotState): List<RobotAction> {
             super.initialize(state)
-            feedIssued = false
+            feedStartElapsedMs = NOT_STARTED
             return emptyList()
         }
 
-        override fun isCompleted(state: RobotState, elapsedMs: Long): Boolean =
-            feedIssued || elapsedMs >= FEED_READY_TIMEOUT_MS
+        override fun isCompleted(state: RobotState, elapsedMs: Long): Boolean = when {
+            feedStartElapsedMs != NOT_STARTED ->
+                elapsedMs < feedStartElapsedMs || elapsedMs - feedStartElapsedMs >= FEED_TRANSFER_DURATION_MS
+            else -> elapsedMs >= FEED_READY_TIMEOUT_MS
+        }
 
         override fun execute(state: RobotState, elapsedMs: Long): List<RobotAction> {
             super.execute(state, elapsedMs)
-            if (feedIssued || !flywheelIsReady(state)) return emptyList()
-            feedIssued = true
+            if (feedStartElapsedMs != NOT_STARTED || elapsedMs >= FEED_READY_TIMEOUT_MS || !flywheelIsReady(state)) {
+                return emptyList()
+            }
+            feedStartElapsedMs = elapsedMs
             return listOf(
                 SetTransferActive(active = true),
                 SetFeederSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS),
@@ -168,17 +172,13 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         }
 
         override fun end(state: RobotState, interrupted: Boolean): List<RobotAction> {
-            val actions = if (interrupted || !feedIssued) {
-                listOf(SetTransferActive(active = false), SetFeederSpeed(0.0), SetFloorSpeed(0.0))
-            } else {
-                emptyList()
-            }
+            val actions = listOf(SetTransferActive(active = false), SetFeederSpeed(0.0), SetFloorSpeed(0.0))
             super.end(state, interrupted)
             return actions
         }
 
         override fun releaseRuntimeState() {
-            feedIssued = false
+            feedStartElapsedMs = NOT_STARTED
             super.releaseRuntimeState()
         }
 
@@ -186,15 +186,24 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
 
     internal fun flywheelIsReady(state: RobotState): Boolean {
         val flywheel = state.superstructure.marvin.flywheel
-        return flywheel.velocityValid &&
+        val cowl = state.superstructure.marvin.cowl
+        return flywheel.velocityValid && flywheel.allMotorsAtTarget &&
             flywheel.targetVelocityRpm > MINIMUM_READY_RPM &&
-            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE
+            kotlin.math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < RPM_TOLERANCE &&
+            cowl.angleValid &&
+            cowl.angleRotations.isFinite() &&
+            cowl.targetAngleRotations.isFinite() &&
+            kotlin.math.abs(cowl.angleRotations - cowl.targetAngleRotations) <= COWL_TOLERANCE_ROTATIONS
     }
 
     private const val AUTO_SHOT_RPM = 4_000.0
+    private const val AUTO_SHOT_COWL_ROTATIONS = 1.55
     private const val INTAKE_ROLLER_RPS = 15.0
     private const val FLOOR_ROLLER_RPS = 10.0
     private const val MINIMUM_READY_RPM = 100.0
     private const val RPM_TOLERANCE = 150.0
+    private const val COWL_TOLERANCE_ROTATIONS = 0.05
     private const val FEED_READY_TIMEOUT_MS = 2_000L
+    private const val FEED_TRANSFER_DURATION_MS = 450L
+    private const val NOT_STARTED = -1L
 }

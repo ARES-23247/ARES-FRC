@@ -31,8 +31,8 @@ class Dyn4jSimulationTest {
         sim.intakeIO.setPivotAngle(90.0)
         sim.intakeIO.setRollerVoltage(12.0)
 
-        // Force one of the balls to be exactly at the robot's center (2.0, 2.0)
-        ballsList[0].transform.setTranslation(2.0, 2.0)
+        // Place one note inside the forward-facing intake aperture.
+        ballsList[0].transform.setTranslation(2.6, 2.0)
 
         // Run step with intake deployed and active.
         // First run a few steps to let the pivot simulator update past 45 degrees
@@ -56,6 +56,38 @@ class Dyn4jSimulationTest {
 
     @Suppress("UNCHECKED_CAST")
     @Test
+    fun defaultSimulatorCreditsInventoryWhenACollectedPieceHasNoVirtualDetector() {
+        val sim = Dyn4jSimulation(seed = 42L)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = com.areslib.frc.marvin.MarvinState(inventoryCount = 3)
+            )
+        )
+        val physicsWorldField = Dyn4jSimulation::class.java.getDeclaredField("physicsWorld")
+        physicsWorldField.isAccessible = true
+        val physicsWorld = physicsWorldField.get(sim)
+        val ballsField = physicsWorld::class.java.getDeclaredField("balls")
+        ballsField.isAccessible = true
+        val balls = ballsField.get(physicsWorld) as MutableList<Body>
+        balls.first().transform.setTranslation(2.6, 2.0)
+        sim.intakeIO.setPivotAngle(90.0)
+        sim.intakeIO.setRollerVoltage(12.0)
+
+        var inventoryAction: com.areslib.frc.marvin.SetInventoryCount? = null
+        for (step in 0 until 60) {
+            inventoryAction = sim.step(state, 0.02)
+                .filterIsInstance<com.areslib.frc.marvin.SetInventoryCount>()
+                .firstOrNull()
+            if (inventoryAction != null) break
+        }
+
+        assertNotNull(inventoryAction, "Default simulation must credit a collected field piece")
+        assertEquals(4, inventoryAction!!.count)
+        assertFalse(sim.feederIO.pieceDetectionValid)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test
     fun testShootingAnd2_5DProjectileMotion() {
         val sim = Dyn4jSimulation(seed = 42L)
         
@@ -66,6 +98,7 @@ class Dyn4jSimulationTest {
                 flywheel = com.areslib.frc.marvin.FlywheelState(
                     velocityRpm = 4000.0,
                     velocityValid = true,
+                    allMotorsAtTarget = true,
                     targetVelocityRpm = 4000.0
                 ),
                 inventoryCount = 10
@@ -112,7 +145,8 @@ class Dyn4jSimulationTest {
         assertEquals(1, flyingList.size, "Exactly one ball should be flying in 2.5D space")
         val fb = flyingList[0]
         assertEquals(0.7164096, fb.z, 1e-4, "Initial launch height should be exactly 0.7164096 meters after one step")
-        assertTrue(fb.vx > 0.0 || fb.vy > 0.0, "Horizontal velocities should be non-zero")
+        assertTrue(fb.x < 2.0, "Rear-facing shooter must spawn and launch the piece behind the robot")
+        assertTrue(fb.vx < 0.0, "A zero-heading rear shooter must launch toward field -X")
         assertTrue(fb.vz > 0.0, "Vertical velocity should be positive due to cowl angle")
     }
 
@@ -310,6 +344,42 @@ class Dyn4jSimulationTest {
             publisher.set("")
             nt.flush()
             publisher.close()
+        }
+    }
+
+    @Test
+    fun `intake capture zone is oriented in the robot frame`() {
+        assertTrue(isInsideIntakeCaptureZone(2.0, 2.0, 0.0, 2.6, 2.0))
+        assertFalse(isInsideIntakeCaptureZone(2.0, 2.0, 0.0, 1.6, 2.0))
+        assertFalse(isInsideIntakeCaptureZone(2.0, 2.0, 0.0, 2.0, 2.4))
+        assertTrue(isInsideIntakeCaptureZone(2.0, 2.0, Math.PI / 2.0, 2.0, 2.6))
+    }
+
+    @Test
+    fun `field-centric velocity is not rotated a second time by simulation`() {
+        val fieldCentric = Dyn4jSimulation(seed = 42L)
+        val robotCentric = Dyn4jSimulation(seed = 42L)
+        try {
+            fieldCentric.resetPose(6.0, 1.0, Math.PI / 2.0)
+            robotCentric.resetPose(6.0, 1.0, Math.PI / 2.0)
+            val fieldState = RobotState(
+                drive = DriveState(xVelocityMetersPerSecond = 1.0, isFieldCentric = true)
+            )
+            val robotState = RobotState(
+                drive = DriveState(xVelocityMetersPerSecond = 1.0, isFieldCentric = false)
+            )
+            repeat(20) {
+                fieldCentric.step(fieldState, 0.02)
+                robotCentric.step(robotState, 0.02)
+            }
+
+            val fieldPose = fieldCentric.getPoseUpdate()
+            val robotPose = robotCentric.getPoseUpdate()
+            assertTrue(fieldPose.xMeters - 6.0 > kotlin.math.abs(fieldPose.yMeters - 1.0))
+            assertTrue(robotPose.yMeters - 1.0 > kotlin.math.abs(robotPose.xMeters - 6.0))
+        } finally {
+            fieldCentric.close()
+            robotCentric.close()
         }
     }
 }

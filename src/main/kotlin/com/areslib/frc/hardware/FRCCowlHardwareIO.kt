@@ -18,8 +18,15 @@ import com.ctre.phoenix6.signals.NeutralModeValue
  */
 class FRCCowlHardwareIO(
     private val motor: TalonFX
-) : CowlIO {
+) : CowlIO, FrcMechanismConfigurationStatus, FrcMechanismHomingStatus, AutoCloseable {
+    private val startupConfigurationValid: Boolean
+    @Volatile private var resetDetected = false
+    override val configurationValid: Boolean
+        get() = startupConfigurationValid && !resetDetected
+    @Volatile override var homed: Boolean = false
+        private set
     @Volatile private var cachedAngleValid = false
+    @Volatile private var cachedCurrentValid = false
 
     private val positionRequest = PositionVoltage(0.0)
     private val voltageRequest = VoltageOut(0.0)
@@ -32,7 +39,7 @@ class FRCCowlHardwareIO(
         setUpdateFrequencies(50.0, cowlPosition)
         setUpdateFrequencies(10.0, cowlCurrent)
 
-        listOf(motor).applyConfig {
+        startupConfigurationValid = listOf(motor).applyMechanismConfigChecked("Cowl") {
             // Neutral mode and inversions
             MotorOutput.NeutralMode = NeutralModeValue.Brake
             MotorOutput.Inverted = InvertedValue.Clockwise_Positive
@@ -61,23 +68,42 @@ class FRCCowlHardwareIO(
     }
 
     override fun refresh() {
-        cachedAngleValid = BaseStatusSignal.refreshAll(cowlPosition).isOK &&
+        if (anyTalonResetOccurred(motor)) {
+            resetDetected = true
+            homed = false
+        }
+        val positionRefreshOk = BaseStatusSignal.refreshAll(cowlPosition).isOK
+        cachedAngleValid = homed && positionRefreshOk &&
             cowlPosition.valueAsDouble.isFinite()
-        BaseStatusSignal.refreshAll(cowlCurrent)
+        cachedCurrentValid = BaseStatusSignal.refreshAll(cowlCurrent).isOK &&
+            cowlCurrent.valueAsDouble.isFinite() && cowlCurrent.valueAsDouble >= 0.0
+    }
+
+    override fun homeAtKnownZero(): Boolean {
+        val stopped = motor.setControl(voltageRequest.withOutput(0.0)).isOK
+        val zeroed = motor.setPosition(0.0).isOK
+        homed = configurationValid && stopped && zeroed
+        cachedAngleValid = false
+        if (!homed) reportConfigurationFailure("Cowl zeroing failed")
+        return homed
     }
 
     override fun setTargetAngle(rotations: Double) {
+        if (!configurationValid || !homed || !angleValid) {
+            setAppliedVoltage(0.0)
+            return
+        }
         motor.setControl(positionRequest.withPosition(safeTarget(rotations)))
     }
 
     override fun setTargetAngle(rotations: Double, maxEffortScale: Double) {
         val effortScale = maxEffortScale.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
-        if (effortScale >= FULL_EFFORT_THRESHOLD) {
-            setTargetAngle(rotations)
+        if (!configurationValid || !homed || !angleValid) {
+            setAppliedVoltage(0.0)
             return
         }
-        if (!angleValid) {
-            setAppliedVoltage(0.0)
+        if (effortScale >= FULL_EFFORT_THRESHOLD) {
+            setTargetAngle(rotations)
             return
         }
         val error = safeTarget(rotations) - angleRotations
@@ -91,8 +117,9 @@ class FRCCowlHardwareIO(
     }
 
     override fun setAppliedVoltage(volts: Double) {
+        val requestedVolts = if (configurationValid && homed) volts else 0.0
         motor.setControl(voltageRequest.withOutput(
-            volts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
+            requestedVolts.takeIf { it.isFinite() }?.coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE) ?: 0.0
         ))
     }
 
@@ -104,6 +131,11 @@ class FRCCowlHardwareIO(
 
     override val currentAmps: Double
         get() = cowlCurrent.valueAsDouble
+
+    override fun isCurrentReadingValid(readingAmps: Double): Boolean =
+        cachedCurrentValid && readingAmps.isFinite() && readingAmps >= 0.0
+
+    override fun close() = closeTalons(motor)
 
     private fun safeTarget(rotations: Double): Double =
         rotations.takeIf { it.isFinite() }?.coerceIn(0.0, MarvinConfig.cowlMaxRotations) ?: 0.0

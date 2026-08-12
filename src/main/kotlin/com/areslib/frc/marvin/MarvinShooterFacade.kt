@@ -16,7 +16,8 @@ import com.areslib.control.assist.ShotSetup
  * SOTM uses measured field-frame chassis velocity rather than joystick intent. Field
  * positions are meters, headings are CCW-positive radians, flywheel targets are RPM,
  * and every cowl value is a mechanism rotation. Rearward-facing aim follows
- * [MarvinConfig.SHOT_CONFIG]. Feeding remains closed until both heading and fresh RPM gates pass.
+ * [MarvinConfig.SHOT_CONFIG]. Feeding remains closed until heading, fresh RPM, and fresh cowl
+ * position gates all pass.
  *
  * **Performance Guarantees:**
  * - Mutable [scratchSpeeds] and caller-owned [ShotResult] keep periodic calculation allocation-free.
@@ -37,42 +38,8 @@ class MarvinShooterSubsystem(private val store: Store) {
     private var lastVy = 0.0
     private var lastVTime = 0.0
 
-    /** Cached measured flywheel RPM. */
-    val flywheelRPM: Double
-        get() = flywheelController.flywheelRPM
-
-    /** Commanded flywheel RPM. */
-    val flywheelTargetRPM: Double
-        get() = flywheelController.flywheelTargetRPM
-
-    /** Cached measured cowl mechanism rotations. */
-    val cowlAngleRotations: Double
-        get() = cowlController.cowlAngleRotations
-
-    /** Whether an already-authorized transfer is in progress. */
-    val transferActive: Boolean
-        get() = feederController.transferActive
-
-    /** Enables the flywheel at [targetRpm]. */
-    fun spinUp(targetRpm: Double) {
-        flywheelController.spinUp(targetRpm)
-    }
-
-    /** Starts a transfer; callers are responsible for enforcing firing interlocks. */
-    fun shoot() {
-        feederController.shoot()
-    }
-
-    /** Stops flywheel, feeder, and floor and clears their re-command-sensitive targets. */
-    fun stop() {
-        flywheelController.stop()
-        feederController.stop()
-    }
-
-    /** Commands cowl mechanism rotations through the shared software clamp. */
-    fun setCowlAngleRotations(rotations: Double) {
-        cowlController.setCowlAngleRotations(rotations)
-    }
+    /** Cancels transfer ownership and clears feeder/floor outputs for trigger release. */
+    fun cancelTransfer() = feederController.cancelTransfer()
 
     /**
      * Calculates SOTM parameters from measured field-frame motion, dispatches shooter
@@ -87,6 +54,15 @@ class MarvinShooterSubsystem(private val store: Store) {
         runFloorRollers: Boolean = false
     ): Double {
         val driveState = store.state.drive
+        if (!driveState.measuredMotionValid) {
+            lastVx = 0.0
+            lastVy = 0.0
+            lastVTime = 0.0
+            clearShotResult(shotResult)
+            flywheelController.stop()
+            feederController.cancelTransfer()
+            return 0.0
+        }
         val rx = driveState.measuredFieldXVelocityMetersPerSecond
         val ry = driveState.measuredFieldYVelocityMetersPerSecond
         val omega = driveState.measuredAngularVelocityRadiansPerSecond
@@ -119,8 +95,9 @@ class MarvinShooterSubsystem(private val store: Store) {
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
         val rpmAligned = flywheelController.isRpmAligned(shotResult.targetFlywheelRpm)
+        val cowlReady = cowlController.isAngleAligned(targetCowlRotations)
         
-        feederController.updateFeeders(rpmAligned, headingAligned, runFloorRollers)
+        feederController.updateFeeders(rpmAligned, headingAligned, cowlReady, runFloorRollers)
         
         return rotation
     }
@@ -150,10 +127,22 @@ class MarvinShooterSubsystem(private val store: Store) {
         
         val headingAligned = kotlin.math.abs(wrappedError) < 0.05
         val rpmAligned = flywheelController.isRpmAligned(targetRpm)
+        val cowlReady = cowlController.isAngleAligned(targetCowlRotations)
         
-        feederController.updateFeeders(rpmAligned, headingAligned, false)
+        feederController.updateFeeders(rpmAligned, headingAligned, cowlReady, false)
         
         return rotation
+    }
+
+    private fun clearShotResult(result: ShotResult) {
+        result.virtualTargetX = 0.0
+        result.virtualTargetY = 0.0
+        result.aimAngleRad = 0.0
+        result.robotTargetHeadingRad = 0.0
+        result.aimDistanceMeters = 0.0
+        result.targetFlywheelRpm = 0.0
+        result.targetCowlAngleRotations = 0.0
+        result.angularVelocityFeedforwardRadPerSec = 0.0
     }
 
     private companion object {

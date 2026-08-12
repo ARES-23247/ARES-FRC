@@ -4,7 +4,6 @@ package com.areslib.frc.generated
 
 import com.areslib.codegen.CapabilityArgumentReader
 import com.areslib.routine.AutonomousCatalogEntry
-import com.areslib.routine.AutonomousRoutineEntryPoint
 import com.areslib.routine.RoutineDocument
 import com.areslib.routine.RoutineDriveMarker
 import com.areslib.routine.RoutineDriveStep
@@ -12,26 +11,6 @@ import com.areslib.routine.RoutinePose
 import com.areslib.routine.RoutineRuntimeBindings
 import com.areslib.routine.RoutineStep
 import com.areslib.routine.RoutineStepKind
-import com.areslib.routine.RoutineManager
-import com.areslib.routine.RoutineStartPolicy
-import com.areslib.input.AnalogBinding
-import com.areslib.input.AnalogBindingListener
-import com.areslib.input.AnalogEmissionPolicy
-import com.areslib.input.AnalogZone
-import com.areslib.input.AnalogZoneListener
-import com.areslib.input.AxisThresholdSource
-import com.areslib.input.AxisTransform
-import com.areslib.input.BindingReleaseReason
-import com.areslib.input.ButtonSuppressionState
-import com.areslib.input.ChordSource
-import com.areslib.input.ControllerBindingRuntime
-import com.areslib.input.DigitalBinding
-import com.areslib.input.DigitalBindingListener
-import com.areslib.input.DigitalBindingTiming
-import com.areslib.input.RawButtonSource
-import com.areslib.input.SuppressibleButtonSource
-import com.areslib.input.SuppressingButtonChordSource
-import com.areslib.input.ThresholdDirection
 import com.areslib.sequencer.Task
 import com.areslib.state.RobotState
 
@@ -62,17 +41,12 @@ interface GeneratedAresProjectCapabilities {
     fun createDriveTask(step: RoutineDriveStep): Task? = null
 }
 
-/** Robot scheduler boundary used by generated direct-action controller bindings. */
-fun interface GeneratedAresProjectControlTaskSink {
-    fun submit(bindingId: String, task: Task)
-}
-
 /** Generated from the project's checked-in ARES documents. Do not edit by hand. */
 object GeneratedAresProject {
-    const val GENERATOR_VERSION: Int = 3
-    const val CATALOG_SHA256: String = "c0355427c078db051a1c3b2750f6a77328b38cc29414d7acc71cbfb019cbad0d"
-    const val CONTENT_SHA256: String = "ad21f2a54ff3f3956c3754b39d69cac5d6378fa17857b93d07b622b4f9008248"
-    const val SOURCE_SHA256: String = "a2a3b0ce0d26caf4b1839eba310dcd4ed2b8c59e60518b31d4f93ebe1ad2d90a"
+    const val GENERATOR_VERSION: Int = 4
+    const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
+    const val CONTENT_SHA256: String = "ad411112a2b4f1f05bdd58f28b3cab642e0a15cb28495273999ec13ba051af8c"
+    const val SOURCE_SHA256: String = "3c306fd0c458d75543b1e75e2d57db1f752d8ed0bf468d340c7ce76e2c9622e9"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -100,48 +74,7 @@ object GeneratedAresProject {
                 ),
             ),
         ),
-        "sim-drive-and-shoot" to RoutineDocument(
-            schemaVersion = 1,
-            documentId = "sim-drive-and-shoot",
-            revision = 1,
-            parentContentHash = null,
-            name = "Simulation Drive and Shoot",
-            description = "Exercises field motion, markers, readiness gating, and safe cleanup.",
-            steps = listOf(
-                RoutineStep(
-                    kind = RoutineStepKind.DRIVE_TO,
-                    drive = RoutineDriveStep(
-                        target = RoutinePose(
-                            xMeters = 3.6,
-                            yMeters = 2.65,
-                            headingRadians = 0.0,
-                        ),
-                        motionPresetKey = "safe",
-                        preferredEngineKey = null,
-                        markers = listOf(
-                            RoutineDriveMarker(progress = 0.1, actionKey = "shooter.prepare"),
-                            RoutineDriveMarker(progress = 0.45, actionKey = "intake.collect"),
-                        ),
-                        arrivalActionKeys = listOf("shooter.feedWhenReady"),
-                    ),
-                ),
-                RoutineStep(
-                    kind = RoutineStepKind.WAIT,
-                    durationSeconds = 0.5,
-                ),
-                RoutineStep(
-                    kind = RoutineStepKind.ACTION,
-                    actionKey = "shooter.stop",
-                ),
-                RoutineStep(
-                    kind = RoutineStepKind.ACTION,
-                    actionKey = "intake.stow",
-                ),
-            ),
-        ),
     )
-
-    val autonomousEntryPoints: Map<String, AutonomousRoutineEntryPoint> = linkedMapOf()
 
     val autonomousEntries: List<AutonomousCatalogEntry> = listOf(
         AutonomousCatalogEntry(
@@ -157,21 +90,6 @@ object GeneratedAresProject {
             authoredAlliance = com.areslib.routine.RoutineAlliance.BLUE,
             mirrorForOppositeAlliance = true,
             sortOrder = 0,
-            enabled = true,
-        ),
-        AutonomousCatalogEntry(
-            entryId = "sim-drive-and-shoot",
-            displayName = "Simulation Drive and Shoot",
-            description = "Drive, prepare, collect, feed, and stop.",
-            routineId = "sim-drive-and-shoot",
-            startingPose = RoutinePose(
-                xMeters = 2.0,
-                yMeters = 2.0,
-                headingRadians = 0.0,
-            ),
-            authoredAlliance = com.areslib.routine.RoutineAlliance.BLUE,
-            mirrorForOppositeAlliance = true,
-            sortOrder = 1,
             enabled = true,
         ),
     )
@@ -253,28 +171,12 @@ object GeneratedAresProject {
                     "intake.collect" -> setOf("floor", "intake")
                     "intake.stop" -> setOf("floor", "intake")
                     "intake.stow" -> setOf("floor", "intake")
-                    "shooter.feedWhenReady" -> setOf("floor", "shooter.feeder", "shooter.flywheel")
-                    "shooter.prepare" -> setOf("shooter.flywheel")
+                    "shooter.feedWhenReady" -> setOf("floor", "shooter.cowl", "shooter.feeder", "shooter.flywheel")
+                    "shooter.prepare" -> setOf("shooter.cowl", "shooter.flywheel")
                     "shooter.stop" -> setOf("floor", "shooter.feeder", "shooter.flywheel")
                     else -> emptySet()
                 }
             },
         )
 
-    val knownControlSchemeIds: Set<String> = emptySet()
-
-    /**
-     * Builds one allocation-free update runtime per controller slot. Suppressing chords are
-     * ordered before constituent buttons and raise their effective press debounce to the chord
-     * window, preventing a near-simultaneous chord from leaking a single-button action.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    fun createControllerRuntimes(
-        schemeId: String,
-        registry: GeneratedAresProjectCapabilities,
-        routineManager: RoutineManager,
-        taskSink: GeneratedAresProjectControlTaskSink,
-    ): Map<String, ControllerBindingRuntime> {
-        throw IllegalArgumentException("Unknown control scheme '$schemeId'")
-    }
 }
