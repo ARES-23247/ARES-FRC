@@ -125,7 +125,7 @@ test {
     useJUnitPlatform()
     
     // Configure test task to run using WPILib's compatible JDK to avoid JNI loader MSVC runtime crashes
-    if (OperatingSystem.current().isWindows()) {
+    if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")) {
         def wpilibJdk = file("C:/Users/Public/wpilib/2026/jdk/bin/java.exe")
         if (wpilibJdk.exists()) {
             executable = wpilibJdk.absolutePath
@@ -140,7 +140,7 @@ test {
     systemProperty "java.library.path", jniPath
     
     // Prepend the native binaries directory to PATH so Windows can resolve transitive DLL dependencies
-    if (OperatingSystem.current().isWindows()) {
+    if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")) {
         environment "PATH", "${jniPath};${System.getenv('PATH')}"
     } else {
         environment "LD_LIBRARY_PATH", "${jniPath}:${System.getenv('LD_LIBRARY_PATH') ?: ''}"
