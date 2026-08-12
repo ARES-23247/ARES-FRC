@@ -43,10 +43,10 @@ interface GeneratedAresProjectCapabilities {
 
 /** Generated from the project's checked-in ARES documents. Do not edit by hand. */
 object GeneratedAresProject {
-    const val GENERATOR_VERSION: Int = 4
+    const val GENERATOR_VERSION: Int = 5
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
-    const val CONTENT_SHA256: String = "ad411112a2b4f1f05bdd58f28b3cab642e0a15cb28495273999ec13ba051af8c"
-    const val SOURCE_SHA256: String = "3c306fd0c458d75543b1e75e2d57db1f752d8ed0bf468d340c7ce76e2c9622e9"
+    const val CONTENT_SHA256: String = "984fe9ed5848d0ebf9002a25ac93a2e3bb7f00696c2692c462bbb999f6becc96"
+    const val SOURCE_SHA256: String = "6f425a5c4f9d8a40199a89593ac1cf5f4c50c91b85ed3f653c4465d0b4628f8f"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -61,7 +61,7 @@ object GeneratedAresProject {
 
     val routines: Map<String, RoutineDocument> = linkedMapOf(
         "do-nothing" to RoutineDocument(
-            schemaVersion = 1,
+            schemaVersion = 2,
             documentId = "do-nothing",
             revision = 1,
             parentContentHash = null,
@@ -70,6 +70,7 @@ object GeneratedAresProject {
             steps = listOf(
                 RoutineStep(
                     kind = RoutineStepKind.WAIT,
+                    stepId = "step-hold-position",
                     durationSeconds = 0.0,
                 ),
             ),
