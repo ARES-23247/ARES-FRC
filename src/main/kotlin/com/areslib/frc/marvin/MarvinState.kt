@@ -7,7 +7,8 @@ import com.areslib.state.SuperstructureState
  * Immutable flywheel state.
  *
  * @property velocityRpm measured speed in RPM; zeroed by the reducer when invalid
- * @property velocityValid whether both master velocity signals refreshed successfully
+ * @property velocityValid whether all master/follower velocity signals refreshed successfully
+ * @property allMotorsAtTarget whether every available motor is individually within shot tolerance
  * @property targetVelocityRpm commanded speed in RPM
  * @property currentAmps cached aggregate current in amperes when supplied
  * @property tempCelsius cached mechanism temperature when supplied
@@ -16,6 +17,7 @@ data class FlywheelState(
     val velocityRpm: Double = 0.0,
     /** Whether the velocity observation is fresh and valid this loop. */
     val velocityValid: Boolean = false,
+    val allMotorsAtTarget: Boolean = false,
     val targetVelocityRpm: Double = 0.0,
     val currentAmps: Double = 0.0,
     val tempCelsius: Double = 0.0
@@ -119,8 +121,12 @@ data class MarvinState(
     val slamtakePhase: Int = 0,
     val flywheelActive: Boolean = false,
     val transferActive: Boolean = false,
-    /** Latched fail-safe that blocks drivetrain and mechanism outputs until explicitly cleared. */
+    /** Immediate output inhibit, including the normal temporary Disabled stop. */
     val mechanismSafetyInhibited: Boolean = false,
+    /** Persistent fault latch; mode initialization cannot clear this flag. */
+    val mechanismSafetyFaultLatched: Boolean = false,
+    /** First/current persistent fault reason for Driver Station diagnosis. */
+    val mechanismSafetyFaultReason: String = "",
     val inventoryCount: Int = 0
 ) : SubsystemState {
     /**
@@ -128,9 +134,13 @@ data class MarvinState(
      * measured speed, and less than 150 RPM absolute error.
      */
     val isFlywheelAtSpeed: Boolean
-        get() = flywheel.velocityValid && flywheel.targetVelocityRpm > 100.0 && flywheel.velocityRpm > 100.0 && Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
+        get() = flywheel.velocityValid && flywheel.allMotorsAtTarget &&
+            flywheel.targetVelocityRpm > 100.0 && flywheel.velocityRpm > 100.0 &&
+            Math.abs(flywheel.velocityRpm - flywheel.targetVelocityRpm) < 150.0
 
-    fun withFlywheelSpeed(rpm: Double) = copy(flywheel = flywheel.copy(targetVelocityRpm = rpm))
+    fun withFlywheelSpeed(rpm: Double) = copy(
+        flywheel = flywheel.copy(targetVelocityRpm = rpm, allMotorsAtTarget = false)
+    )
     fun withCowlAngle(rotations: Double) = copy(cowl = cowl.copy(targetAngleRotations = rotations))
     fun withIntakePivot(deployed: Boolean) = copy(intake = intake.copy(
         isDeployed = deployed,

@@ -4,19 +4,21 @@ import com.areslib.Store
 
 /** Coordinates the feeder transfer latch and optional floor-roller assist. */
 class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
+    private var transferStartTimeMs = NOT_STARTED
+    private var transferConsumed = false
 
-    /** True after a shot transfer has been explicitly started and before [stop]. */
+    /** True after a shot transfer has been explicitly started and before cancellation/timeout. */
     val transferActive: Boolean
         get() = store.state.superstructure.marvin.transferActive
 
-    /** Latches transfer active and commands the calibrated feeder shooting speed. */
-    fun shoot() {
-        dispatchOnChange(store.state.superstructure.marvin.transferActive, true, ::SetTransferActive) {}
-        dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, MarvinConfig.FEEDER_SHOOT_SPEED_RPS, ::SetFeederSpeed) {}
+    /** Ends the current trigger cycle so a later press may authorize one new transfer. */
+    fun cancelTransfer() {
+        transferStartTimeMs = NOT_STARTED
+        transferConsumed = false
+        stopOutputs()
     }
 
-    /** Clears the transfer latch and stops both feeder and floor targets. */
-    fun stop() {
+    private fun stopOutputs() {
         dispatchOnChange(store.state.superstructure.marvin.transferActive, false, ::SetTransferActive) {}
         dispatchOnChange(store.state.superstructure.marvin.feeder.targetVelocityRps, 0.0, ::SetFeederSpeed) {}
         dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, 0.0, ::SetFloorSpeed) {}
@@ -34,11 +36,23 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
         cowlReady: Boolean,
         runFloorRollers: Boolean = false
     ) {
+        val nowMs = com.areslib.util.RobotClock.currentTimeMillis()
         val canStartTransfer = headingAligned && rpmAligned && cowlReady
-        if (canStartTransfer && !transferActive) {
-            store.dispatch(SetTransferActive(true))
+        if (transferActive && transferStartTimeMs == NOT_STARTED) transferStartTimeMs = nowMs
+        if (transferStartTimeMs != NOT_STARTED) {
+            val elapsedMs = nowMs - transferStartTimeMs
+            if (elapsedMs < 0L || elapsedMs >= TRANSFER_DURATION_MS) {
+                transferStartTimeMs = NOT_STARTED
+                transferConsumed = true
+                stopOutputs()
+                return
+            }
         }
-        val speed = if (canStartTransfer || transferActive) {
+        if (canStartTransfer && !transferActive && !transferConsumed) {
+            store.dispatch(SetTransferActive(true))
+            transferStartTimeMs = nowMs
+        }
+        val speed = if (transferActive) {
             MarvinConfig.FEEDER_SHOOT_SPEED_RPS
         } else {
             0.0
@@ -47,5 +61,10 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
 
         val floorSpeed = if (runFloorRollers) speed else 0.0
         dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, floorSpeed, ::SetFloorSpeed) {}
+    }
+
+    private companion object {
+        const val NOT_STARTED = -1L
+        const val TRANSFER_DURATION_MS = 450L
     }
 }

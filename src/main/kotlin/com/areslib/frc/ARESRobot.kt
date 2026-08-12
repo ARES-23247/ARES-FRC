@@ -35,31 +35,51 @@ import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.frc.robot.FrcSysIdController
 import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
-import com.areslib.frc.generatedruntime.FrcControllerBindingHost
-import com.areslib.frc.generated.GeneratedAresProject
 import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
-import com.areslib.frc.generatedruntime.selectDefaultGeneratedControlScheme
 
-/**
- * Current Driver Station alliance in the platform-neutral ARES state model.
- * Unknown station data deliberately falls back to Blue so blue-origin field transforms remain
- * defined before the Driver Station supplies an alliance.
- */
-val aresAlliance: com.areslib.state.Alliance
-    get() = when (DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)) {
-        DriverStation.Alliance.Red -> com.areslib.state.Alliance.RED
-        DriverStation.Alliance.Blue -> com.areslib.state.Alliance.BLUE
-        else -> com.areslib.state.Alliance.BLUE
-    }
-
-/** Returns false when any real mechanism adapter reports failed one-time configuration. */
-internal fun mechanismsConfigured(vararg devices: Any): Boolean {
+/** Returns false when any real mechanism adapter reports failed or reset configuration. */
+internal fun mechanismsConfigured(
+    vararg devices: com.areslib.frc.hardware.FrcMechanismConfigurationStatus
+): Boolean {
     for (device in devices) {
-        val status = device as? com.areslib.frc.hardware.FrcMechanismConfigurationStatus ?: continue
-        if (!status.configurationValid) return false
+        if (!device.configurationValid) return false
     }
     return true
 }
+
+/** Returns false until every relative-only position mechanism has a deliberate safe zero. */
+internal fun mechanismsHomed(
+    vararg devices: com.areslib.frc.hardware.FrcMechanismHomingStatus
+): Boolean {
+    for (device in devices) {
+        if (!device.homed) return false
+    }
+    return true
+}
+
+internal fun mechanismSafetyHealthy(
+    configurationValid: Boolean,
+    homingValid: Boolean,
+    fatalUpdateFailure: Throwable?
+): Boolean = configurationValid && homingValid && fatalUpdateFailure == null
+
+internal fun mechanismHomingComboPressed(
+    driverBack: Boolean,
+    driverStart: Boolean,
+    operatorBack: Boolean,
+    operatorStart: Boolean
+): Boolean = driverBack && driverStart && operatorBack && operatorStart
+
+internal fun mechanismHomingRequestAllowed(isDisabled: Boolean, isTestEnabled: Boolean): Boolean =
+    isDisabled && !isTestEnabled
+
+/** Rejects an unavailable or suspicious enabled PDH total so shared fallback remains truthful. */
+internal fun validatedPdhCurrent(readingAmps: Double, robotEnabled: Boolean): Double =
+    if (readingAmps.isFinite() && readingAmps >= 0.0 && (!robotEnabled || readingAmps > 0.0)) {
+        readingAmps
+    } else {
+        Double.NaN
+    }
 
 /**
  * WPILib lifecycle and dependency-composition root for Marvin XIX.
@@ -74,8 +94,6 @@ class ARESRobot : TimedRobot() {
     private lateinit var robot: FrcSwerveRobot
     private var sim: Dyn4jSimulation? = null
     private lateinit var marvinShooter: MarvinShooterSubsystem
-    private lateinit var marvinIntake: MarvinIntakeSubsystem
-    private lateinit var marvinClimber: MarvinClimberSubsystem
 
     private val controller = XboxController(0)
     private val coPilotController = XboxController(1)
@@ -85,7 +103,6 @@ class ARESRobot : TimedRobot() {
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
     private lateinit var sysIdController: FrcSysIdController
-    private var generatedControllerBindings: FrcControllerBindingHost? = null
     private var localizationCalibration: FrcLocalizationCalibrationSession? = null
     private var localizationVisionTracker: FrcVisionTracker? = null
     private val calibrationButtonState = BooleanArray(12)
@@ -97,6 +114,13 @@ class ARESRobot : TimedRobot() {
     private val swerveCalibrationSamples = SwerveOffsetCalibrationSampleCache()
     private val calibrationEncoderPositions = DoubleArray(SwerveOffsetCalibrationSampleCache.MODULE_COUNT)
     private var mechanismConfigurationValid = true
+    private var mechanismConfigurationDevices =
+        emptyArray<com.areslib.frc.hardware.FrcMechanismConfigurationStatus>()
+    private var mechanismConfigurationContractComplete = true
+    private var mechanismHomingValid = true
+    private var mechanismHomingDevices = emptyArray<com.areslib.frc.hardware.FrcMechanismHomingStatus>()
+    private var flywheelTuningStatus: com.areslib.frc.hardware.FrcFlywheelTuningStatus? = null
+    private var homingComboWasPressed = false
 
     // Simulation timing
     private var lastSimTime = 0.0
@@ -125,7 +149,7 @@ class ARESRobot : TimedRobot() {
                 edu.wpi.first.wpilibj.PowerDistribution()
             } catch (error: Exception) {
                 DriverStation.reportError(
-                    "ARES: PowerDistribution initialization failed; using cached motor-current fallback: " +
+                    "ARES: PowerDistribution initialization failed; current monitoring will fail closed: " +
                         error.message,
                     false
                 )
@@ -192,17 +216,47 @@ class ARESRobot : TimedRobot() {
             climberIO = simInstance.climberIO
         }
 
-        mechanismConfigurationValid = mechanismsConfigured(
+        mechanismConfigurationDevices = listOf(
             flywheelIO, cowlIO, intakeIO, feederIO, floorIO, climberIO
-        )
+        ).mapNotNull { it as? com.areslib.frc.hardware.FrcMechanismConfigurationStatus }
+            .toTypedArray()
+        mechanismConfigurationContractComplete = !isReal ||
+            mechanismConfigurationDevices.size == EXPECTED_REAL_MECHANISM_COUNT
+        mechanismConfigurationValid = mechanismConfigurationContractComplete &&
+            mechanismsConfigured(*mechanismConfigurationDevices)
+        mechanismHomingDevices = if (isReal) {
+            arrayOf(
+                cowlIO as com.areslib.frc.hardware.FrcMechanismHomingStatus,
+                intakeIO as com.areslib.frc.hardware.FrcMechanismHomingStatus,
+                climberIO as com.areslib.frc.hardware.FrcMechanismHomingStatus
+            )
+        } else {
+            emptyArray()
+        }
+        mechanismHomingValid = mechanismsHomed(*mechanismHomingDevices)
+        flywheelTuningStatus = flywheelIO as? com.areslib.frc.hardware.FrcFlywheelTuningStatus
 
-        // Register subsystems to HardwareRegistry so they are refreshed/logged automatically
-        com.areslib.hardware.HardwareRegistry.registerDevice("Flywheel", flywheelIO)
-        com.areslib.hardware.HardwareRegistry.registerDevice("Cowl", cowlIO)
-        com.areslib.hardware.HardwareRegistry.registerDevice("Intake", intakeIO)
-        com.areslib.hardware.HardwareRegistry.registerDevice("Feeder", feederIO)
-        com.areslib.hardware.HardwareRegistry.registerDevice("Floor", floorIO)
-        com.areslib.hardware.HardwareRegistry.registerDevice("Climber", climberIO)
+        // Register each logical mechanism once for lifecycle/telemetry and attach its physical CAN
+        // identity for dashboard topology discovery. Multi-motor mechanisms retain every member ID
+        // in metadata while canId identifies the primary controller.
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Flywheel", flywheelIO, marvinCanTopology("Flywheel", 9, 9, 10, 11, 12)
+        )
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Cowl", cowlIO, marvinCanTopology("Cowl", 13, 13)
+        )
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Intake", intakeIO, marvinCanTopology("Intake", 14, 14, 15)
+        )
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Feeder", feederIO, marvinCanTopology("Feeder", 20, 20)
+        )
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Floor", floorIO, marvinCanTopology("Floor", 16, 16)
+        )
+        com.areslib.hardware.HardwareRegistry.registerDevice(
+            "Climber", climberIO, marvinCanTopology("Climber", 19, 19)
+        )
 
         // 2. Compose the root reducer with the Marvin reducer
         fun composedReducer(state: RobotState, action: RobotAction): RobotState {
@@ -227,6 +281,39 @@ class ARESRobot : TimedRobot() {
             initialState = initialState,
             reducer = ::composedReducer
         )
+
+        if (swerveIO != null) {
+            com.areslib.hardware.HardwareRegistry.registerDevice(
+                "Swerve",
+                swerveIO,
+                com.areslib.hardware.TopologyNode(
+                    id = "Swerve",
+                    type = com.areslib.hardware.TopologyNodeType.CANIVORE,
+                    displayName = "CTRE Swerve (CAN2)",
+                    canBus = MARVIN_CAN_BUS,
+                    connectionType = "CAN-FD",
+                    metadata = mapOf(
+                        "driveMotorCanIds" to "8,2,6,4",
+                        "steerMotorCanIds" to "7,1,5,3",
+                        "encoderCanIds" to "14,11,13,12",
+                        "pigeonCanId" to "9"
+                    )
+                )
+            )
+        }
+        if (visionIO != null) {
+            com.areslib.hardware.HardwareRegistry.registerDevice(
+                "Vision",
+                visionIO,
+                com.areslib.hardware.TopologyNode(
+                    id = "Vision",
+                    type = com.areslib.hardware.TopologyNodeType.CAMERA,
+                    displayName = "Dual Limelight",
+                    connectionType = "NetworkTables",
+                    metadata = mapOf("sources" to "limelight-shooter,limelight-back")
+                )
+            )
+        }
 
         robot.store.actionListener = { action ->
             if (action is RobotAction.CalibrateSwerveOffsets && swerveIO != null) {
@@ -271,8 +358,6 @@ class ARESRobot : TimedRobot() {
 
         // 6. Instantiate the facades
         marvinShooter = MarvinShooterSubsystem(robot.store)
-        marvinIntake = MarvinIntakeSubsystem(robot.store)
-        marvinClimber = MarvinClimberSubsystem(robot.store)
 
         // 7. Register a custom telemetry publisher for Marvin state
         robot.telemetryManager.customPublishers.add { state, telemetry ->
@@ -293,6 +378,8 @@ class ARESRobot : TimedRobot() {
             superstructureTelemetry[12] = marvin.climber.targetVoltage
             superstructureTelemetry[13] = if (marvin.slamtakeActive) 1.0 else 0.0
             telemetry.putDoubleArray("Superstructure/PackedState", superstructureTelemetry)
+            telemetry.putBoolean("Safety/MechanismFaultLatched", marvin.mechanismSafetyFaultLatched)
+            telemetry.putString("Safety/MechanismFaultReason", marvin.mechanismSafetyFaultReason)
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
                 val loopCounter = (state.timestampMs / 20) // 50Hz
                 if (loopCounter % 25L == 0L) { // 2Hz
@@ -304,7 +391,7 @@ class ARESRobot : TimedRobot() {
         lastSimTime = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
 
         // Wire brownout guard to read live battery voltage from roboRIO
-        robot.batteryVoltageSupplier = {
+        robot.batteryVoltageSupplier = java.util.function.DoubleSupplier {
             try {
                 edu.wpi.first.wpilibj.RobotController.getBatteryVoltage()
             } catch (_: Exception) {
@@ -312,16 +399,21 @@ class ARESRobot : TimedRobot() {
             }
         }
         if (isReal) {
-            robot.totalCurrentSupplier = {
-                powerDistribution?.totalCurrent ?: Double.NaN
+            robot.totalCurrentSupplier = java.util.function.DoubleSupplier {
+                val reading = try {
+                    powerDistribution?.totalCurrent ?: Double.NaN
+                } catch (_: Exception) {
+                    Double.NaN
+                }
+                validatedPdhCurrent(reading, DriverStation.isEnabled())
             }
-            robot.brownedOutSupplier = {
+            robot.brownedOutSupplier = java.util.function.BooleanSupplier {
                 edu.wpi.first.wpilibj.RobotController.isBrownedOut()
             }
         }
 
         teleOpController = FRCTeleOpDriveController(
-            robot, marvinShooter, marvinIntake, marvinClimber,
+            robot, marvinShooter,
             controller, coPilotController, controllerState, coPilotControllerState
         )
         sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
@@ -329,23 +421,56 @@ class ARESRobot : TimedRobot() {
         FrcAutoCapabilities.register()
         autoOrchestrator = FRCAutoOrchestrator(robot, sim)
         autoOrchestrator.publishCatalog()
-        installGeneratedControllerBindingsFromProject()
+        robot.telemetry.putString("ARES/Controls/Source", "hardcoded")
+        robot.publishHardwareTopology(MARVIN_ROBOT_ID)
 
         addPeriodic({
             try {
                 robot.update(controllerState, coPilotControllerState)
+                if (mechanismHomingValid) {
+                    for (device in mechanismHomingDevices) {
+                        if (!device.homed) {
+                            mechanismHomingValid = false
+                            throw IllegalStateException(
+                                "Relative mechanism reference was lost; Disabled safe-zero recovery is required"
+                            )
+                        }
+                    }
+                }
                 if (swerveIO != null) {
                     swerveCalibrationSamples.record(
                         swerveIO,
                         com.areslib.util.RobotClock.currentTimeMillis()
                     )
                 }
-                val tuningEnabled = DriverStation.isTest() || RobotBase.isSimulation()
+                val tuningEnabled = DriverStation.isTestEnabled()
                 robot.isLiveTuningEnabled = tuningEnabled
-                sysIdController.update(com.areslib.util.RobotClock.currentTimeMillis(), robot.store.state, tuningEnabled)
-            } catch (e: Exception) {
-                DriverStation.reportError("Periodic loop exception", false)
-                latchMechanismAllStop()
+                if (flywheelTuningStatus?.lastTuningApplySuccessful == false) {
+                    throw IllegalStateException("Flywheel live tuning did not reach every motor")
+                }
+                mechanismConfigurationValid = mechanismConfigurationContractComplete &&
+                    mechanismsConfigured(*mechanismConfigurationDevices)
+                if (!mechanismConfigurationValid) {
+                    throw IllegalStateException(
+                        "A mechanism Talon reset or lost its verified configuration; restart and re-home"
+                    )
+                }
+                sysIdController.update(
+                    timestampMs = com.areslib.util.RobotClock.currentTimeMillis(),
+                    state = robot.store.state,
+                    enabledForTuning = tuningEnabled,
+                    hardwareSafetyPermitted = isMechanismHardwarePermitted(),
+                    powerScale = robot.powerManager.powerScale,
+                    brownedOut = robot.powerManager.isBrownedOut
+                )
+            } catch (failure: Throwable) {
+                DriverStation.reportError(
+                    "Periodic loop exception: ${failure.message ?: failure::class.java.simpleName}",
+                    false
+                )
+                latchMechanismFault(
+                    "Periodic loop exception: ${failure.message ?: failure::class.java.simpleName}"
+                )
             }
         }, 0.02, 0.005)
     }
@@ -383,78 +508,43 @@ class ARESRobot : TimedRobot() {
     override fun disabledInit() {
         if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
         if (::sysIdController.isInitialized) sysIdController.stop()
-        generatedControllerBindings?.cancel()
+        if (::robot.isInitialized) stopMechanismsForDisable()
         controller.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
         coPilotController.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0.0)
     }
 
     override fun disabledPeriodic() {
+        handleMechanismHomingRequest()
     }
 
     // ── Teleop ──
 
     override fun teleopInit() {
         autoOrchestrator.stop()
+        sysIdController.stop()
+        applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         teleOpController.teleopInit()
         applyMechanismSafetyPolicy("teleop initialization")
-        generatedControllerBindings?.cancel()
     }
 
     override fun teleopPeriodic() {
         try {
-            val generatedBindings = generatedControllerBindings
-            if (generatedBindings == null) {
-                teleOpController.teleopPeriodic()
-            } else {
-                generatedBindings.update()
-                // Generated bindings own mechanisms. Legacy stick drive remains the explicit drive
-                // owner unless a generated routine is actively following a path.
-                if (!autoOrchestrator.generatedRoutineOwnsDrive()) {
-                    teleOpController.drivePeriodic()
-                }
-            }
-        } catch (error: Exception) {
-            DriverStation.reportError("Teleop controller exception: ${error.message}", false)
-            latchMechanismAllStop()
+            teleOpController.teleopPeriodic()
+        } catch (error: Throwable) {
+            DriverStation.reportError(
+                "Teleop controller exception: ${error.message ?: error::class.java.simpleName}",
+                false
+            )
+            latchMechanismFault(
+                "Teleop controller exception: ${error.message ?: error::class.java.simpleName}"
+            )
         }
-    }
-
-    private fun installGeneratedControllerBindingsFromProject() {
-        val schemeId = selectDefaultGeneratedControlScheme(GeneratedAresProject.knownControlSchemeIds)
-        if (schemeId == null) {
-            robot.telemetry.putString("ARES/Controls/Source", "legacy")
-            return
-        }
-        runCatching { autoOrchestrator.createControllerBindingHost(schemeId) }
-            .onSuccess { host ->
-                installGeneratedControllerBindings(host)
-                robot.telemetry.putString("ARES/Controls/Source", "generated:$schemeId")
-            }
-            .onFailure { error ->
-                installGeneratedControllerBindings(null)
-                val message = "Generated controls '$schemeId' were rejected; using legacy: " +
-                    (error.message ?: error::class.java.simpleName)
-                robot.telemetry.putString("ARES/Controls/Error", message)
-                DriverStation.reportWarning(message, false)
-            }
-    }
-
-    /**
-     * Installs a complete generated scheme at the platform boundary.
-     *
-     * The generated catalog currently declares no schemes, so production retains the proven
-     * hardcoded controller. Once code generation emits a complete graph, robot initialization can
-     * install it here without mixing duplicate actions from two teleop owners.
-     */
-    internal fun installGeneratedControllerBindings(host: FrcControllerBindingHost?) {
-        generatedControllerBindings?.cancel()
-        generatedControllerBindings = host
     }
 
     // ── Autonomous ──
 
     override fun autonomousInit() {
-        generatedControllerBindings?.cancel()
+        sysIdController.stop()
         applyMechanismSafetyPolicy("autonomous initialization")
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         autoOrchestrator.autonomousInit()
@@ -471,8 +561,9 @@ class ARESRobot : TimedRobot() {
     // ── Localization calibration (Driver Station Test mode) ──
 
     override fun testInit() {
-        generatedControllerBindings?.cancel()
         autoOrchestrator.stop()
+        sysIdController.stop()
+        applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
         applyMechanismSafetyPolicy("test initialization")
         robot.swerveDrive.brake()
         localizationCalibration?.close()
@@ -487,6 +578,7 @@ class ARESRobot : TimedRobot() {
     }
 
     override fun testPeriodic() {
+        val homingComboPressed = handleMechanismHomingRequest()
         val calibration = localizationCalibration ?: return
         teleOpController.drivePeriodic()
         val timestampMs = com.areslib.util.RobotClock.currentTimeMillis()
@@ -501,8 +593,8 @@ class ARESRobot : TimedRobot() {
         }
         if (calibrationRising(2, controller.xButton)) calibration.markStart(timestampMs)
         if (calibrationRising(3, controller.yButton)) calibration.markEnd(timestampMs)
-        if (calibrationRising(4, controller.backButton)) calibration.zeroTruth()
-        if (calibrationRising(5, controller.startButton)) calibration.seedPoseToTruth(timestampMs)
+        if (calibrationRising(4, controller.backButton && !homingComboPressed)) calibration.zeroTruth()
+        if (calibrationRising(5, controller.startButton && !homingComboPressed)) calibration.seedPoseToTruth(timestampMs)
         if (calibrationRising(6, controller.leftBumperButton)) {
             calibration.adjustTruth(deltaHeading = -Math.toRadians(5.0))
         }
@@ -525,6 +617,7 @@ class ARESRobot : TimedRobot() {
     }
 
     override fun testExit() {
+        sysIdController.stop()
         localizationVisionTracker?.fusionEnabled = true
         localizationVisionTracker = null
         localizationCalibration?.close()
@@ -538,40 +631,168 @@ class ARESRobot : TimedRobot() {
     }
 
     private fun applyMechanismSafetyPolicy(source: String) {
-        robot.store.dispatch(SetMechanismSafetyInhibit(!mechanismConfigurationValid))
-        robot.telemetry.putBoolean("Safety/MechanismConfigurationValid", mechanismConfigurationValid)
-        if (!mechanismConfigurationValid) {
+        mechanismConfigurationValid = mechanismConfigurationContractComplete &&
+            mechanismsConfigured(*mechanismConfigurationDevices)
+        val configurationHealthy = mechanismConfigurationValid &&
+            (flywheelTuningStatus?.lastTuningApplySuccessful != false)
+        mechanismHomingValid = mechanismsHomed(*mechanismHomingDevices)
+        val healthy = mechanismSafetyHealthy(
+            configurationHealthy,
+            mechanismHomingValid,
+            robot.fatalUpdateFailure
+        )
+        if (healthy) {
+            // The reducer refuses this temporary clear while a distinct fault remains latched.
+            robot.store.dispatch(SetMechanismSafetyInhibit(false))
+        } else {
+            robot.store.dispatch(
+                LatchMechanismSafetyFault(
+                    "Mechanism safety validation failed during $source " +
+                        "(configured=$configurationHealthy, homed=$mechanismHomingValid, " +
+                        "fatalUpdate=${robot.fatalUpdateFailure != null})"
+                )
+            )
+        }
+        val persistentFault = robot.store.state.superstructure.marvin
+        robot.telemetry.putBoolean("Safety/MechanismConfigurationValid", configurationHealthy)
+        robot.telemetry.putBoolean("Safety/MechanismsHomed", mechanismHomingValid)
+        robot.telemetry.putBoolean("Safety/MechanismFaultLatched", persistentFault.mechanismSafetyFaultLatched)
+        robot.telemetry.putString("Safety/MechanismFaultReason", persistentFault.mechanismSafetyFaultReason)
+        if (!healthy) {
             DriverStation.reportError(
-                "ARES: mechanism configuration invalid during $source; outputs remain inhibited",
+                "ARES: mechanism safety validation failed during $source " +
+                    "(configured=$configurationHealthy, homed=$mechanismHomingValid, " +
+                    "fatalUpdate=${robot.fatalUpdateFailure != null}); " +
+                    "outputs remain inhibited",
+                false
+            )
+            robot.safeHardware()
+        } else if (persistentFault.mechanismSafetyFaultLatched) {
+            DriverStation.reportError(
+                "ARES: mechanism fault remains latched during $source; Disabled dual-operator " +
+                    "recovery is required (${persistentFault.mechanismSafetyFaultReason})",
                 false
             )
             robot.safeHardware()
         }
     }
 
-    private fun latchMechanismAllStop() {
+    private fun isMechanismHardwarePermitted(): Boolean {
+        val configurationHealthy = mechanismConfigurationValid &&
+            (flywheelTuningStatus?.lastTuningApplySuccessful != false)
+        return mechanismSafetyHealthy(
+            configurationHealthy,
+            mechanismHomingValid,
+            robot.fatalUpdateFailure
+        ) && !robot.store.state.superstructure.marvin.mechanismSafetyInhibited &&
+            !robot.store.state.superstructure.marvin.mechanismSafetyFaultLatched
+    }
+
+    /**
+     * Both operators must hold Back+Start while Disabled after physically placing
+     * the cowl, intake pivot, and climber at their documented zero stops.
+     */
+    private fun handleMechanismHomingRequest(): Boolean {
+        val comboPressed = mechanismHomingComboPressed(
+            controller.backButton,
+            controller.startButton,
+            coPilotController.backButton,
+            coPilotController.startButton
+        )
+        if (comboPressed && !homingComboWasPressed) {
+            if (mechanismHomingRequestAllowed(DriverStation.isDisabled(), DriverStation.isTestEnabled())) {
+                robot.safeHardware()
+                var allSucceeded = true
+                for (device in mechanismHomingDevices) {
+                    if (!device.homeAtKnownZero()) allSucceeded = false
+                }
+                mechanismHomingValid = allSucceeded && mechanismsHomed(*mechanismHomingDevices)
+                mechanismConfigurationValid = mechanismConfigurationContractComplete &&
+                    mechanismsConfigured(*mechanismConfigurationDevices)
+                val recoveryHealthy = mechanismSafetyHealthy(
+                    mechanismConfigurationValid &&
+                        (flywheelTuningStatus?.lastTuningApplySuccessful != false),
+                    mechanismHomingValid,
+                    robot.fatalUpdateFailure
+                )
+                if (recoveryHealthy) {
+                    robot.store.dispatch(
+                        ClearMechanismSafetyFault("Dual-operator Disabled safe-zero recovery")
+                    )
+                }
+                applyMechanismSafetyPolicy("operator-confirmed safe-zero homing")
+                if (mechanismHomingValid) {
+                    DriverStation.reportWarning("ARES: cowl, intake pivot, and climber safe zeros accepted", false)
+                }
+            } else {
+                DriverStation.reportError("ARES: mechanism recovery rejected outside Disabled", false)
+            }
+        }
+        homingComboWasPressed = comboPressed
+        return comboPressed
+    }
+
+    private fun stopMechanismsForDisable() {
         runCatching { robot.store.dispatch(SetMechanismSafetyInhibit(true)) }
+        robot.safeHardware()
+    }
+
+    private fun latchMechanismFault(reason: String) {
+        runCatching { robot.store.dispatch(LatchMechanismSafetyFault(reason)) }
         robot.safeHardware()
     }
 
     override fun close() {
         var failure: Throwable? = null
+        fun capture(error: Throwable) {
+            failure?.addSuppressed(error) ?: run { failure = error }
+        }
         try {
-            if (::robot.isInitialized) robot.close()
+            if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
         } catch (error: Throwable) {
-            failure = error
+            capture(error)
+        }
+        try {
+            if (::sysIdController.isInitialized) sysIdController.stop()
+        } catch (error: Throwable) {
+            capture(error)
+        }
+        try {
+            localizationVisionTracker?.fusionEnabled = true
+            localizationCalibration?.close()
+        } catch (error: Throwable) {
+            capture(error)
+        } finally {
+            localizationVisionTracker = null
+            localizationCalibration = null
+        }
+        try {
+            if (::robot.isInitialized) {
+                robot.close()
+            } else {
+                com.areslib.hardware.HardwareRegistry.closeAll()
+            }
+        } catch (error: Throwable) {
+            capture(error)
+        }
+        try {
+            sim?.close()
+        } catch (error: Throwable) {
+            capture(error)
+        } finally {
+            sim = null
         }
         try {
             powerDistribution?.close()
         } catch (error: Throwable) {
-            failure?.addSuppressed(error) ?: run { failure = error }
+            capture(error)
         } finally {
             powerDistribution = null
         }
         try {
             super.close()
         } catch (error: Throwable) {
-            failure?.addSuppressed(error) ?: run { failure = error }
+            capture(error)
         }
         failure?.let { throw it }
     }
@@ -584,7 +805,7 @@ class ARESRobot : TimedRobot() {
         val simInstance = sim ?: return
 
         val now = com.areslib.util.RobotClock.currentTimeMillis() / 1000.0
-        val dt = Math.min(now - lastSimTime, 0.05)
+        val dt = (now - lastSimTime).coerceIn(0.0, 0.05)
         lastSimTime = now
 
         // Step physics and dispatch any resulting actions (ball intake/shoot)
@@ -600,4 +821,28 @@ class ARESRobot : TimedRobot() {
         // Publish 3D visualization
         simInstance.publishVisualization(robot.store.state, robot.telemetry)
     }
+
+    private companion object {
+        const val EXPECTED_REAL_MECHANISM_COUNT = 6
+        const val MARVIN_CAN_BUS = "CAN2"
+        const val MARVIN_ROBOT_ID = "Marvin-XIX"
+    }
 }
+
+internal fun marvinCanTopology(
+    displayName: String,
+    primaryCanId: Int,
+    vararg memberCanIds: Int
+): com.areslib.hardware.TopologyNode = com.areslib.hardware.TopologyNode(
+    id = displayName,
+    type = com.areslib.hardware.TopologyNodeType.CAN_MOTOR_CONTROLLER,
+    displayName = displayName,
+    canId = primaryCanId,
+    canBus = "CAN2",
+    busPosition = primaryCanId,
+    connectionType = "CAN-FD",
+    metadata = mapOf(
+        "canIds" to memberCanIds.joinToString(","),
+        "controllerModel" to "TalonFX"
+    )
+)

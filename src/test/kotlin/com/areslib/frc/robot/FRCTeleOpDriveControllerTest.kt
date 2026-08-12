@@ -16,8 +16,6 @@ class FRCTeleOpDriveControllerTest {
 
     private lateinit var robot: FrcSwerveRobot
     private lateinit var marvinShooter: MarvinShooterSubsystem
-    private lateinit var marvinIntake: MarvinIntakeSubsystem
-    private lateinit var marvinClimber: MarvinClimberSubsystem
     private lateinit var controller: XboxController
     private lateinit var coPilotController: XboxController
     private lateinit var controllerState: GamepadState
@@ -37,8 +35,6 @@ class FRCTeleOpDriveControllerTest {
         )
         
         marvinShooter = MarvinShooterSubsystem(robot.store)
-        marvinIntake = MarvinIntakeSubsystem(robot.store)
-        marvinClimber = MarvinClimberSubsystem(robot.store)
         
         controller = XboxController(0)
         coPilotController = XboxController(1)
@@ -47,7 +43,7 @@ class FRCTeleOpDriveControllerTest {
         coPilotControllerState = GamepadState()
 
         teleOpController = FRCTeleOpDriveController(
-            robot, marvinShooter, marvinIntake, marvinClimber,
+            robot, marvinShooter,
             controller, coPilotController, controllerState, coPilotControllerState
         )
         teleOpController.teleopInit()
@@ -187,11 +183,34 @@ class FRCTeleOpDriveControllerTest {
         teleOpController.latchControllerAllStop("test controller", IllegalStateException("boom"))
 
         assertTrue(robot.store.state.superstructure.marvin.mechanismSafetyInhibited)
+        assertTrue(robot.store.state.superstructure.marvin.mechanismSafetyFaultLatched)
+        assertTrue(
+            robot.store.state.superstructure.marvin.mechanismSafetyFaultReason.contains("boom")
+        )
+        assertEquals(com.areslib.state.DriveMode.X_BRAKE, robot.store.state.drive.driveMode)
+        assertTrue(robot.store.state.drive.isXLock)
         assertFalse(robot.store.state.superstructure.marvin.flywheelActive)
         assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
         robot.store.dispatch(SetFlywheelSpeed(5_000.0))
         robot.store.dispatch(SetFeederSpeed(12.0))
         assertEquals(0.0, robot.store.state.superstructure.marvin.flywheel.targetVelocityRpm)
         assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
+    }
+
+    @Test
+    fun slamtakeRequiresANewAButtonEdgeAfterCompletion() {
+        controllerState.a = true
+        teleOpController.teleopPeriodic()
+        assertTrue(robot.store.state.superstructure.marvin.slamtakeActive)
+
+        robot.store.dispatch(StopSlamtake())
+        teleOpController.teleopPeriodic()
+        assertFalse(robot.store.state.superstructure.marvin.slamtakeActive)
+
+        controllerState.a = false
+        teleOpController.teleopPeriodic()
+        controllerState.a = true
+        teleOpController.teleopPeriodic()
+        assertTrue(robot.store.state.superstructure.marvin.slamtakeActive)
     }
 }

@@ -1,6 +1,10 @@
 package com.areslib.frc
 
 import com.areslib.frc.marvin.MarvinConfig
+import com.areslib.frc.marvin.SetFlywheelSpeed
+import com.areslib.frc.marvin.SetFlywheelActive
+import com.areslib.frc.marvin.LatchMechanismSafetyFault
+import com.areslib.frc.marvin.marvin
 import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.math.coordinate.CoordinateTransformers
 import com.areslib.state.Alliance
@@ -8,8 +12,10 @@ import com.areslib.util.RobotClock
 import edu.wpi.first.hal.AllianceStationID
 import edu.wpi.first.hal.HAL
 import edu.wpi.first.wpilibj.simulation.DriverStationSim
+import edu.wpi.first.wpilibj.simulation.XboxControllerSim
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,6 +33,7 @@ class ARESRobotTimedBehaviorRegressionTest {
         DriverStationSim.setEnabled(false)
         DriverStationSim.setAllianceStationId(AllianceStationID.Red1)
         DriverStationSim.notifyNewData()
+        edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putString("Topology/HardwareMap", "")
     }
 
     @AfterEach
@@ -62,6 +69,90 @@ class ARESRobotTimedBehaviorRegressionTest {
         outer.robotPeriodic()
         assertEquals(Alliance.BLUE, facade.store.state.drive.alliance)
         assertEquals(MarvinConfig.FieldTargets.blueSpeaker, teleop.speakerTranslation)
+    }
+
+    @Test
+    fun `teleop and test init synchronously apply alliance assigned after robot init`() {
+        DriverStationSim.setAllianceStationId(AllianceStationID.Unknown)
+        DriverStationSim.notifyNewData()
+        val outer = ARESRobot()
+        timedRobot = outer
+        outer.robotInit()
+        val facade = privateField<FrcSwerveRobot>(outer, "robot")
+        val teleop = privateField<FRCTeleOpDriveController>(outer, "teleOpController")
+        assertEquals(Alliance.BLUE, facade.store.state.drive.alliance)
+
+        DriverStationSim.setAllianceStationId(AllianceStationID.Red1)
+        DriverStationSim.notifyNewData()
+        outer.teleopInit()
+        assertEquals(Alliance.RED, facade.store.state.drive.alliance)
+        assertEquals(MarvinConfig.FieldTargets.redSpeaker, teleop.speakerTranslation)
+        val topologyJson = facade.telemetry.getString("Topology/HardwareMap", "")
+        assertTrue(topologyJson.contains("\"robotId\":\"Marvin-XIX\""))
+        assertTrue(topologyJson.contains("\"canBus\":\"CAN2\""))
+        assertTrue(topologyJson.contains("\"canIds\":\"9,10,11,12\""))
+
+        DriverStationSim.setAllianceStationId(AllianceStationID.Blue1)
+        DriverStationSim.notifyNewData()
+        outer.testInit()
+        assertEquals(Alliance.BLUE, facade.store.state.drive.alliance)
+        assertEquals(MarvinConfig.FieldTargets.blueSpeaker, teleop.speakerTranslation)
+    }
+
+    @Test
+    fun `disabled init clears and latches stale mechanism targets`() {
+        val outer = ARESRobot()
+        timedRobot = outer
+        outer.robotInit()
+        val facade = privateField<FrcSwerveRobot>(outer, "robot")
+        facade.store.dispatch(SetFlywheelSpeed(4_000.0))
+        facade.store.dispatch(SetFlywheelActive(true))
+        assertTrue(facade.store.state.superstructure.marvin.flywheelActive)
+
+        outer.disabledInit()
+
+        val disabled = facade.store.state.superstructure.marvin
+        assertTrue(disabled.mechanismSafetyInhibited)
+        assertFalse(disabled.flywheelActive)
+        assertEquals(0.0, disabled.flywheel.targetVelocityRpm, 1e-9)
+    }
+
+    @Test
+    fun `mode init preserves fault latch until dual operator disabled recovery`() {
+        val outer = ARESRobot()
+        timedRobot = outer
+        outer.robotInit()
+        val facade = privateField<FrcSwerveRobot>(outer, "robot")
+        facade.store.dispatch(LatchMechanismSafetyFault("teleop controller failed"))
+
+        outer.disabledInit()
+        DriverStationSim.setAutonomous(true)
+        DriverStationSim.setEnabled(true)
+        DriverStationSim.notifyNewData()
+        outer.autonomousInit()
+
+        var marvin = facade.store.state.superstructure.marvin
+        assertTrue(marvin.mechanismSafetyInhibited)
+        assertTrue(marvin.mechanismSafetyFaultLatched)
+        assertEquals("teleop controller failed", marvin.mechanismSafetyFaultReason)
+
+        DriverStationSim.setAutonomous(false)
+        DriverStationSim.setEnabled(false)
+        DriverStationSim.notifyNewData()
+        outer.disabledInit()
+        val driver = XboxControllerSim(0)
+        val operator = XboxControllerSim(1)
+        driver.setBackButton(true)
+        driver.setStartButton(true)
+        operator.setBackButton(true)
+        operator.setStartButton(true)
+        DriverStationSim.notifyNewData()
+        outer.disabledPeriodic()
+
+        marvin = facade.store.state.superstructure.marvin
+        assertFalse(marvin.mechanismSafetyFaultLatched)
+        assertFalse(marvin.mechanismSafetyInhibited)
+        assertEquals("", marvin.mechanismSafetyFaultReason)
     }
 
     @Test

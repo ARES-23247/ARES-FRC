@@ -35,9 +35,18 @@ class MarvinSuperstructure(
     override fun readSensors(store: Store, timestampMs: Long) {
         val pieceDetectionValid = feederIO.pieceDetectionValid
         val pieceDetected = pieceDetectionValid && feederIO.isBeamBroken
+        val flywheelVelocityValid = flywheelIO.velocityValid
+        val targetFlywheelRpm = store.state.superstructure.marvin.flywheel.targetVelocityRpm
+        val allFlywheelMotorsAtTarget = flywheelVelocityValid && when (flywheelIO) {
+            is com.areslib.frc.hardware.FrcFlywheelPerMotorReadiness ->
+                flywheelIO.allMotorsAtTarget(targetFlywheelRpm, FLYWHEEL_READY_TOLERANCE_RPM)
+            else -> kotlin.math.abs(flywheelIO.velocityRpm - targetFlywheelRpm) <
+                FLYWHEEL_READY_TOLERANCE_RPM
+        }
         store.dispatch(SuperstructureSensorUpdate(
             flywheelRpm = flywheelIO.velocityRpm,
-            flywheelVelocityValid = flywheelIO.velocityValid,
+            flywheelVelocityValid = flywheelVelocityValid,
+            flywheelAllMotorsAtTarget = allFlywheelMotorsAtTarget,
             cowlAngleRotations = cowlIO.angleRotations,
             cowlAngleValid = cowlIO.angleValid,
             intakeAngle = intakeIO.pivotAngleDegrees,
@@ -68,7 +77,7 @@ class MarvinSuperstructure(
     /** Emits outputs from immutable state using [scale] as effort/velocity power budget. */
     override fun writeOutputs(state: RobotState, scale: Double) {
         val marvin = state.superstructure.marvin
-        if (marvin.mechanismSafetyInhibited) {
+        if (marvin.mechanismSafetyInhibited || marvin.mechanismSafetyFaultLatched) {
             flywheelIO.setAppliedVoltage(0.0)
             cowlIO.setAppliedVoltage(0.0)
             intakeIO.setPivotVoltage(0.0)
@@ -101,13 +110,15 @@ class MarvinSuperstructure(
             MarvinConfig.MechanismLimits.climberMaxRotations
         )
         val climberVoltage = finiteOrZero(marvin.climber.targetVoltage).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
+        val climberPositionValid = marvin.climber.positionValid &&
+            marvin.climber.positionRotations.isFinite()
         val climberMotionRequested = when (marvin.climber.controlMode) {
             ClimberControlMode.VOLTAGE -> kotlin.math.abs(climberVoltage) > OUTPUT_EPSILON
             ClimberControlMode.POSITION_ROTATIONS ->
-                !marvin.climber.positionValid ||
+                !climberPositionValid ||
                     kotlin.math.abs(climberTarget - marvin.climber.positionRotations) > POSITION_EPSILON_ROTATIONS
         }
-        val climberBlocksIntake = !marvin.climber.positionValid ||
+        val climberBlocksIntake = !climberPositionValid ||
             marvin.climber.positionRotations > MarvinConfig.MechanismLimits.climberClearanceRotations ||
             climberTarget > MarvinConfig.MechanismLimits.climberClearanceRotations || climberMotionRequested
         val requestedPivot = finiteOrZero(marvin.intake.targetAngleDegrees).coerceIn(
@@ -136,13 +147,13 @@ class MarvinSuperstructure(
 
         val intakeClear = marvin.intake.pivotAngleValid && marvin.intake.pivotAngleDegrees.isFinite() &&
             marvin.intake.pivotAngleDegrees <= MarvinConfig.MechanismLimits.intakeClearanceDegrees
-        if (climberMotionRequested && !intakeClear) {
+        if (climberMotionRequested && (!climberPositionValid || !intakeClear)) {
             climberIO.setAppliedVoltage(0.0)
         } else {
             when (marvin.climber.controlMode) {
                 ClimberControlMode.VOLTAGE -> climberIO.setAppliedVoltage(climberVoltage * effortScale)
                 ClimberControlMode.POSITION_ROTATIONS -> {
-                    if (marvin.climber.positionValid && marvin.climber.positionRotations.isFinite()) {
+                    if (climberPositionValid) {
                         climberIO.setTargetPositionRotations(climberTarget, effortScale)
                     } else {
                         climberIO.setAppliedVoltage(0.0)
@@ -163,6 +174,7 @@ class MarvinSuperstructure(
         private const val FLOOR_KV_VOLTS_PER_RPS = 0.12
         private const val NOMINAL_VOLTAGE = 12.0
         private const val MAX_FLYWHEEL_RPM = 6000.0
+        private const val FLYWHEEL_READY_TOLERANCE_RPM = 150.0
         private const val OUTPUT_EPSILON = 1e-4
         private const val POSITION_EPSILON_ROTATIONS = 0.01
     }

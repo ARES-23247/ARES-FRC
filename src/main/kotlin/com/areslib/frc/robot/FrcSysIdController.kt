@@ -5,10 +5,18 @@ import com.areslib.control.assist.SysIdManager
 import com.areslib.control.assist.SysIdMechanism
 import com.areslib.control.assist.SysIdRoutine
 import com.areslib.hardware.actuator.FlywheelIO
+import com.areslib.frc.hardware.FrcFlywheelTuningStatus
 import com.areslib.state.RobotState
 import com.areslib.telemetry.ITelemetry
 
-/** FRC test-mode executor for the shared flywheel SysId contract. */
+/**
+ * FRC test-mode executor for the shared flywheel SysId contract.
+ *
+ * [update] never infers hardware authorization from tuning mode alone. The season composition root
+ * must pass its verified configuration, homing, fatal-loop, and mechanism-latch decision through
+ * `hardwareSafetyPermitted`; losing that permission stops a running routine before another voltage
+ * is written.
+ */
 class FrcSysIdController(
     private val telemetry: ITelemetry,
     private val flywheel: FlywheelIO
@@ -20,21 +28,49 @@ class FrcSysIdController(
     private var lastCommand = ""
     private var lastTuning = com.areslib.state.MechanismTuningState()
 
-    fun update(timestampMs: Long, state: RobotState, enabledForTuning: Boolean) {
+    fun update(
+        timestampMs: Long,
+        state: RobotState,
+        enabledForTuning: Boolean,
+        hardwareSafetyPermitted: Boolean,
+        powerScale: Double = 1.0,
+        brownedOut: Boolean = false
+    ) {
+        val powerSafe = !brownedOut && powerScale.isFinite() && powerScale >= MINIMUM_SYSID_POWER_SCALE
+        val command = telemetry.getString("SysId/Command", "")
+        val newCommand = command != lastCommand
+        if (newCommand) lastCommand = command
+        if (!hardwareSafetyPermitted) {
+            manager.stop()
+            adapter.stop()
+            telemetry.putString("SysId/Status", "NONE")
+            telemetry.putString("SysId/Error", "MECHANISM_HARDWARE_SAFETY_INHIBITED")
+            telemetry.putDoubleArray("SysId/Data", emptySample)
+            return
+        }
         val tuning = state.tuning.subsystem.flywheel
-        if (tuning != lastTuning) {
+        val tuningStatus = flywheel as? FrcFlywheelTuningStatus
+        if (enabledForTuning && (tuning != lastTuning || tuningStatus?.lastTuningApplySuccessful == false)) {
             flywheel.configureVelocityController(tuning.velocityGains, tuning.feedforward)
-            lastTuning = tuning
+            if (tuningStatus?.lastTuningApplySuccessful != false) {
+                lastTuning = tuning
+            } else {
+                manager.stop()
+                adapter.stop()
+                telemetry.putString("SysId/Status", "NONE")
+                telemetry.putString("SysId/Error", "FLYWHEEL_TUNING_APPLY_FAILED")
+                telemetry.putDoubleArray("SysId/Data", emptySample)
+                return
+            }
         }
 
-        val command = telemetry.getString("SysId/Command", "")
-        if (command != lastCommand) {
-            lastCommand = command
+        if (newCommand) {
             manager.stop()
             adapter.stop()
             when {
                 command == "STOP" || command.isBlank() -> Unit
-                !enabledForTuning -> telemetry.putString("SysId/Error", "FRC_SYSID_REQUIRES_TEST_MODE")
+                !enabledForTuning -> telemetry.putString("SysId/Error", "FRC_SYSID_REQUIRES_TEST_ENABLED")
+                !powerSafe -> telemetry.putString("SysId/Error", "SYSID_REQUIRES_FULL_POWER")
                 command.startsWith("START_FLYWHEEL_") -> {
                     val routine = runCatching {
                         SysIdRoutine.valueOf(command.removePrefix("START_FLYWHEEL_"))
@@ -54,12 +90,21 @@ class FrcSysIdController(
             return
         }
         val pose = state.drive.poseEstimator.estimatedPose
-        if (!enabledForTuning || !adapter.measurementValid ||
+        if (!enabledForTuning || !powerSafe || !adapter.measurementValid ||
             !manager.checkSafety(pose.x, pose.y, pose.heading.radians, timestampMs)) {
             manager.stop()
             adapter.stop()
             telemetry.putString("SysId/Status", "NONE")
-            telemetry.putString("SysId/Error", if (!adapter.measurementValid) "INVALID_FLYWHEEL_MEASUREMENT" else "SYSID_ABORTED")
+            telemetry.putString(
+                "SysId/Error",
+                when {
+                    !enabledForTuning -> "FRC_SYSID_REQUIRES_TEST_ENABLED"
+                    !powerSafe -> "SYSID_POWER_DERATING_ABORT"
+                    !adapter.measurementValid -> "INVALID_FLYWHEEL_MEASUREMENT"
+                    else -> "SYSID_ABORTED"
+                }
+            )
+            telemetry.putDoubleArray("SysId/Data", emptySample)
             return
         }
 
@@ -78,5 +123,9 @@ class FrcSysIdController(
     fun stop() {
         manager.stop()
         adapter.stop()
+    }
+
+    private companion object {
+        const val MINIMUM_SYSID_POWER_SCALE = 0.999
     }
 }

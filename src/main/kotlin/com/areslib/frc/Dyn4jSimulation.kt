@@ -47,7 +47,7 @@ class FlyingBall(
 class Dyn4jSimulation(
     seed: Long = 42L,
     private val feederPieceDetectorConfigured: Boolean = false
-) {
+) : AutoCloseable {
 
     constructor(
         config: com.areslib.state.RobotFieldConfig,
@@ -57,12 +57,13 @@ class Dyn4jSimulation(
         buildWorld(config)
     }
 
-    private val physicsWorld = Dyn4jPhysicsWorld(seed)
+    private val physicsWorld = Dyn4jPhysicsWorld()
     private val swerveSim = Dyn4jSwerveModuleSim()
     private val telemetryPublisher = Dyn4jSimTelemetryPublisher()
     private val fieldConfigSubscriber = NetworkTableInstance.getDefault()
         .getStringTopic("ARES/Input/fieldConfig")
         .subscribe("")
+    private var closed = false
     private var lastFieldConfigJson = ""
 
     private var shootCooldownTimer = 0.0
@@ -154,8 +155,7 @@ class Dyn4jSimulation(
                 val ball = physicsWorld.balls[i]
                 val bx = ball.transform.translationX
                 val by = ball.transform.translationY
-                val dist = Math.hypot(bx - robotX, by - robotY)
-                if (dist < 0.5) {
+                if (isInsideIntakeCaptureZone(robotX, robotY, robotHeading, bx, by)) {
                     physicsWorld.world.removeBody(ball)
                     physicsWorld.balls.removeAt(i)
                     if (feederPieceDetectorConfigured) {
@@ -191,9 +191,13 @@ class Dyn4jSimulation(
             val robotVx = physicsWorld.robotBody.linearVelocity.x
             val robotVy = physicsWorld.robotBody.linearVelocity.y
             
-            val bx = robotX + kotlin.math.cos(robotHeading) * 0.5
-            val by = robotY + kotlin.math.sin(robotHeading) * 0.5
-            val bz = 0.6
+            val headingCos = kotlin.math.cos(robotHeading)
+            val headingSin = kotlin.math.sin(robotHeading)
+            val exitX = MarvinConfig.MechanismGeometry.SHOOTER_EXIT_X_METERS
+            val exitY = MarvinConfig.MechanismGeometry.SHOOTER_EXIT_Y_METERS
+            val bx = robotX + headingCos * exitX - headingSin * exitY
+            val by = robotY + headingSin * exitX + headingCos * exitY
+            val bz = MarvinConfig.MechanismGeometry.SHOOTER_EXIT_HEIGHT_METERS
             val vx = robotVx + launchVx
             val vy = robotVy + launchVy
             val vz = vVert
@@ -308,4 +312,29 @@ class Dyn4jSimulation(
     fun buildWorld(config: com.areslib.state.RobotFieldConfig) {
         physicsWorld.buildWorld(config)
     }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        fieldConfigSubscriber.close()
+    }
+}
+
+/** Pure robot-frame aperture check used by the runtime simulation and geometry regressions. */
+internal fun isInsideIntakeCaptureZone(
+    robotX: Double,
+    robotY: Double,
+    robotHeading: Double,
+    pieceX: Double,
+    pieceY: Double
+): Boolean {
+    val dx = pieceX - robotX
+    val dy = pieceY - robotY
+    val cosHeading = kotlin.math.cos(robotHeading)
+    val sinHeading = kotlin.math.sin(robotHeading)
+    val localX = cosHeading * dx + sinHeading * dy
+    val localY = -sinHeading * dx + cosHeading * dy
+    return localX >= MarvinConfig.MechanismGeometry.INTAKE_CAPTURE_MIN_X_METERS &&
+        localX <= MarvinConfig.MechanismGeometry.INTAKE_CAPTURE_MAX_X_METERS &&
+        kotlin.math.abs(localY) <= MarvinConfig.MechanismGeometry.INTAKE_CAPTURE_HALF_WIDTH_METERS
 }

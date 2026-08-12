@@ -57,7 +57,7 @@ Run these commands from this directory in PowerShell:
 # Start WPILib desktop simulation
 .\gradlew.bat simulateJava
 
-# Deploy for team 23247; always pass the team explicitly
+# Deploy for the default team 23247 (override only for an intentional alternate target)
 .\gradlew.bat deploy -PteamNumber=23247
 
 # Pull runtime-calibrated swerve offsets from the RoboRIO
@@ -89,7 +89,7 @@ cd ..\ARESLib-Kotlin
 | Path | Purpose |
 |---|---|
 | `.ares-robot.json` | Offline project identity used by Analytics workspace discovery |
-| `.ares/` | Canonical routines, autonomous/action catalogs, controller profiles, and control schemes |
+| `.ares/` | Canonical routines plus autonomous and action catalogs |
 | `src/main/kotlin/com/areslib/frc/ARESRobot.kt` | `TimedRobot` lifecycle and real/sim composition root |
 | `src/main/kotlin/com/areslib/frc/robot/` | Teleop drive and autonomous orchestration |
 | `src/main/kotlin/com/areslib/frc/marvin/` | Season state, actions, reducer, facades, and mechanism controllers |

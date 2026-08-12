@@ -169,6 +169,10 @@ class MarvinReducerTest {
         // Explicit cancellation also clears the active flag.
         val stateSlamtakeStop = MarvinReducer.reduce(stateSlamtakeStart, StopSlamtake(1500L))
         assertFalse(stateSlamtakeStop.superstructure.marvin.slamtakeActive)
+        assertEquals(0.0, stateSlamtakeStop.superstructure.marvin.intake.targetRollerVelocityRps)
+        assertEquals(0.0, stateSlamtakeStop.superstructure.marvin.floor.targetVelocityRps)
+        assertEquals(0.0, stateSlamtakeStop.superstructure.marvin.feeder.targetVelocityRps)
+        assertFalse(stateSlamtakeStop.superstructure.marvin.transferActive)
     }
 
     @Test
@@ -247,5 +251,30 @@ class MarvinReducerTest {
 
         assertFalse(invalidReading.superstructure.marvin.flywheel.velocityValid)
         assertFalse(invalidReading.superstructure.marvin.isFlywheelAtSpeed)
+    }
+
+    @Test
+    fun `fresh average without per-motor readiness proof cannot report ready`() {
+        val initial = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(flywheel = FlywheelState(targetVelocityRpm = 4000.0))
+            )
+        )
+
+        val unprovenReading = MarvinReducer.reduce(
+            initial,
+            SuperstructureSensorUpdate(
+                flywheelRpm = 4000.0,
+                cowlAngleRotations = 0.0,
+                intakeAngle = 0.0,
+                pieceDetected = false,
+                flywheelVelocityValid = true,
+                timestampMs = 1000L
+            )
+        )
+
+        assertTrue(unprovenReading.superstructure.marvin.flywheel.velocityValid)
+        assertFalse(unprovenReading.superstructure.marvin.flywheel.allMotorsAtTarget)
+        assertFalse(unprovenReading.superstructure.marvin.isFlywheelAtSpeed)
     }
 }

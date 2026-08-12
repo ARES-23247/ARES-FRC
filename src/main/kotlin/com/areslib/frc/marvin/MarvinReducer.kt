@@ -33,32 +33,29 @@ object MarvinReducer {
         // Then apply Marvin specific state updates
         val currentMarvin = nextState.superstructure.marvin
         val nextMarvin = when {
-            action is SetMechanismSafetyInhibit -> if (action.inhibited) {
-                currentMarvin.copy(
-                    flywheel = currentMarvin.flywheel.copy(targetVelocityRpm = 0.0),
-                    cowl = currentMarvin.cowl.copy(targetAngleRotations = 0.0),
-                    intake = currentMarvin.intake.copy(
-                        targetAngleDegrees = 0.0,
-                        targetRollerVelocityRps = 0.0,
-                        isDeployed = false
-                    ),
-                    feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
-                    climber = currentMarvin.climber.copy(
-                        targetPositionRotations = 0.0,
-                        targetVoltage = 0.0,
-                        controlMode = ClimberControlMode.VOLTAGE
-                    ),
-                    floor = currentMarvin.floor.copy(targetVelocityRps = 0.0),
-                    slamtakeActive = false,
-                    slamtakePhase = 0,
-                    flywheelActive = false,
-                    transferActive = false,
-                    mechanismSafetyInhibited = true
-                )
-            } else {
-                currentMarvin.copy(mechanismSafetyInhibited = false)
+            action is LatchMechanismSafetyFault -> currentMarvin.withAllOutputsStopped(
+                faultLatched = true,
+                faultReason = if (
+                    currentMarvin.mechanismSafetyFaultLatched &&
+                    currentMarvin.mechanismSafetyFaultReason.isNotBlank()
+                ) {
+                    currentMarvin.mechanismSafetyFaultReason
+                } else {
+                    action.reason.ifBlank { "Unspecified mechanism safety fault" }
+                }
+            )
+            action is ClearMechanismSafetyFault -> currentMarvin.copy(
+                mechanismSafetyInhibited = true,
+                mechanismSafetyFaultLatched = false,
+                mechanismSafetyFaultReason = ""
+            )
+            action is SetMechanismSafetyInhibit -> when {
+                action.inhibited -> currentMarvin.withAllOutputsStopped()
+                currentMarvin.mechanismSafetyFaultLatched -> null
+                else -> currentMarvin.copy(mechanismSafetyInhibited = false)
             }
-            currentMarvin.mechanismSafetyInhibited && action.isMechanismSetpointAction() -> null
+            (currentMarvin.mechanismSafetyInhibited || currentMarvin.mechanismSafetyFaultLatched) &&
+                action.isMechanismSetpointAction() -> null
             else -> when (action) {
             is SetFlywheelSpeed -> currentMarvin.withFlywheelSpeed(action.rpm)
             is SetCowlAngle -> currentMarvin.withCowlAngle(action.rotations)
@@ -67,7 +64,14 @@ object MarvinReducer {
             is SetFeederSpeed -> currentMarvin.withFeederSpeed(action.speedRps)
             is SetFloorSpeed -> currentMarvin.withFloorSpeed(action.speedRps)
             is SetClimberVoltage -> currentMarvin.withClimberVoltage(action.volts)
-            is SetFlywheelActive -> currentMarvin.copy(flywheelActive = action.active)
+            is SetFlywheelActive -> currentMarvin.copy(
+                flywheelActive = action.active,
+                flywheel = if (action.active) {
+                    currentMarvin.flywheel
+                } else {
+                    currentMarvin.flywheel.copy(allMotorsAtTarget = false)
+                }
+            )
             is SetTransferActive -> currentMarvin.copy(transferActive = action.active)
             is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
             is SetClimberPositionRotations -> currentMarvin.withClimberPositionRotations(action.rotations)
@@ -77,13 +81,19 @@ object MarvinReducer {
                     slamtakePhase = 1,
                     slamtakeStartTimeMs = action.timestampMs,
                     intake = currentMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
-                    floor = currentMarvin.floor.copy(targetVelocityRps = 10.0)
+                    floor = currentMarvin.floor.copy(targetVelocityRps = 10.0),
+                    feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
+                    transferActive = false
                 )
             }
             is StopSlamtake -> {
                 currentMarvin.copy(
                     slamtakeActive = false,
-                    slamtakePhase = 0
+                    slamtakePhase = 0,
+                    intake = currentMarvin.intake.copy(targetRollerVelocityRps = 0.0),
+                    floor = currentMarvin.floor.copy(targetVelocityRps = 0.0),
+                    feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
+                    transferActive = false
                 )
             }
             is SlamtakeTimerExpired -> {
@@ -107,11 +117,14 @@ object MarvinReducer {
                 var updatedMarvin = currentMarvin
 
                 val flywheelVelocityValid = action.flywheelVelocityValid && action.flywheelRpm.isFinite()
+                val flywheelAllMotorsAtTarget = flywheelVelocityValid && action.flywheelAllMotorsAtTarget
                 if (Math.abs(updatedMarvin.flywheel.velocityRpm - action.flywheelRpm) > 2.0 ||
-                    updatedMarvin.flywheel.velocityValid != flywheelVelocityValid) {
+                    updatedMarvin.flywheel.velocityValid != flywheelVelocityValid ||
+                    updatedMarvin.flywheel.allMotorsAtTarget != flywheelAllMotorsAtTarget) {
                     updatedMarvin = updatedMarvin.copy(flywheel = updatedMarvin.flywheel.copy(
                         velocityRpm = if (flywheelVelocityValid) action.flywheelRpm else 0.0,
-                        velocityValid = flywheelVelocityValid
+                        velocityValid = flywheelVelocityValid,
+                        allMotorsAtTarget = flywheelAllMotorsAtTarget
                     ))
                 }
                 val cowlAngleValid = action.cowlAngleValid && action.cowlAngleRotations.isFinite()
@@ -183,7 +196,9 @@ object MarvinReducer {
                             slamtakeActive = false,
                             slamtakePhase = 0,
                             intake = updatedMarvin.intake.copy(targetRollerVelocityRps = 0.0),
-                            floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0)
+                            floor = updatedMarvin.floor.copy(targetVelocityRps = 0.0),
+                            feeder = updatedMarvin.feeder.copy(targetVelocityRps = 0.0),
+                            transferActive = false
                         )
                     }
                 }
@@ -193,19 +208,20 @@ object MarvinReducer {
             }
         }
 
-        val outputsInhibited = nextMarvin?.mechanismSafetyInhibited
-            ?: currentMarvin.mechanismSafetyInhibited
+        val outputsInhibited = nextMarvin?.let {
+            it.mechanismSafetyInhibited || it.mechanismSafetyFaultLatched
+        } ?: (currentMarvin.mechanismSafetyInhibited || currentMarvin.mechanismSafetyFaultLatched)
         if (outputsInhibited) {
             nextState = nextState.copy(
                 drive = nextState.drive.copy(
                     xVelocityMetersPerSecond = 0.0,
                     yVelocityMetersPerSecond = 0.0,
                     angularVelocityRadiansPerSecond = 0.0,
-                    driveMode = com.areslib.state.DriveMode.TELEOP,
+                    driveMode = com.areslib.state.DriveMode.X_BRAKE,
                     headingLockTargetRadians = null,
                     positionLockX = null,
                     positionLockY = null,
-                    isXLock = false
+                    isXLock = true
                 )
             )
         }
@@ -234,4 +250,34 @@ object MarvinReducer {
         is SlamtakeTimerExpired -> true
         else -> false
     }
+
+    private fun MarvinState.withAllOutputsStopped(
+        faultLatched: Boolean = mechanismSafetyFaultLatched,
+        faultReason: String = mechanismSafetyFaultReason
+    ): MarvinState = copy(
+        flywheel = flywheel.copy(
+            targetVelocityRpm = 0.0,
+            allMotorsAtTarget = false
+        ),
+        cowl = cowl.copy(targetAngleRotations = 0.0),
+        intake = intake.copy(
+            targetAngleDegrees = 0.0,
+            targetRollerVelocityRps = 0.0,
+            isDeployed = false
+        ),
+        feeder = feeder.copy(targetVelocityRps = 0.0),
+        climber = climber.copy(
+            targetPositionRotations = 0.0,
+            targetVoltage = 0.0,
+            controlMode = ClimberControlMode.VOLTAGE
+        ),
+        floor = floor.copy(targetVelocityRps = 0.0),
+        slamtakeActive = false,
+        slamtakePhase = 0,
+        flywheelActive = false,
+        transferActive = false,
+        mechanismSafetyInhibited = true,
+        mechanismSafetyFaultLatched = faultLatched,
+        mechanismSafetyFaultReason = faultReason
+    )
 }

@@ -31,7 +31,7 @@ Run from the ARES-FRC repository root:
 .\gradlew.bat fetchOffsets
 ```
 
-The Gradle deployment default is team `9999`, so always supply `-PteamNumber=23247` unless intentionally targeting another robot.
+The Gradle deployment default is team `23247`; `-PteamNumber` is available only for an intentional alternate target.
 
 Tests use JUnit 5 and configure WPILib desktop JNI extraction. On Windows the build prefers `C:/Users/Public/wpilib/2026/jdk/bin/java.exe` when it exists.
 
@@ -45,18 +45,21 @@ cd ..\ARESLib-Kotlin
 ## Deployment checklist
 
 1. Run `test` and a desktop simulation of the intended native auto.
-2. Confirm `SmartDashboard/SelectedAuto` names the intended `.aresauto` document.
-3. Save competition autos under `src/main/deploy/ares/autos/` and confirm every action appears in
-   `src/main/deploy/ares/auto-capabilities.json`.
+2. Confirm `SmartDashboard/SelectedAuto` names an enabled entry compiled from `.ares/`.
+3. Run `generateAresProject` and `verifyAresProject`; confirm every action appears in
+   `.ares/action-catalog.json` with correct resource ownership.
 4. Verify `src/main/deploy/swerve_offsets.json` matches the robot.
-5. Verify the cowl and climber encoder zero references before using position control.
+5. Physically place cowl, intake pivot, and climber at their safe zero stops. While Disabled or
+   Test-enabled, have both operators hold Back+Start together once and verify
+   `Safety/MechanismsHomed=true` before using any mechanism.
 6. Confirm both Limelights are reachable as `limelight-shooter` and `limelight-back`.
-7. Deploy with the explicit team number.
-8. While disabled, confirm alliance, pose, mechanism validity telemetry, and zero/safe outputs.
+7. Confirm the GradleRIO target is team 23247, then deploy.
+8. While disabled, confirm alliance, pose, mechanism validity telemetry, zero/safe outputs, and a
+   populated `Topology/HardwareMap` containing the expected CAN2 IDs.
 9. Enable mechanisms individually before running a full autonomous routine.
 
-GradleRIO copies `src/main/deploy` to `/home/lvuser/deploy`. Native autos therefore arrive under
-`/home/lvuser/deploy/ares/autos/` without a robot-side conversion step.
+GradleRIO copies `src/main/deploy` to `/home/lvuser/deploy`; autonomous documents are not among
+those files because the verified generated Kotlin is the only robot runtime source.
 
 ## Swerve offsets
 
@@ -67,7 +70,10 @@ The checked-in baseline is `src/main/deploy/swerve_offsets.json`, with keys:
 - `backLeft`
 - `backRight`
 
-The runtime robot may write `/home/lvuser/swerve_offsets_runtime.json`. The `fetchOffsets` task copies that file over the checked-in deploy JSON from `lvuser@10.232.47.2`.
+The runtime robot may write `/home/lvuser/swerve_offsets_runtime.json`. `fetchOffsets` downloads it
+to a same-directory temporary file, requires exactly four finite values in `[-1, 1]`, and atomically
+replaces the checked-in baseline. Network, parse, schema, or move failure fails the task and leaves
+the baseline intact.
 
 Before the first fetch, connect once with `ssh lvuser@10.232.47.2 true` and verify the RoboRIO
 fingerprint. The task requires a trusted `known_hosts` entry and fails on unknown or changed host
@@ -87,19 +93,23 @@ Do not fetch offsets from an unknown robot or network target and immediately dep
 
 ### Autonomous immediately stops
 
-Check `ARES/Auto/Error` and `SmartDashboard/SelectedAuto` first. Verify the document exists under
-`/home/lvuser/deploy/ares/autos/`, its filename matches its embedded `documentId`, every action is
-registered, and no robot footprint crosses the field boundary. `do-nothing` is a valid safe default.
+Check `ARES/Auto/Error` and `SmartDashboard/SelectedAuto` first. Verify the selected entry exists in
+the generated catalog, every action is registered, and no robot footprint crosses the field
+boundary. If the reason reports mechanism safety inhibition, restore verified configuration and
+safe-zero homing before retrying; autonomous will not arm around that latch. `do-nothing` is a valid
+safe default and preserves the current localized pose.
 
 ### An auto exists in Analytics but is missing on the RoboRIO
 
-Save it into the selected FRC project so it appears under `src/main/deploy/ares/autos`, then redeploy
-the static files. Editing on the laptop never requires the robot to be powered on, but executing a
-new document requires that document to be deployed.
+Save it into the selected FRC project's `.ares/` directory, run `generateAresProject` and
+`verifyAresProject`, then deploy the rebuilt robot program. Loose deploy documents are ignored.
 
 ### `shooter.feedWhenReady` waits and then continues without a shot
 
-The wait is intentionally capped at 2 s. Inspect flywheel target RPM, measured RPM, and `velocityValid`. A plausible cached RPM with invalid status is not ready. Readiness also requires a target above 100 RPM and less than 150 RPM error.
+The wait is intentionally capped at 2 s. Inspect flywheel target RPM, all four motor observations,
+measured cowl position, and both validity flags. Readiness requires a target above 100 RPM, less
+than 150 RPM error, and cowl error no greater than 0.05 rotations. Once authorized, transfer lasts
+450 ms and always clears feeder/floor/latch outputs on completion or cancellation.
 
 ### Feeder/game-piece state never changes
 
@@ -111,7 +121,11 @@ The cowl API and shot table use mechanism **rotations**, not degrees. `0.50` mea
 
 ### Climber position is wrong or hits a soft limit
 
-Position commands are mechanism rotations with an 80:1 sensor-to-mechanism ratio and hardware limits of `0.0..1.73` rotations. The code does not home the climber. Check encoder zero, calibration, and units; do not compensate by bypassing the soft limit.
+Position commands are mechanism rotations with an 80:1 sensor-to-mechanism ratio and hardware limits
+of `0.0..1.73` rotations. A process restart invalidates the relative zero; repeat the Disabled/Test
+safe-zero contract before enabling. A Talon reset while the process is running invalidates both its
+configuration and relative zero; restart robot code so all CTRE settings are reapplied, then repeat
+safe-zero. Do not compensate by bypassing the homing guard or soft limit.
 
 ### Robot drives 180 degrees from the expected field direction
 

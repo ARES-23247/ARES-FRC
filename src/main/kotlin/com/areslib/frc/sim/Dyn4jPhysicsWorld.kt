@@ -6,6 +6,7 @@ import org.dyn4j.geometry.Geometry
 import org.dyn4j.geometry.MassType
 import org.dyn4j.geometry.Vector2
 import com.areslib.frc.FlyingBall
+import com.areslib.frc.marvin.MarvinConfig
 import com.areslib.state.RobotFieldDocument
 import java.io.File
 
@@ -16,7 +17,7 @@ import java.io.File
  * when a field configuration is rebuilt; all other bodies are replaced and the grounded-piece
  * index is repopulated. Dyn4j integration must occur through [step] so callers use a single `dt`.
  */
-class Dyn4jPhysicsWorld(@Suppress("UNUSED_PARAMETER") seed: Long) {
+class Dyn4jPhysicsWorld {
 
     val world = World<Body>()
     val robotBody = Body()
@@ -28,7 +29,12 @@ class Dyn4jPhysicsWorld(@Suppress("UNUSED_PARAMETER") seed: Long) {
     init {
         world.setGravity(Vector2(0.0, 0.0))
 
-        val robotFixture = robotBody.addFixture(Geometry.createRectangle(0.7, 0.7))
+        val robotFixture = robotBody.addFixture(
+            Geometry.createRectangle(
+                MarvinConfig.ROBOT_BUMPER_LENGTH_METERS,
+                MarvinConfig.ROBOT_BUMPER_WIDTH_METERS
+            )
+        )
         robotFixture.density = 78.0
         robotBody.linearDamping = 1.0
         robotBody.angularDamping = 2.0

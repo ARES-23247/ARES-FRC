@@ -1,6 +1,8 @@
 package com.areslib.frc.sim.io
 
 import com.areslib.frc.Dyn4jSimulation
+import com.areslib.frc.marvin.FlywheelState
+import com.areslib.frc.marvin.MarvinState
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -80,5 +82,28 @@ class SimulatedIOTest {
         val configuredDetector = SimulatedFeederIO(configuredSim, detectorConfigured = true)
         assertTrue(configuredDetector.pieceDetectionValid)
         assertTrue(configuredDetector.isBeamBroken)
+    }
+
+    @Test
+    fun `model matched flywheel control reaches the production readiness band`() {
+        val sim = Dyn4jSimulation(seed = 42L)
+        val flywheel = SimulatedFlywheelIO(sim)
+        val targetRpm = 4_000.0
+
+        repeat(300) {
+            flywheel.setVelocityRpm(targetRpm)
+            sim.flywheelSim.update(sim.simFlywheelVoltage, 0.02)
+        }
+
+        assertEquals(targetRpm, flywheel.velocityRpm, 150.0)
+        val state = MarvinState(
+            flywheel = FlywheelState(
+                velocityRpm = flywheel.velocityRpm,
+                velocityValid = true,
+                allMotorsAtTarget = true,
+                targetVelocityRpm = targetRpm
+            )
+        )
+        assertTrue(state.isFlywheelAtSpeed)
     }
 }

@@ -1,6 +1,7 @@
 package com.areslib.frc.hardware
 
 import com.areslib.frc.hardware.FeederIO
+import com.ctre.phoenix6.BaseStatusSignal
 import com.ctre.phoenix6.controls.VoltageOut
 import com.ctre.phoenix6.hardware.TalonFX
 
@@ -13,8 +14,12 @@ import com.ctre.phoenix6.hardware.TalonFX
  */
 class FRCFeederHardwareIO(
     private val motor: TalonFX
-) : FeederIO, FrcMechanismConfigurationStatus {
+) : FeederIO, FrcMechanismConfigurationStatus, AutoCloseable {
+    private val startupConfigurationValid: Boolean
+    @Volatile private var resetDetected = false
     override val configurationValid: Boolean
+        get() = startupConfigurationValid && !resetDetected
+    @Volatile private var cachedCurrentValid = false
 
     private val voltageRequest = VoltageOut(0.0)
 
@@ -24,7 +29,7 @@ class FRCFeederHardwareIO(
         motor.optimizeBusUtilization()
         setUpdateFrequencies(10.0, feederCurrent)
 
-        configurationValid = listOf(motor).applyMechanismConfigChecked("Feeder") {
+        startupConfigurationValid = listOf(motor).applyMechanismConfigChecked("Feeder") {
             MotorOutput.NeutralMode = com.ctre.phoenix6.signals.NeutralModeValue.Coast
             MotorOutput.Inverted = com.ctre.phoenix6.signals.InvertedValue.Clockwise_Positive
             Feedback.SensorToMechanismRatio = 4.0 // 4:1 feeder gear reduction
@@ -37,7 +42,9 @@ class FRCFeederHardwareIO(
     }
 
     override fun refresh() {
-        feederCurrent.refresh()
+        if (anyTalonResetOccurred(motor)) resetDetected = true
+        cachedCurrentValid = BaseStatusSignal.refreshAll(feederCurrent).isOK &&
+            feederCurrent.valueAsDouble.isFinite() && feederCurrent.valueAsDouble >= 0.0
     }
 
     /**
@@ -61,4 +68,9 @@ class FRCFeederHardwareIO(
 
     override val currentAmps: Double
         get() = feederCurrent.valueAsDouble
+
+    override fun isCurrentReadingValid(readingAmps: Double): Boolean =
+        cachedCurrentValid && readingAmps.isFinite() && readingAmps >= 0.0
+
+    override fun close() = closeTalons(motor)
 }

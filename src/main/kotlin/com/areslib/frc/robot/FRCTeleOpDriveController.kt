@@ -3,8 +3,6 @@ package com.areslib.frc.robot
 import com.areslib.control.assist.ShotResult
 import com.areslib.action.RobotAction
 import com.areslib.frc.FrcSwerveRobot
-import com.areslib.frc.marvin.MarvinClimberSubsystem
-import com.areslib.frc.marvin.MarvinIntakeSubsystem
 import com.areslib.frc.marvin.MarvinShooterSubsystem
 import com.areslib.frc.marvin.marvin
 import com.areslib.frc.marvin.SetClimberVoltage
@@ -15,8 +13,7 @@ import com.areslib.frc.marvin.SetFlywheelActive
 import com.areslib.frc.marvin.SetFlywheelSpeed
 import com.areslib.frc.marvin.SetIntakePivot
 import com.areslib.frc.marvin.SetIntakeRollers
-import com.areslib.frc.marvin.SetMechanismSafetyInhibit
-import com.areslib.frc.marvin.SetTransferActive
+import com.areslib.frc.marvin.LatchMechanismSafetyFault
 import com.areslib.frc.marvin.StartSlamtake
 import com.areslib.frc.marvin.StopSlamtake
 import com.areslib.math.geometry.Translation2d
@@ -43,8 +40,6 @@ import edu.wpi.first.wpilibj.XboxController
 class FRCTeleOpDriveController(
     private val robot: FrcSwerveRobot,
     private val marvinShooter: MarvinShooterSubsystem,
-    private val marvinIntake: MarvinIntakeSubsystem,
-    private val marvinClimber: MarvinClimberSubsystem,
     private val controller: XboxController,
     private val coPilotController: XboxController,
     private val controllerState: GamepadState,
@@ -54,6 +49,7 @@ class FRCTeleOpDriveController(
     private var lastBeached = false
     private var rumbleStartTimestampMs: Long = 0
     private var controllerFaultLatched = false
+    private var aButtonWasPressed = false
     private val shotResult = ShotResult()
 
     // Pre-allocated shuttle targets in blue-origin field meters; index 1 is currently selected.
@@ -83,15 +79,11 @@ class FRCTeleOpDriveController(
     /** Clears the local controller-fault guard; the robot shell separately validates hardware health. */
     fun teleopInit() {
         controllerFaultLatched = false
+        aButtonWasPressed = false
+        marvinShooter.cancelTransfer()
     }
 
-    /**
-     * Runs only the legacy drivetrain owner for a generated mechanism-control scheme.
-     *
-     * This deliberately excludes shooting assists and every mechanism dispatch. A generated
-     * routine containing a drive step suppresses this method at the ARESRobot boundary, leaving
-     * the path follower as the sole drivetrain owner for that frame.
-     */
+    /** Runs the drivetrain-only control path used by localization calibration in Test mode. */
     fun drivePeriodic() {
         if (controllerFaultLatched) {
             robot.safeHardware()
@@ -109,7 +101,7 @@ class FRCTeleOpDriveController(
                 4.5 * allianceScale
             val rotation = MathUtil.applyDeadband(-controllerState.rightStickX.toDouble(), 0.1) * Math.PI
             robot.drive.joystickDrive(forward, strafe, rotation, isFieldCentric = true)
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             latchControllerAllStop("drivePeriodic", error)
         }
     }
@@ -146,8 +138,8 @@ class FRCTeleOpDriveController(
             val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
             val copilotRbPressed = coPilotControllerState.rightBumper
             val shootingRequested = rtPressed || rbPressed || bPressed
-            if (!shootingRequested && marvin.transferActive) {
-                robot.store.dispatch(SetTransferActive(false))
+            if (!shootingRequested) {
+                marvinShooter.cancelTransfer()
             }
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleRotations
@@ -226,9 +218,12 @@ class FRCTeleOpDriveController(
 
             // ── A Button: Start Slamtake Sequence ──
             val aPressed = controllerState.a
-            val isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
-            if (aPressed && !isSlamtakeActive) {
+            val aRising = aPressed && !aButtonWasPressed
+            aButtonWasPressed = aPressed
+            var isSlamtakeActive = robot.store.state.superstructure.marvin.slamtakeActive
+            if (aRising && !isSlamtakeActive) {
                 robot.store.dispatch(StartSlamtake())
+                isSlamtakeActive = true
             }
 
             // ── Left Bumper: Unjam ──
@@ -255,6 +250,7 @@ class FRCTeleOpDriveController(
                     // Unjam sequence takes top priority
                     if (isSlamtakeActive) {
                         robot.store.dispatch(StopSlamtake())
+                        isSlamtakeActive = false
                     }
                     targetPivot = true
                     targetIntakeRollers = -5.0
@@ -339,15 +335,24 @@ class FRCTeleOpDriveController(
                 controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                 coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             latchControllerAllStop("teleopPeriodic", e)
         }
     }
 
-    internal fun latchControllerAllStop(source: String, error: Exception) {
+    internal fun latchControllerAllStop(source: String, error: Throwable) {
         controllerFaultLatched = true
-        runCatching { robot.store.dispatch(SetMechanismSafetyInhibit(true)) }
-        DriverStation.reportError("Exception in $source: ${error.message}", false)
+        runCatching {
+            robot.store.dispatch(
+                LatchMechanismSafetyFault(
+                    "Exception in $source: ${error.message ?: error::class.java.simpleName}"
+                )
+            )
+        }
+        DriverStation.reportError(
+            "Exception in $source: ${error.message ?: error::class.java.simpleName}",
+            false
+        )
         robot.safeHardware()
     }
 }

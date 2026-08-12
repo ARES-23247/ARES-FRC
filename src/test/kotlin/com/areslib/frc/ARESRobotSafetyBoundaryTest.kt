@@ -1,11 +1,13 @@
 package com.areslib.frc
 
 import com.areslib.frc.hardware.FrcMechanismConfigurationStatus
+import com.areslib.frc.hardware.FrcMechanismHomingStatus
 import com.areslib.hardware.drive.SwerveHardwareIO
 import com.areslib.math.geometry.Pose2d
 import com.areslib.state.DriveState
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -17,7 +19,7 @@ class ARESRobotSafetyBoundaryTest {
         var encoderValid = true
 
         override fun read(): DriveState = DriveState()
-        override fun write(driveState: DriveState) = Unit
+        override fun write(driveState: DriveState, powerScale: Double) = Unit
         override fun getEncoderPositions(out: DoubleArray) {
             encoderPositions.copyInto(out)
         }
@@ -29,8 +31,17 @@ class ARESRobotSafetyBoundaryTest {
     }
 
     private class ConfigurationStatus(
+        var valid: Boolean
+    ) : FrcMechanismConfigurationStatus {
         override val configurationValid: Boolean
-    ) : FrcMechanismConfigurationStatus
+            get() = valid
+    }
+
+    private class HomingStatus(
+        override val homed: Boolean
+    ) : FrcMechanismHomingStatus {
+        override fun homeAtKnownZero(): Boolean = homed
+    }
 
     @Test
     fun `swerve calibration cache requires recent finite plausible four-module sample`() {
@@ -64,7 +75,49 @@ class ARESRobotSafetyBoundaryTest {
 
     @Test
     fun `mechanism configuration health fails closed on any reporting adapter`() {
-        assertTrue(mechanismsConfigured(ConfigurationStatus(true), Any()))
+        assertTrue(mechanismsConfigured(ConfigurationStatus(true)))
         assertFalse(mechanismsConfigured(ConfigurationStatus(true), ConfigurationStatus(false)))
+        val resettable = ConfigurationStatus(true)
+        assertTrue(mechanismsConfigured(resettable))
+        resettable.valid = false
+        assertFalse(mechanismsConfigured(resettable), "a post-startup reset must invalidate live health")
+    }
+
+    @Test
+    fun `relative position mechanism health fails closed until every device is homed`() {
+        assertTrue(mechanismsHomed(HomingStatus(true)))
+        assertFalse(mechanismsHomed(HomingStatus(true), HomingStatus(false)))
+        assertFalse(mechanismSafetyHealthy(true, false, null))
+        assertFalse(mechanismSafetyHealthy(false, true, null))
+        assertFalse(mechanismSafetyHealthy(true, true, IllegalStateException("update failed")))
+        assertTrue(mechanismSafetyHealthy(true, true, null))
+    }
+
+    @Test
+    fun `safe zero recovery requires both operators and disabled state`() {
+        assertFalse(mechanismHomingComboPressed(true, true, true, false))
+        assertTrue(mechanismHomingComboPressed(true, true, true, true))
+        assertTrue(mechanismHomingRequestAllowed(isDisabled = true, isTestEnabled = false))
+        assertFalse(mechanismHomingRequestAllowed(isDisabled = false, isTestEnabled = true))
+        assertFalse(mechanismHomingRequestAllowed(isDisabled = false, isTestEnabled = false))
+    }
+
+    @Test
+    fun `unknown or suspicious enabled PDH current remains explicitly invalid`() {
+        assertTrue(validatedPdhCurrent(Double.NaN, false).isNaN())
+        assertTrue(validatedPdhCurrent(0.0, true).isNaN())
+        assertTrue(validatedPdhCurrent(-1.0, true).isNaN())
+        assertTrue(validatedPdhCurrent(35.0, true) == 35.0)
+        assertTrue(validatedPdhCurrent(0.0, false) == 0.0)
+    }
+
+    @Test
+    fun `marvin topology retains primary and member CAN identities`() {
+        val topology = marvinCanTopology("Flywheel", 9, 9, 10, 11, 12)
+
+        assertEquals("CAN2", topology.canBus)
+        assertEquals(9, topology.canId)
+        assertEquals("9,10,11,12", topology.metadata["canIds"])
+        assertEquals(com.areslib.hardware.TopologyNodeType.CAN_MOTOR_CONTROLLER, topology.type)
     }
 }

@@ -219,6 +219,35 @@ class MarvinSuperstructureSafetyTest {
     }
 
     @Test
+    fun staleClimberPositionFeedbackAlsoBlocksOpenLoopVoltage() {
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(
+            RecordingFlywheelIO(), RecordingCowlIO(), RecordingIntakeIO(),
+            RecordingFeederIO(), RecordingFloorIO(), climber
+        )
+        val staleState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        pivotAngleDegrees = MarvinConfig.MechanismLimits.intakeStowedDegrees,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(
+                        positionRotations = 0.5,
+                        positionValid = false,
+                        targetVoltage = 6.0,
+                        controlMode = ClimberControlMode.VOLTAGE
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(staleState, 1.0)
+
+        assertEquals(0.0, climber.voltageCommand)
+    }
+
+    @Test
     fun latchedSafetyInhibitWritesOnlyZeroEffortOutputs() {
         val flywheel = RecordingFlywheelIO()
         val cowl = RecordingCowlIO()

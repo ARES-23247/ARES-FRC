@@ -62,6 +62,7 @@ class MarvinControlAndFreshnessRegressionTest {
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = true,
+                flywheelAllMotorsAtTarget = true,
                 cowlAngleValid = false,
                 timestampMs = 1_000L
             )
@@ -80,6 +81,7 @@ class MarvinControlAndFreshnessRegressionTest {
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = true,
+                flywheelAllMotorsAtTarget = true,
                 cowlAngleValid = true,
                 timestampMs = 1_020L
             )
@@ -93,7 +95,7 @@ class MarvinControlAndFreshnessRegressionTest {
         // Once authorized, a transfer finishes even if alignment moves out of tolerance.
         feeder.updateFeeders(rpmAligned = false, headingAligned = false, cowlReady = false, runFloorRollers = true)
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
-        feeder.stop()
+        feeder.cancelTransfer()
         assertFalse(store.state.superstructure.marvin.transferActive)
         assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
 
@@ -130,6 +132,7 @@ class MarvinControlAndFreshnessRegressionTest {
                 intakeAngle = 0.0,
                 pieceDetected = false,
                 flywheelVelocityValid = true,
+                flywheelAllMotorsAtTarget = true,
                 cowlAngleValid = true,
                 timestampMs = 1_060L
             )
@@ -174,6 +177,8 @@ class MarvinControlAndFreshnessRegressionTest {
         assertEquals(0.0, store.state.drive.xVelocityMetersPerSecond)
         assertEquals(0.0, store.state.drive.yVelocityMetersPerSecond)
         assertEquals(0.0, store.state.drive.angularVelocityRadiansPerSecond)
+        assertEquals(com.areslib.state.DriveMode.X_BRAKE, store.state.drive.driveMode)
+        assertTrue(store.state.drive.isXLock)
 
         store.dispatch(SetFlywheelSpeed(5_000.0))
         store.dispatch(SetFlywheelActive(true))
@@ -190,6 +195,27 @@ class MarvinControlAndFreshnessRegressionTest {
         store.dispatch(SetFlywheelSpeed(5_000.0))
         assertFalse(store.state.superstructure.marvin.mechanismSafetyInhibited)
         assertEquals(5_000.0, store.state.superstructure.marvin.flywheel.targetVelocityRpm)
+    }
+
+    @Test
+    fun `persistent mechanism fault survives temporary mode clear until explicit recovery`() {
+        val store = newStore()
+        store.dispatch(LatchMechanismSafetyFault("controller failed"))
+
+        store.dispatch(SetMechanismSafetyInhibit(false))
+        var marvin = store.state.superstructure.marvin
+        assertTrue(marvin.mechanismSafetyInhibited)
+        assertTrue(marvin.mechanismSafetyFaultLatched)
+        assertEquals("controller failed", marvin.mechanismSafetyFaultReason)
+
+        store.dispatch(ClearMechanismSafetyFault("disabled dual-operator recovery"))
+        marvin = store.state.superstructure.marvin
+        assertTrue(marvin.mechanismSafetyInhibited, "fault clear alone must not enable outputs")
+        assertFalse(marvin.mechanismSafetyFaultLatched)
+        assertEquals("", marvin.mechanismSafetyFaultReason)
+
+        store.dispatch(SetMechanismSafetyInhibit(false))
+        assertFalse(store.state.superstructure.marvin.mechanismSafetyInhibited)
     }
 
     @Test
