@@ -46,6 +46,11 @@ jobs:
         with:
           languages: java-kotlin
           build-mode: manual
+          config: |
+            paths:
+              - ARES-FRC/src
+            paths-ignore:
+              - ARESLib-Kotlin/**
 
       - name: Publish ARESLib dependencies locally
         working-directory: ARESLib-Kotlin
