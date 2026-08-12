@@ -21,12 +21,12 @@ jobs:
 
     steps:
       - name: Check out FRC
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ARES-FRC
 
       - name: Check out ARESLib
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ARES-23247/ARESLib-Kotlin
           ref: master
