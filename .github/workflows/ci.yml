@@ -41,6 +41,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Publish ARESLib dependencies locally
+        working-directory: ARESLib-Kotlin
+        run: ./gradlew publishToMavenLocal --no-daemon
+
       - name: Verify generated project and run tests
         working-directory: ARES-FRC
-        run: ./gradlew verifyAresProject test --no-daemon
+        run: ./gradlew verifyAresProject test -Pares.usePublishedLib=true --no-daemon
