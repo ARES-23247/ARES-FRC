@@ -29,13 +29,12 @@ pluginManagement {
 Properties props = System.getProperties();
 props.setProperty("org.gradle.internal.native.headers.unresolved.dependencies.ignore", "true");
 
-// Local development defaults to the sibling composite build. CI and verification can instead
-// consume the exact artifact already published to mavenLocal(), avoiding writes into a shared
-// ARESLib checkout while another process is using it.
-def usePublishedAresLib = providers.gradleProperty("ares.usePublishedLib")
+// Normal builds consume the same versioned binaries students use. Library developers can opt
+// into source substitution explicitly with -ParesUseSiblingLib=true.
+def useSiblingAresLib = providers.gradleProperty("aresUseSiblingLib")
     .map { it.toBoolean() }
     .getOrElse(false)
-if (!usePublishedAresLib) {
+if (useSiblingAresLib && file("../ARESLib-Kotlin").exists()) {
     includeBuild("../ARESLib-Kotlin")
 }
 rootProject.name = 'ARES-FRC'

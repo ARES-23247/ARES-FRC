@@ -69,11 +69,13 @@ Run these commands from this directory in PowerShell:
 .\gradlew.bat fetchOffsets
 ```
 
-The sibling `../ARESLib-Kotlin` build is included as a composite build. After changing ARESLib for use by any non-composite consumer, publish its snapshots to Maven Local before building those consumers:
+Normal builds consume the pinned ARESLib release from Maven Central. Library developers can opt into sibling source substitution with `-ParesUseSiblingLib=true`, or validate the exact unpublished binaries with:
 
 ```powershell
 cd ..\ARESLib-Kotlin
-.\gradlew.bat publishToMavenLocal
+.\gradlew.bat apiCheck publishReleaseValidation
+cd ..\ARES-FRC
+.\gradlew.bat test -ParesRepository="..\ARESLib-Kotlin\build\release-repository"
 ```
 
 ## Non-negotiable conventions
