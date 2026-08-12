@@ -8,11 +8,6 @@ on:
   schedule:
     - cron: '29 5 * * 4'
   workflow_dispatch:
-    inputs:
-      areslib_ref:
-        description: ARESLib branch or tag to verify against (defaults to matching branch, then master)
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -33,29 +28,6 @@ jobs:
         with:
           path: ARES-FRC
 
-      - name: Resolve ARESLib dependency ref
-        id: areslib
-        shell: bash
-        env:
-          REQUESTED_REF: ${{ inputs.areslib_ref || vars.ARESLIB_REF || github.head_ref || github.ref_name }}
-        run: |
-          requested="${REQUESTED_REF:-master}"
-          remote="https://github.com/ARES-23247/ARESLib-Kotlin.git"
-          if git ls-remote --exit-code --heads --tags "$remote" "refs/heads/$requested" "refs/tags/$requested" >/dev/null; then
-            echo "Using matching ARESLib ref: $requested"
-            echo "ref=$requested" >> "$GITHUB_OUTPUT"
-          else
-            echo "ARESLib ref '$requested' does not exist; using master"
-            echo "ref=master" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check out ARESLib
-        uses: actions/checkout@v4
-        with:
-          repository: ARES-23247/ARESLib-Kotlin
-          ref: ${{ steps.areslib.outputs.ref }}
-          path: ARESLib-Kotlin
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -70,16 +42,10 @@ jobs:
           config: |
             paths:
               - ARES-FRC/src
-            paths-ignore:
-              - ARESLib-Kotlin/**
-
-      - name: Publish ARESLib dependencies locally
-        working-directory: ARESLib-Kotlin
-        run: ./gradlew publishToMavenLocal --no-daemon
 
       - name: Compile FRC sources
         working-directory: ARES-FRC
-        run: ./gradlew classes testClasses -Pares.usePublishedLib=true --no-daemon
+        run: ./gradlew classes testClasses --no-daemon
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4

@@ -35,11 +35,13 @@ The Gradle deployment default is team `23247`; `-PteamNumber` is available only 
 
 Tests use JUnit 5 and configure WPILib desktop JNI extraction. On Windows the build prefers `C:/Users/Public/wpilib/2026/jdk/bin/java.exe` when it exists.
 
-If shared ARESLib code changes, its composite build is used by ARES-FRC. Other projects consume Maven snapshots, so publish ARESLib before testing those consumers:
+Normal operations use the pinned ARESLib release from Maven Central. To test an unpublished shared change through its exact binary bundle:
 
 ```powershell
 cd ..\ARESLib-Kotlin
-.\gradlew.bat publishToMavenLocal
+.\gradlew.bat apiCheck publishReleaseValidation
+cd ..\ARES-FRC
+.\gradlew.bat test -ParesRepository="..\ARESLib-Kotlin\build\release-repository"
 ```
 
 ## Deployment checklist
@@ -145,4 +147,4 @@ Verify the WPILib 2026 installation and its Java 17 runtime at `C:/Users/Public/
 
 ### Changes in ARESLib are not visible elsewhere
 
-ARES-FRC uses a composite sibling build, but ARES-FTC and ARES-Analytics may consume Maven/JitPack-style snapshots. Publish ARESLib to Maven Local, then rebuild the consumer. Do not copy shared classes into the season repository.
+Confirm the consumer's `aresVersion` is the intended Maven Central release. For an unpublished library change, run `publishReleaseValidation` in ARESLib and pass its `build/release-repository` through `-ParesRepository`. Do not copy shared classes into the season repository.

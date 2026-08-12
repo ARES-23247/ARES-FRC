@@ -7,9 +7,11 @@ plugins {
 }
 
 repositories {
-    mavenLocal()
+    def aresRepositoryUrl = providers.gradleProperty('aresRepository').orNull
+    if (aresRepositoryUrl != null && !aresRepositoryUrl.trim().isEmpty()) {
+        maven { url uri(aresRepositoryUrl) }
+    }
     mavenCentral()
-    maven { url 'https://jitpack.io' }
 }
 
 sourceCompatibility = JavaVersion.VERSION_17
@@ -72,10 +74,18 @@ wpi.java.debugJni = false
 
 // Set this to true to enable desktop support.
 def includeDesktopSupport = true
+def aresVersion = providers.gradleProperty('aresVersion').getOrElse('3.0.0')
+def aresOsName = System.getProperty('os.name').toLowerCase()
+def aresSimulatorRuntime = aresOsName.contains('windows')
+    ? 'simulator-runtime-windows'
+    : (aresOsName.contains('mac')
+        ? 'simulator-runtime-macos'
+        : 'simulator-runtime-linux')
 
 dependencies {
-    implementation 'com.areslib:core:1.0-SNAPSHOT'
-    implementation('com.github.ARES-23247.ARESLib-Kotlin:simulator:master-SNAPSHOT') {
+    implementation platform("org.aresfirst.ares:ares-bom:$aresVersion")
+    implementation 'org.aresfirst.ares:core'
+    implementation('org.aresfirst.ares:simulator') {
         exclude group: 'edu.wpi.first.wpilibj'
         exclude group: 'edu.wpi.first.cameraserver'
         exclude group: 'edu.wpi.first.wpinet'
@@ -84,8 +94,18 @@ dependencies {
         exclude group: 'edu.wpi.first.wpimath'
         exclude group: 'edu.wpi.first.hal'
     }
-    implementation 'com.areslib:frc-hardware:1.0-SNAPSHOT'
-    aresCodegen 'com.areslib:core:1.0-SNAPSHOT'
+    runtimeOnly("org.aresfirst.ares:$aresSimulatorRuntime") {
+        exclude group: 'edu.wpi.first.wpilibj'
+        exclude group: 'edu.wpi.first.cameraserver'
+        exclude group: 'edu.wpi.first.wpinet'
+        exclude group: 'edu.wpi.first.ntcore'
+        exclude group: 'edu.wpi.first.wpiutil'
+        exclude group: 'edu.wpi.first.wpimath'
+        exclude group: 'edu.wpi.first.hal'
+    }
+    implementation 'org.aresfirst.ares:frc-hardware'
+    aresCodegen platform("org.aresfirst.ares:ares-bom:$aresVersion")
+    aresCodegen 'org.aresfirst.ares:codegen'
     aresCodegen 'com.google.code.gson:gson:2.10.1'
     implementation 'org.dyn4j:dyn4j:4.2.2'
     
