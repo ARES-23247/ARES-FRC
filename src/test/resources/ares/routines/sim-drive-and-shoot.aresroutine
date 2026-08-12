@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "documentId": "sim-drive-and-shoot",
   "revision": 1,
   "name": "Simulation Drive and Shoot",
@@ -7,6 +7,7 @@
   "steps": [
     {
       "kind": "DRIVE_TO",
+      "stepId": "step-drive-to-shot",
       "arguments": {},
       "drive": {
         "target": {"xMeters":3.6,"yMeters":2.65,"headingRadians":0.0},
@@ -21,8 +22,8 @@
       "children": [],
       "elseChildren": []
     },
-    {"kind":"WAIT","arguments":{},"durationSeconds":0.5,"children":[],"elseChildren":[]},
-    {"kind":"ACTION","actionKey":"shooter.stop","arguments":{},"children":[],"elseChildren":[]},
-    {"kind":"ACTION","actionKey":"intake.stow","arguments":{},"children":[],"elseChildren":[]}
+    {"kind":"WAIT","stepId":"step-feed-settle","arguments":{},"durationSeconds":0.5,"children":[],"elseChildren":[]},
+    {"kind":"ACTION","stepId":"step-stop-shooter","actionKey":"shooter.stop","arguments":{},"children":[],"elseChildren":[]},
+    {"kind":"ACTION","stepId":"step-stow-intake","actionKey":"intake.stow","arguments":{},"children":[],"elseChildren":[]}
   ]
 }
