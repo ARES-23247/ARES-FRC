@@ -7,6 +7,7 @@ This is intentionally **not** a WPILib Command-Based project. Driver input, auto
 ## Start here
 
 - [Architecture and safety contracts](docs/ARCHITECTURE.md) — lifecycle, Redux flow, IO freshness, units, safety, coordinates, and hardware map.
+- [Subsystem generator and hand-authoring guide](docs/SUBSYSTEM_AUTHORING.md) — capability templates, file ownership, safe regeneration, parity, and review coverage.
 - [Autonomous and simulation](docs/AUTONOMOUS_AND_SIMULATION.md) — native visual autos, action
   discovery, preflight, mirroring, and the dyn4j model.
 - [Build, test, deploy, and troubleshoot](docs/OPERATIONS.md) — commands, prerequisites, swerve offsets, and common failure modes.
@@ -53,6 +54,10 @@ Run these commands from this directory in PowerShell:
 # Regenerate and verify Kotlin compiled from the offline .ares project
 .\gradlew.bat generateAresProject
 .\gradlew.bat verifyAresProject
+
+# Preview or create editable subsystem starters; normal builds refresh plumbing only
+.\gradlew.bat previewSubsystemChanges
+.\gradlew.bat generateSubsystemStarters
 
 # Start WPILib desktop simulation
 .\gradlew.bat simulateJava

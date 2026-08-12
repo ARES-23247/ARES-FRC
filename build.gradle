@@ -19,6 +19,16 @@ kotlin {
     jvmToolchain(17)
 }
 
+// Editable subsystem starters live under src/. Mechanical registration/definition plumbing and
+// generated contract tests are disposable build products recreated from .ares/subsystems.
+def generatedAresSubsystemMainDir = file("${buildDir}/generated/ares/main/kotlin")
+def generatedAresSubsystemTestDir = file("${buildDir}/generated/ares/test/kotlin")
+
+sourceSets {
+    main.kotlin.srcDir generatedAresSubsystemMainDir
+    test.kotlin.srcDir generatedAresSubsystemTestDir
+}
+
 def ROBOT_MAIN_CLASS = "com.areslib.frc.Main"
 
 application {
@@ -223,39 +233,107 @@ task fetchOffsets {
     }
 }
 
-// Canonical `.ares` documents are the source of truth. Generated Kotlin is committed so robot
-// builds remain offline and deterministic; compilation fails if a GUI/document edit is stale.
+// Canonical `.ares` documents are the source of truth. The project composition source remains
+// checked in for offline robot builds. Subsystem starters are explicit source files; only their
+// entirely mechanical plumbing is placed under build/generated.
 def generatedAresSource = file("src/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt")
-def generatedSubsystemSource = file("src/main/kotlin/com/areslib/frc/generated/subsystems")
-def generatedSubsystemTests = file("src/test/kotlin/com/areslib/frc/generated/subsystems")
+def subsystemStarterSource = file("src/main/kotlin/com/areslib/frc/generated/subsystems")
+def subsystemCodegenArgs = [
+    "--subsystems-starter-output", subsystemStarterSource.absolutePath,
+    "--subsystems-generated-output", generatedAresSubsystemMainDir.absolutePath,
+    "--subsystems-generated-test-output", generatedAresSubsystemTestDir.absolutePath,
+    "--subsystems-package", "com.areslib.frc.generated.subsystems",
+]
 
 tasks.register("generateAresProject", JavaExec) {
     group = "ARES"
-    description = "Generate checked-in Kotlin from the offline .ares project documents."
+    description = "Generate checked-in project Kotlin and disposable subsystem plumbing; never replace starters."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC"
+    args subsystemCodegenArgs
+}
+
+tasks.register("prepareAresSubsystemPlumbing", JavaExec) {
+    group = "build setup"
+    description = "Materialize disposable subsystem registration/tests without modifying editable starters."
     classpath = configurations.aresCodegen
     mainClass = "com.areslib.codegen.AresProjectCodegenCli"
     args "--project", projectDir.absolutePath,
         "--output", generatedAresSource.absolutePath,
         "--package", "com.areslib.frc.generated",
         "--platform", "FRC",
-        "--subsystems-output", generatedSubsystemSource.absolutePath,
-        "--subsystems-test-output", generatedSubsystemTests.absolutePath,
-        "--subsystems-package", "com.areslib.frc.generated.subsystems"
+        "--subsystems-only"
+    args subsystemCodegenArgs
+}
+
+tasks.register("previewSubsystemChanges", JavaExec) {
+    group = "ARES"
+    description = "Preview categorized subsystem starter changes and safety warnings without writing files."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC",
+        "--subsystems-only",
+        "--preview-subsystem-starters"
+    args subsystemCodegenArgs
+}
+
+tasks.register("generateSubsystemStarters", JavaExec) {
+    group = "ARES"
+    description = "Create missing editable subsystem starters and generated plumbing; refuse replacements."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC",
+        "--subsystems-only",
+        "--apply-subsystem-starters"
+    args subsystemCodegenArgs
+}
+
+tasks.register("replaceSubsystemStarters", JavaExec) {
+    group = "ARES"
+    description = "Replace changed generated starters only with the exact token printed by preview."
+    classpath = configurations.aresCodegen
+    mainClass = "com.areslib.codegen.AresProjectCodegenCli"
+    args "--project", projectDir.absolutePath,
+        "--output", generatedAresSource.absolutePath,
+        "--package", "com.areslib.frc.generated",
+        "--platform", "FRC",
+        "--subsystems-only",
+        "--apply-subsystem-starters"
+    args subsystemCodegenArgs
+    doFirst {
+        def token = providers.gradleProperty("ares.subsystemReplacementToken").orNull
+        if (token == null || token.trim().isEmpty()) {
+            throw new GradleException(
+                "Run previewSubsystemChanges, review its structured diff, then pass " +
+                    "-Pares.subsystemReplacementToken=<exact-token>."
+            )
+        }
+        args "--subsystems-confirmation-token", token
+    }
 }
 
 tasks.register("verifyAresProject", JavaExec) {
     group = "verification"
-    description = "Fail when generated ARES Kotlin does not match the checked-in project documents."
+    description = "Fail when checked-in project Kotlin, starters, or generated subsystem plumbing is stale."
+    dependsOn tasks.named("prepareAresSubsystemPlumbing")
     classpath = configurations.aresCodegen
     mainClass = "com.areslib.codegen.AresProjectCodegenCli"
     args "--project", projectDir.absolutePath,
         "--output", generatedAresSource.absolutePath,
         "--package", "com.areslib.frc.generated",
         "--platform", "FRC",
-        "--subsystems-output", generatedSubsystemSource.absolutePath,
-        "--subsystems-test-output", generatedSubsystemTests.absolutePath,
-        "--subsystems-package", "com.areslib.frc.generated.subsystems",
         "--check"
+    args subsystemCodegenArgs
 }
 
 tasks.named("compileKotlin").configure {
