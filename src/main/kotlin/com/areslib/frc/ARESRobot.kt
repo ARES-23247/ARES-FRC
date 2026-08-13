@@ -124,7 +124,9 @@ class ARESRobot : TimedRobot() {
 
     // Simulation timing
     private var lastSimTime = 0.0
-    private val can2Bus = com.ctre.phoenix6.CANBus("CAN2")
+    private val can2Bus = com.ctre.phoenix6.CANBus(
+        com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS
+    )
     private var powerDistribution: edu.wpi.first.wpilibj.PowerDistribution? = null
 
 
@@ -270,7 +272,8 @@ class ARESRobot : TimedRobot() {
             ),
             vision = VisionState(
                 filterConfig = com.areslib.hardware.vision.VisionFilterConfig.frcDefaults()
-            )
+            ),
+            tuning = com.areslib.frc.config.CanonicalDrivebaseConfig.initialTuningState(),
         )
 
         // 4. Instantiate FrcSwerveRobot
@@ -282,6 +285,35 @@ class ARESRobot : TimedRobot() {
             reducer = ::composedReducer
         )
 
+        val tuningRuntime = com.areslib.frc.generated.drivebase.GeneratedAresTuningConfig.createRuntime()
+        robot.tuningManager = com.areslib.tuning.TuningManager(
+            runtime = tuningRuntime,
+            telemetry = robot.telemetryManager.dataLoggingTelemetry,
+            contextProvider = {
+                // Marvin has no dedicated armed live-tuning mode yet. Metadata remains visible,
+                // while all mutation fails closed until that explicit operator workflow exists.
+                com.areslib.tuning.TuningApplyContext(
+                    sessionArmed = false,
+                    robotDisabled = DriverStation.isDisabled(),
+                )
+            },
+            onApplied = { parameterUid, _ ->
+                if (com.areslib.frc.config.CanonicalDrivebaseConfig.supportsRuntimeParameter(parameterUid)) {
+                    robot.store.dispatch(
+                        RobotAction.UpdateTuningState(
+                            com.areslib.frc.config.CanonicalDrivebaseConfig.withRuntimeValues(
+                                robot.store.state.tuning,
+                                tuningRuntime,
+                            )
+                        )
+                    )
+                    true
+                } else {
+                    false
+                }
+            },
+        )
+
         if (swerveIO != null) {
             com.areslib.hardware.HardwareRegistry.registerDevice(
                 "Swerve",
@@ -289,8 +321,8 @@ class ARESRobot : TimedRobot() {
                 com.areslib.hardware.TopologyNode(
                     id = "Swerve",
                     type = com.areslib.hardware.TopologyNodeType.CANIVORE,
-                    displayName = "CTRE Swerve (CAN2)",
-                    canBus = MARVIN_CAN_BUS,
+                    displayName = "CTRE Swerve (${com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS})",
+                    canBus = com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS,
                     connectionType = "CAN-FD",
                     metadata = mapOf(
                         "driveMotorCanIds" to "8,2,6,4",
@@ -383,7 +415,10 @@ class ARESRobot : TimedRobot() {
             if (edu.wpi.first.wpilibj.RobotBase.isReal()) {
                 val loopCounter = (state.timestampMs / 20) // 50Hz
                 if (loopCounter % 25L == 0L) { // 2Hz
-                    telemetry.putNumber("CAN2/BusUtilization", can2Bus.status.BusUtilization.toDouble())
+                    telemetry.putNumber(
+                        "${com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS}/BusUtilization",
+                        can2Bus.status.BusUtilization.toDouble(),
+                    )
                 }
             }
         }
@@ -824,7 +859,6 @@ class ARESRobot : TimedRobot() {
 
     private companion object {
         const val EXPECTED_REAL_MECHANISM_COUNT = 6
-        const val MARVIN_CAN_BUS = "CAN2"
         const val MARVIN_ROBOT_ID = "Marvin-XIX"
     }
 }
@@ -838,7 +872,7 @@ internal fun marvinCanTopology(
     type = com.areslib.hardware.TopologyNodeType.CAN_MOTOR_CONTROLLER,
     displayName = displayName,
     canId = primaryCanId,
-    canBus = "CAN2",
+    canBus = com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS,
     busPosition = primaryCanId,
     connectionType = "CAN-FD",
     metadata = mapOf(

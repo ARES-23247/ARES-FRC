@@ -117,7 +117,7 @@ class FrcGeneratedRoutineCapabilities(
             TrajectoryPreset.FAST -> 0.90
             TrajectoryPreset.ADAPTIVE -> 0.60
         }
-        val maxAcceleration = robot.store.state.tuning.pathAccelerationLimit
+        val maxAcceleration = robot.store.state.tuning.drive.pathAccelerationLimit
             .takeIf { it.isFinite() && it > 0.0 }
             ?.times(scale)
             ?: DEFAULT_ACCELERATION_MPS2 * scale

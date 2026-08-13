@@ -57,8 +57,14 @@ class Dyn4jSimulation(
         buildWorld(config)
     }
 
-    private val physicsWorld = Dyn4jPhysicsWorld()
-    private val swerveSim = Dyn4jSwerveModuleSim()
+    private val physicsWorld = Dyn4jPhysicsWorld(
+        robotLengthMeters = com.areslib.frc.config.CanonicalDrivebaseConfig.simulationRobotLengthMeters,
+        robotWidthMeters = com.areslib.frc.config.CanonicalDrivebaseConfig.simulationRobotWidthMeters,
+    )
+    private val swerveSim = Dyn4jSwerveModuleSim(
+        kpLinear = com.areslib.frc.config.CanonicalDrivebaseConfig.simulationLinearKp,
+        kpAngular = com.areslib.frc.config.CanonicalDrivebaseConfig.simulationAngularKp,
+    )
     private val telemetryPublisher = Dyn4jSimTelemetryPublisher()
     private val fieldConfigSubscriber = NetworkTableInstance.getDefault()
         .getStringTopic("ARES/Input/fieldConfig")

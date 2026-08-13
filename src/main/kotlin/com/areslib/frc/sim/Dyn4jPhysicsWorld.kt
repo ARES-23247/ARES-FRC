@@ -17,7 +17,10 @@ import java.io.File
  * when a field configuration is rebuilt; all other bodies are replaced and the grounded-piece
  * index is repopulated. Dyn4j integration must occur through [step] so callers use a single `dt`.
  */
-class Dyn4jPhysicsWorld {
+class Dyn4jPhysicsWorld(
+    val robotLengthMeters: Double = MarvinConfig.ROBOT_BUMPER_LENGTH_METERS,
+    val robotWidthMeters: Double = MarvinConfig.ROBOT_BUMPER_WIDTH_METERS,
+) {
 
     val world = World<Body>()
     val robotBody = Body()
@@ -27,12 +30,14 @@ class Dyn4jPhysicsWorld {
     private val debug = java.lang.Boolean.getBoolean("ares.debug")
 
     init {
+        require(robotLengthMeters.isFinite() && robotLengthMeters > 0.0) { "Robot length must be finite and positive" }
+        require(robotWidthMeters.isFinite() && robotWidthMeters > 0.0) { "Robot width must be finite and positive" }
         world.setGravity(Vector2(0.0, 0.0))
 
         val robotFixture = robotBody.addFixture(
             Geometry.createRectangle(
-                MarvinConfig.ROBOT_BUMPER_LENGTH_METERS,
-                MarvinConfig.ROBOT_BUMPER_WIDTH_METERS
+                robotLengthMeters,
+                robotWidthMeters
             )
         )
         robotFixture.density = 78.0
