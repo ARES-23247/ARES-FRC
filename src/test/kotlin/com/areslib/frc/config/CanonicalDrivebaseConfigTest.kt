@@ -21,8 +21,9 @@ class CanonicalDrivebaseConfigTest {
     @Test
     fun `vendor source remains read only and hash pinned`() {
         val source = projectFile(GeneratedAresDrivebaseConfig.CTRE_VENDOR_SOURCE)
+        val canonicalSource = source.readText().replace("\r\n", "\n")
         val hash = MessageDigest.getInstance("SHA-256")
-            .digest(source.readBytes())
+            .digest(canonicalSource.toByteArray())
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
         assertEquals("frc.robot.generated.TunerConstants", GeneratedAresDrivebaseConfig.CTRE_CONSTANTS_CLASS)

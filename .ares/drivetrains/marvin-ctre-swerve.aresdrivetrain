@@ -116,7 +116,7 @@
   "ctreImport": {
     "canBusName": "CAN2",
     "vendorSourcePath": "src/main/java/frc/robot/generated/TunerConstants.java",
-    "sourceSha256": "c8c0306dbd707446e53c591ff4ae764c41b32c6f0658f40fa357113afa72ecd2",
+    "sourceSha256": "be0da772cb17877eda193bf27a63662561e5ddffdffb859f0f7cebf31a369616",
     "generatorName": "CTRE Tuner X Swerve Project Generator",
     "generatorVersion": "2026",
     "drivetrainConstantsClassName": "frc.robot.generated.TunerConstants",
