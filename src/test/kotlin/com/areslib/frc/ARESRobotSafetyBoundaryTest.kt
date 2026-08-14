@@ -120,4 +120,21 @@ class ARESRobotSafetyBoundaryTest {
         assertEquals("9,10,11,12", topology.metadata["canIds"])
         assertEquals(com.areslib.hardware.TopologyNodeType.CAN_MOTOR_CONTROLLER, topology.type)
     }
+
+    @Test
+    fun `mechanism safety health returns false whenever an update failure occurs`() {
+        assertTrue(mechanismSafetyHealthy(configurationValid = true, homingValid = true, fatalUpdateFailure = null))
+        assertFalse(mechanismSafetyHealthy(configurationValid = false, homingValid = true, fatalUpdateFailure = null))
+        assertFalse(mechanismSafetyHealthy(configurationValid = true, homingValid = false, fatalUpdateFailure = null))
+        assertFalse(mechanismSafetyHealthy(configurationValid = true, homingValid = true, fatalUpdateFailure = RuntimeException("CAN timeout")))
+    }
+
+    @Test
+    fun `validated PDH current handles non-finite and zero boundaries correctly`() {
+        assertTrue(validatedPdhCurrent(Double.POSITIVE_INFINITY, false).isNaN())
+        assertTrue(validatedPdhCurrent(Double.NEGATIVE_INFINITY, true).isNaN())
+        assertTrue(validatedPdhCurrent(0.0, false) == 0.0)
+        assertTrue(validatedPdhCurrent(12.5, true) == 12.5)
+        assertTrue(validatedPdhCurrent(0.0, true).isNaN())
+    }
 }
