@@ -41,6 +41,12 @@ class MarvinShooterSubsystem(private val store: Store) {
     /** Cancels transfer ownership and clears feeder/floor outputs for trigger release. */
     fun cancelTransfer() = feederController.cancelTransfer()
 
+    /** Stops the flywheel and cancels active feeding/transfer. */
+    fun stopShooter() {
+        flywheelController.stop()
+        feederController.cancelTransfer()
+    }
+
     /**
      * Calculates SOTM parameters from measured field-frame motion, dispatches shooter
      * targets/interlocks, and returns a chassis omega command in radians per second.

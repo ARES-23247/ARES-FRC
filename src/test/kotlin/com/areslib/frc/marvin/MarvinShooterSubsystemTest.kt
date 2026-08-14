@@ -361,4 +361,63 @@ class MarvinShooterSubsystemTest {
         assertEquals(targetRpm, flywheelIO.velocityRpmCommand, 1e-4)
         assertEquals(0.0, feederIO.voltageCommand, 1e-4)
     }
+
+    @Test
+    fun `stopShooter resets flywheel active, zeroing flywheel and feeder targets and writing zero outputs`() {
+        val flywheelIO = RecordingFlywheelIO()
+        val cowlIO = RecordingCowlIO()
+        val intakeIO = RecordingIntakeIO()
+        val feederIO = RecordingFeederIO()
+        val floorIO = RecordingFloorIO()
+        val climberIO = RecordingClimberIO()
+
+        val store = Store(
+            RobotState(
+                drive = DriveState(measuredMotionValid = true),
+                superstructure = SuperstructureState(custom = MarvinState())
+            )
+        ) { state, action -> MarvinReducer.reduce(state, action) }
+
+        val superstructure = MarvinSuperstructure(
+            flywheelIO, cowlIO, intakeIO, feederIO, floorIO, climberIO
+        )
+        val shooter = MarvinShooterSubsystem(store)
+
+        val target = Translation2d(0.0, 5.547868)
+        val pose = Pose2d(0.0, 0.0, Rotation2d(-Math.PI / 2.0))
+
+        // Spin up shooter and satisfy readiness tolerances so feeder engages
+        shooter.updateStaticShoot(pose, target)
+        val targetRpm = store.state.superstructure.marvin.flywheel.targetVelocityRpm
+        assertTrue(targetRpm > 100.0)
+        assertTrue(store.state.superstructure.marvin.flywheelActive)
+
+        flywheelIO.measuredVelocityRpm = targetRpm
+        flywheelIO.measuredVelocityValid = true
+        cowlIO.angleRotations = store.state.superstructure.marvin.cowl.targetAngleRotations
+        cowlIO.angleValid = true
+        superstructure.readSensors(store, 1_000L)
+
+        shooter.updateStaticShoot(pose, target)
+        assertTrue(store.state.superstructure.marvin.transferActive)
+        assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
+
+        superstructure.writeOutputs(store.state, scale = 1.0)
+        assertEquals(targetRpm, flywheelIO.velocityRpmCommand, 1e-4)
+        assertEquals(0.12 * MarvinConfig.FEEDER_SHOOT_SPEED_RPS, feederIO.voltageCommand, 1e-4)
+
+        // Stop shooter
+        shooter.stopShooter()
+
+        // Verify flywheelActive transitions to false, flywheel target RPM and feeder target RPS are zeroed
+        assertFalse(store.state.superstructure.marvin.flywheelActive, "flywheelActive must transition to false")
+        assertEquals(0.0, store.state.superstructure.marvin.flywheel.targetVelocityRpm, 1e-4, "Flywheel target RPM must be 0.0")
+        assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps, 1e-4, "Feeder target RPS must be 0.0")
+        assertFalse(store.state.superstructure.marvin.transferActive, "transferActive must be false")
+
+        // Verify superstructure.writeOutputs() sends 0.0 to flywheelIO and feederIO
+        superstructure.writeOutputs(store.state, scale = 1.0)
+        assertEquals(0.0, flywheelIO.velocityRpmCommand, 1e-4, "Flywheel IO velocity command must be 0.0")
+        assertEquals(0.0, feederIO.voltageCommand, 1e-4, "Feeder IO voltage command must be 0.0")
+    }
 }
