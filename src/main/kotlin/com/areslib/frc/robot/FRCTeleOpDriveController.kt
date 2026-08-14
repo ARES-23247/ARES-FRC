@@ -48,6 +48,7 @@ class FRCTeleOpDriveController(
     private var intakeDeployed = false
     private var lastBeached = false
     private var rumbleStartTimestampMs: Long = 0
+    private var lastRumbleDeactivationMs: Long = 0
     private var controllerFaultLatched = false
     private var aButtonWasPressed = false
     private val shotResult = ShotResult()
@@ -320,20 +321,25 @@ class FRCTeleOpDriveController(
 
             // ── Beach / Traction Loss detection ──
             val beached = robot.isBeached
+            val nowMs = com.areslib.util.RobotClock.currentTimeMillis()
             if (beached != lastBeached) {
                 robot.telemetry.putBoolean("Diagnostics/Beached", beached)
                 lastBeached = beached
                 if (beached) {
-                    controller.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
-                    coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
-                    rumbleStartTimestampMs = com.areslib.util.RobotClock.currentTimeMillis()
+                    if (nowMs - lastRumbleDeactivationMs > 2000L) {
+                        controller.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
+                        coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 1.0)
+                        rumbleStartTimestampMs = nowMs
+                    }
                 } else {
                     controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                     coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
+                    lastRumbleDeactivationMs = nowMs
                 }
-            } else if (beached && com.areslib.util.RobotClock.currentTimeMillis() - rumbleStartTimestampMs > 1000) {
+            } else if (beached && nowMs - rumbleStartTimestampMs > 1000L) {
                 controller.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
                 coPilotController.setRumble(GenericHID.RumbleType.kBothRumble, 0.0)
+                lastRumbleDeactivationMs = nowMs
             }
         } catch (e: Throwable) {
             latchControllerAllStop("teleopPeriodic", e)
