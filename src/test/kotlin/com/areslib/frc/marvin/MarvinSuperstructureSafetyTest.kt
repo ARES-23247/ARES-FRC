@@ -270,4 +270,146 @@ class MarvinSuperstructureSafetyTest {
         assertEquals(0.0, floor.voltageCommand)
         assertEquals(0.0, climber.voltageCommand)
     }
+
+    @Test
+    fun flywheelCommandDispatchesTargetRpmWhenValid() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    flywheelActive = true,
+                    flywheel = FlywheelState(
+                        targetVelocityRpm = 4500.0
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(4500.0, flywheel.velocityRpmCommand, 1e-4)
+    }
+
+    @Test
+    fun cowlCommandDispatchesTargetAngleWhenValid() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    cowl = CowlState(
+                        angleRotations = 1.0,
+                        angleValid = true,
+                        targetAngleRotations = 1.5
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(1.5, cowl.angleCommand, 1e-4)
+        assertEquals(1.0, cowl.effortScale, 1e-4)
+    }
+
+    @Test
+    fun climberCommandDispatchesTargetVoltageWhenIntakeClear() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        pivotAngleDegrees = 0.0,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(
+                        positionRotations = 0.2,
+                        positionValid = true,
+                        targetVoltage = 8.0,
+                        controlMode = ClimberControlMode.VOLTAGE
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(8.0, climber.voltageCommand, 1e-4)
+    }
+
+    @Test
+    fun climberCommandDispatchesTargetPositionWhenIntakeClear() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        pivotAngleDegrees = 0.0,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(
+                        positionRotations = 0.2,
+                        positionValid = true,
+                        targetPositionRotations = 1.5,
+                        controlMode = ClimberControlMode.POSITION_ROTATIONS
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 0.9)
+
+        assertEquals(1.5, climber.positionCommandRotations, 1e-4)
+        assertEquals(0.9, climber.effortScale, 1e-4)
+    }
+
+    @Test
+    fun feederAndFloorVoltageCalculationsScaleLinearlyWithKvAndEffort() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    feeder = FeederState(targetVelocityRps = 50.0),
+                    floor = FloorState(targetVelocityRps = 25.0)
+                )
+            )
+        )
+
+        // With effortScale = 0.5:
+        // feeder voltage = 0.12 * 50.0 * 0.5 = 3.0V
+        // floor voltage = 0.12 * 25.0 * 0.5 = 1.5V
+        subsystem.writeOutputs(state, 0.5)
+
+        assertEquals(3.0, feeder.voltageCommand, 1e-4)
+        assertEquals(1.5, floor.voltageCommand, 1e-4)
+    }
 }
