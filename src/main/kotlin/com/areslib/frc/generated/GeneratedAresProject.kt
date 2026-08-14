@@ -11,6 +11,8 @@ import com.areslib.routine.RoutinePose
 import com.areslib.routine.RoutineRuntimeBindings
 import com.areslib.routine.RoutineStep
 import com.areslib.routine.RoutineStepKind
+import com.areslib.routine.RoutineManager
+import com.areslib.input.ControllerBindingRuntime
 import com.areslib.sequencer.Task
 import com.areslib.state.RobotState
 
@@ -41,12 +43,17 @@ interface GeneratedAresProjectCapabilities {
     fun createDriveTask(step: RoutineDriveStep): Task? = null
 }
 
+/** Robot scheduler boundary used by generated direct-action controller bindings. */
+fun interface GeneratedAresProjectControlTaskSink {
+    fun submit(bindingId: String, task: Task)
+}
+
 /** Generated from the project's checked-in ARES documents. Do not edit by hand. */
 object GeneratedAresProject {
-    const val GENERATOR_VERSION: Int = 5
+    const val GENERATOR_VERSION: Int = 6
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
-    const val CONTENT_SHA256: String = "984fe9ed5848d0ebf9002a25ac93a2e3bb7f00696c2692c462bbb999f6becc96"
-    const val SOURCE_SHA256: String = "6f425a5c4f9d8a40199a89593ac1cf5f4c50c91b85ed3f653c4465d0b4628f8f"
+    const val CONTENT_SHA256: String = "bfe0002441877c8bbe4fa104d93b4a43c2d8212778d16e75d8739726b6819b0d"
+    const val SOURCE_SHA256: String = "1dee0c94f3f12073526332163acb515748cac6974372a4b6da29635473a8c38a"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -180,4 +187,22 @@ object GeneratedAresProject {
             },
         )
 
+    val knownControlSchemeIds: Set<String> = emptySet()
+    val DEFAULT_CONTROL_SCHEME_ID: String? = null
+
+    /**
+     * Builds one allocation-free update runtime per zero-based Driver Station port. Suppressing chords are
+     * ordered before constituent buttons and raise their effective press debounce to the chord
+     * window, preventing a near-simultaneous chord from leaking a single-button action.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun createControllerRuntimes(
+        schemeId: String?,
+        registry: GeneratedAresProjectCapabilities,
+        routineManager: RoutineManager,
+        taskSink: GeneratedAresProjectControlTaskSink,
+    ): Map<Int, ControllerBindingRuntime> {
+        require(schemeId == null) { "This project has no generated control scheme" }
+        return emptyMap()
+    }
 }
