@@ -312,6 +312,29 @@ class MarvinIntakeSubsystemTest {
     }
 
     @Test
+    fun `collect and stopAndStow coordinate pivot deployment and roller speed commands across Redux store and writeOutputs`() {
+        intakeSubsystem.collect(45.0)
+
+        assertTrue(intakeSubsystem.isDeployed)
+        assertEquals(90.0, intakeSubsystem.targetAngleDegrees, 1e-4)
+        assertEquals(45.0, intakeSubsystem.targetRollerVelocityRps, 1e-4)
+
+        superstructure.writeOutputs(store.state, scale = 1.0)
+        assertEquals(90.0, intakeIO.pivotAngleCommand, 1e-4)
+        assertEquals(45.0, intakeIO.rollerVelocityCommand, 1e-4)
+
+        intakeSubsystem.stopAndStow()
+
+        assertFalse(intakeSubsystem.isDeployed)
+        assertEquals(0.0, intakeSubsystem.targetAngleDegrees, 1e-4)
+        assertEquals(0.0, intakeSubsystem.targetRollerVelocityRps, 1e-4)
+
+        superstructure.writeOutputs(store.state, scale = 1.0)
+        assertEquals(0.0, intakeIO.pivotAngleCommand, 1e-4)
+        assertEquals(0.0, intakeIO.rollerVelocityCommand, 1e-4)
+    }
+
+    @Test
     fun `brownout power scaling scales roller velocity and pivot effort while preserving geometry`() {
         intakeSubsystem.collect(12.0)
 
