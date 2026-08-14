@@ -270,4 +270,29 @@ class MarvinSuperstructureSafetyTest {
         assertEquals(0.0, floor.voltageCommand)
         assertEquals(0.0, climber.voltageCommand)
     }
+
+    @Test
+    fun flywheelCommandDispatchesTargetRpmWhenValid() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    flywheelActive = true,
+                    flywheel = FlywheelState(
+                        targetVelocityRpm = 4500.0
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(4500.0, flywheel.velocityRpmCommand, 1e-4)
+    }
 }
