@@ -138,6 +138,7 @@ class FRCTeleOpDriveController(
             val bPressed = controllerState.b
             val copilotRtPressed = coPilotControllerState.rightTrigger > 0.5f
             val copilotRbPressed = coPilotControllerState.rightBumper
+            val copilotBPressed = coPilotControllerState.b
             val shootingRequested = rtPressed || rbPressed || bPressed
             if (!shootingRequested) {
                 marvinShooter.cancelTransfer()
@@ -182,7 +183,7 @@ class FRCTeleOpDriveController(
                     targetCowlAngle = 0.5
                     true
                 }
-                copilotRbPressed -> {
+                copilotRbPressed || copilotBPressed -> {
                     targetFlywheelSpeed = 3650.0
                     targetCowlAngle = 1.1
                     true
