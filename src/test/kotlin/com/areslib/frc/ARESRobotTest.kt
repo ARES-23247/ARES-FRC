@@ -25,6 +25,8 @@ class ARESRobotTest {
         DriverStationSim.setEnabled(true)
         controllerSim = XboxControllerSim(0)
         coPilotSim = XboxControllerSim(1)
+        controllerSim.setPOV(-1)
+        coPilotSim.setPOV(-1)
         robot = ARESRobot()
     }
 
@@ -103,6 +105,218 @@ class ARESRobotTest {
         controllerSim.setRawButton(LEFT_BUMPER_BUTTON, true)
         robot.teleopPeriodic()
         controllerSim.setRawButton(LEFT_BUMPER_BUTTON, false)
+    }
 
+    @Test
+    fun testTestModeLifecycleAndDisabledTriggers() {
+        robot.robotInit()
+
+        // ── 1. Disabled Mode & Gyro Reset / Homing Trigger Handling ──
+        DriverStationSim.setAutonomous(false)
+        DriverStationSim.setTest(false)
+        DriverStationSim.setEnabled(false)
+        DriverStationSim.notifyNewData()
+
+        robot.disabledInit()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        // Individual button presses (non-combo) in disabled mode
+        controllerSim.setBackButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+        controllerSim.setBackButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        controllerSim.setStartButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+        controllerSim.setStartButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        coPilotSim.setBackButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+        coPilotSim.setBackButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        coPilotSim.setStartButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+        coPilotSim.setStartButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        // Dual-operator Back + Start homing trigger in disabled mode
+        controllerSim.setBackButton(true)
+        controllerSim.setStartButton(true)
+        coPilotSim.setBackButton(true)
+        coPilotSim.setStartButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        controllerSim.setBackButton(false)
+        controllerSim.setStartButton(false)
+        coPilotSim.setBackButton(false)
+        coPilotSim.setStartButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.disabledPeriodic()
+
+        // ── 2. Test Mode Lifecycle (testInit, testPeriodic, testExit) ──
+        DriverStationSim.setTest(true)
+        DriverStationSim.setEnabled(true)
+        DriverStationSim.notifyNewData()
+
+        robot.testInit()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        assertEquals("VISION_STATIONARY", edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getString("Calibration/Localization/TestType", ""))
+        assertFalse(edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getBoolean("Calibration/Localization/Recording", true))
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthX", -1.0), 1e-6)
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthY", -1.0), 1e-6)
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthHeadingRad", -1.0), 1e-6)
+
+        // Toggle continuous recording with 'A'
+        controllerSim.setAButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        assertTrue(edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getBoolean("Calibration/Localization/Recording", false))
+        controllerSim.setAButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Cycle test type with 'B'
+        controllerSim.setBButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        assertNotEquals("VISION_STATIONARY", edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getString("Calibration/Localization/TestType", ""))
+        controllerSim.setBButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Mark start with 'X' and mark end with 'Y'
+        controllerSim.setXButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setXButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        controllerSim.setYButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setYButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Adjust heading with Bumpers
+        controllerSim.setRawButton(LEFT_BUMPER_BUTTON, true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setRawButton(LEFT_BUMPER_BUTTON, false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        controllerSim.setRawButton(RIGHT_BUMPER_BUTTON, true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setRawButton(RIGHT_BUMPER_BUTTON, false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Adjust truth with D-Pad POV
+        controllerSim.setPOV(0)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setPOV(180)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setPOV(270)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setPOV(90)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setPOV(-1)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Zero truth with Back button
+        controllerSim.setBackButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthX", -1.0), 1e-6)
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthY", -1.0), 1e-6)
+        assertEquals(0.0, edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber("Calibration/Localization/TruthHeadingRad", -1.0), 1e-6)
+        controllerSim.setBackButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Seed pose to truth with Start button
+        controllerSim.setStartButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setStartButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Test drivePeriodic in test mode (joystick drive & xLock)
+        controllerSim.setLeftY(-0.5)
+        controllerSim.setLeftX(-0.5)
+        controllerSim.setRightX(0.2)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        controllerSim.setLeftY(0.0)
+        controllerSim.setLeftX(0.0)
+        controllerSim.setRightX(0.0)
+        DriverStationSim.notifyNewData()
+
+        coPilotSim.setXButton(true)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+        coPilotSim.setXButton(false)
+        DriverStationSim.notifyNewData()
+        robot.robotPeriodic()
+        robot.testPeriodic()
+
+        // Clean exit from test mode
+        robot.testExit()
     }
 }
