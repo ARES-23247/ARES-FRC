@@ -385,4 +385,31 @@ class MarvinSuperstructureSafetyTest {
         assertEquals(1.5, climber.positionCommandRotations, 1e-4)
         assertEquals(0.9, climber.effortScale, 1e-4)
     }
+
+    @Test
+    fun feederAndFloorVoltageCalculationsScaleLinearlyWithKvAndEffort() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    feeder = FeederState(targetVelocityRps = 50.0),
+                    floor = FloorState(targetVelocityRps = 25.0)
+                )
+            )
+        )
+
+        // With effortScale = 0.5:
+        // feeder voltage = 0.12 * 50.0 * 0.5 = 3.0V
+        // floor voltage = 0.12 * 25.0 * 0.5 = 1.5V
+        subsystem.writeOutputs(state, 0.5)
+
+        assertEquals(3.0, feeder.voltageCommand, 1e-4)
+        assertEquals(1.5, floor.voltageCommand, 1e-4)
+    }
 }
