@@ -242,4 +242,54 @@ class FRCTeleOpDriveControllerTest {
         assertFalse(releasedState.superstructure.marvin.flywheelActive)
         assertEquals(0.0, releasedState.superstructure.marvin.flywheel.targetVelocityRpm, 1e-4)
     }
+
+    @Test
+    fun leftBumperTriggersUnjamSequenceAndStopsActiveSlamtake() {
+        // Start slamtake first
+        controllerState.a = true
+        teleOpController.teleopPeriodic()
+        assertTrue(robot.store.state.superstructure.marvin.slamtakeActive)
+
+        // Trigger left bumper unjam
+        controllerState.leftBumper = true
+        teleOpController.teleopPeriodic()
+
+        val state = robot.store.state.superstructure.marvin
+        assertFalse(state.slamtakeActive)
+        assertTrue(state.intake.isDeployed)
+        assertEquals(-5.0, state.intake.targetRollerVelocityRps, 1e-4)
+        assertEquals(-5.0, state.floor.targetVelocityRps, 1e-4)
+        assertEquals(-5.0, state.feeder.targetVelocityRps, 1e-4)
+    }
+
+    @Test
+    fun leftTriggerRunsManualIntakeAndFeederRollers() {
+        controllerState.leftTrigger = 0.9f
+        teleOpController.teleopPeriodic()
+
+        val state = robot.store.state.superstructure.marvin
+        assertTrue(state.intake.isDeployed)
+        assertEquals(10.0, state.intake.targetRollerVelocityRps, 1e-4)
+        assertEquals(10.0, state.floor.targetVelocityRps, 1e-4)
+        assertEquals(10.0, state.feeder.targetVelocityRps, 1e-4)
+    }
+
+    @Test
+    fun dpadUpAndDownDriveClimberVoltageCommands() {
+        // D-Pad Up commands +6V
+        controllerState.dpadUp = true
+        teleOpController.teleopPeriodic()
+        assertEquals(6.0, robot.store.state.superstructure.marvin.climber.targetVoltage, 1e-4)
+
+        // Release D-Pad Up commands 0V
+        controllerState.dpadUp = false
+        teleOpController.teleopPeriodic()
+        assertEquals(0.0, robot.store.state.superstructure.marvin.climber.targetVoltage, 1e-4)
+
+        // Copilot D-Pad Down commands -6V
+        coPilotControllerState.dpadDown = true
+        teleOpController.teleopPeriodic()
+        assertEquals(-6.0, robot.store.state.superstructure.marvin.climber.targetVoltage, 1e-4)
+    }
 }
+
