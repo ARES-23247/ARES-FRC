@@ -53,24 +53,19 @@ class RepositorySafetyContractTest {
     }
 
     @Test
-    fun `zero-scheme project exposes only the explicit season controller`() {
+    fun `zero-scheme project still installs the generated controller lifecycle safely`() {
         val lifecycleSource = File(
             projectRoot,
             "src/main/kotlin/com/areslib/frc/ARESRobot.kt"
         ).readText()
-        val orchestratorSource = File(
+        val runtimeSource = File(
             projectRoot,
-            "src/main/kotlin/com/areslib/frc/robot/FRCAutoOrchestrator.kt"
+            "src/main/kotlin/com/areslib/frc/generatedruntime/FrcGeneratedControlsRuntime.kt"
         ).readText()
-        assertTrue(lifecycleSource.contains("ARES/Controls/Source\", \"hardcoded"))
-        assertFalse(lifecycleSource.contains("GeneratedAresProject.knownControlSchemeIds"))
-        assertFalse(lifecycleSource.contains("installGeneratedControllerBindings"))
-        assertFalse(orchestratorSource.contains("createControllerRuntimes"))
-        assertFalse(
-            File(
-                projectRoot,
-                "src/main/kotlin/com/areslib/frc/generatedruntime/FrcControllerBindingHost.kt"
-            ).exists()
-        )
+        assertTrue(lifecycleSource.contains("generatedControlsRuntime.update()"))
+        assertTrue(lifecycleSource.contains("cancelGeneratedControls(\"FRC disabled\")"))
+        assertTrue(runtimeSource.contains("GeneratedAresProject.createControllerRuntimes"))
+        assertTrue(runtimeSource.contains("?: \"hardcoded-only\""))
+        assertFalse(runtimeSource.contains("mavenLocal"))
     }
 }

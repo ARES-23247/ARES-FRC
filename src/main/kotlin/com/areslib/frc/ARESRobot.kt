@@ -33,6 +33,7 @@ import com.areslib.frc.robot.FRCAutoOrchestrator
 import com.areslib.frc.robot.FrcAutoCapabilities
 import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.frc.robot.FrcSysIdController
+import com.areslib.frc.generatedruntime.FrcGeneratedControlsRuntime
 import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
 import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
@@ -102,6 +103,7 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
+    private lateinit var generatedControlsRuntime: FrcGeneratedControlsRuntime
     private lateinit var sysIdController: FrcSysIdController
     private var localizationCalibration: FrcLocalizationCalibrationSession? = null
     private var localizationVisionTracker: FrcVisionTracker? = null
@@ -454,9 +456,14 @@ class ARESRobot : TimedRobot() {
         sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
         applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
         FrcAutoCapabilities.register()
+        generatedControlsRuntime = FrcGeneratedControlsRuntime(
+            stateProvider = { robot.store.state },
+            dispatch = robot.store::dispatch,
+            capabilities = FrcAutoCapabilities,
+        )
         autoOrchestrator = FRCAutoOrchestrator(robot, sim)
         autoOrchestrator.publishCatalog()
-        robot.telemetry.putString("ARES/Controls/Source", "hardcoded")
+        robot.telemetry.putString("ARES/Controls/Source", generatedControlsRuntime.controlsSource)
         robot.publishHardwareTopology(MARVIN_ROBOT_ID)
 
         addPeriodic({
@@ -541,6 +548,7 @@ class ARESRobot : TimedRobot() {
     }
 
     override fun disabledInit() {
+        cancelGeneratedControls("FRC disabled")
         if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
         if (::sysIdController.isInitialized) sysIdController.stop()
         if (::robot.isInitialized) stopMechanismsForDisable()
@@ -555,6 +563,7 @@ class ARESRobot : TimedRobot() {
     // ── Teleop ──
 
     override fun teleopInit() {
+        cancelGeneratedControls("FRC TeleOp initialized")
         autoOrchestrator.stop()
         sysIdController.stop()
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
@@ -565,13 +574,14 @@ class ARESRobot : TimedRobot() {
     override fun teleopPeriodic() {
         try {
             teleOpController.teleopPeriodic()
+            generatedControlsRuntime.update()
         } catch (error: Throwable) {
             DriverStation.reportError(
-                "Teleop controller exception: ${error.message ?: error::class.java.simpleName}",
+                "Teleop control exception: ${error.message ?: error::class.java.simpleName}",
                 false
             )
             latchMechanismFault(
-                "Teleop controller exception: ${error.message ?: error::class.java.simpleName}"
+                "Teleop control exception: ${error.message ?: error::class.java.simpleName}"
             )
         }
     }
@@ -579,6 +589,7 @@ class ARESRobot : TimedRobot() {
     // ── Autonomous ──
 
     override fun autonomousInit() {
+        cancelGeneratedControls("FRC autonomous initialized")
         sysIdController.stop()
         applyMechanismSafetyPolicy("autonomous initialization")
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
@@ -596,6 +607,7 @@ class ARESRobot : TimedRobot() {
     // ── Localization calibration (Driver Station Test mode) ──
 
     override fun testInit() {
+        cancelGeneratedControls("FRC test initialized")
         autoOrchestrator.stop()
         sysIdController.stop()
         applyAlliance(DriverStation.getAlliance().orElse(cachedAlliance))
@@ -777,10 +789,32 @@ class ARESRobot : TimedRobot() {
         robot.safeHardware()
     }
 
+    private fun cancelGeneratedControls(reason: String) {
+        if (!::generatedControlsRuntime.isInitialized) return
+        try {
+            generatedControlsRuntime.cancelAll(reason)
+        } catch (error: Throwable) {
+            DriverStation.reportError(
+                "Generated controller cleanup failed: ${error.message ?: error::class.java.simpleName}",
+                false
+            )
+            if (::robot.isInitialized) {
+                latchMechanismFault(
+                    "Generated controller cleanup failed: ${error.message ?: error::class.java.simpleName}"
+                )
+            }
+        }
+    }
+
     override fun close() {
         var failure: Throwable? = null
         fun capture(error: Throwable) {
             failure?.addSuppressed(error) ?: run { failure = error }
+        }
+        try {
+            cancelGeneratedControls("FRC robot closing")
+        } catch (error: Throwable) {
+            capture(error)
         }
         try {
             if (::autoOrchestrator.isInitialized) autoOrchestrator.stop()
