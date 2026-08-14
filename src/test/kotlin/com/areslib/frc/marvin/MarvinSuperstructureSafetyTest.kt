@@ -185,6 +185,64 @@ class MarvinSuperstructureSafetyTest {
     }
 
     @Test
+    fun climberMotionBlockedWhenIntakeDeployedBeyondClearanceThreshold() {
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(
+            RecordingFlywheelIO(), RecordingCowlIO(), RecordingIntakeIO(),
+            RecordingFeederIO(), RecordingFloorIO(), climber
+        )
+
+        // Verify voltage command is zeroed when intake pivot is beyond clearance threshold (> 10.0 deg)
+        val voltageModeState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        pivotAngleDegrees = 15.0,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(
+                        positionRotations = 0.0,
+                        positionValid = true,
+                        targetVoltage = 8.0,
+                        controlMode = ClimberControlMode.VOLTAGE
+                    )
+                )
+            )
+        )
+        subsystem.writeOutputs(voltageModeState, 1.0)
+
+        assertEquals(0.0, climber.voltageCommand)
+        assertTrue(climber.positionCommandRotations.isNaN())
+
+        // Verify position command is blocked/zeroed when intake pivot is beyond clearance threshold (> 10.0 deg)
+        val climberPositionIO = RecordingClimberIO()
+        val subsystemPosition = MarvinSuperstructure(
+            RecordingFlywheelIO(), RecordingCowlIO(), RecordingIntakeIO(),
+            RecordingFeederIO(), RecordingFloorIO(), climberPositionIO
+        )
+        val positionModeState = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    intake = IntakeState(
+                        pivotAngleDegrees = 15.0,
+                        pivotAngleValid = true
+                    ),
+                    climber = ClimberState(
+                        positionRotations = 0.0,
+                        positionValid = true,
+                        targetPositionRotations = 1.0,
+                        controlMode = ClimberControlMode.POSITION_ROTATIONS
+                    )
+                )
+            )
+        )
+        subsystemPosition.writeOutputs(positionModeState, 1.0)
+
+        assertEquals(0.0, climberPositionIO.voltageCommand)
+        assertTrue(climberPositionIO.positionCommandRotations.isNaN())
+    }
+
+    @Test
     fun stalePositionFeedbackZerosPositionOutputsUntilFresh() {
         val cowl = RecordingCowlIO()
         val intake = RecordingIntakeIO()
