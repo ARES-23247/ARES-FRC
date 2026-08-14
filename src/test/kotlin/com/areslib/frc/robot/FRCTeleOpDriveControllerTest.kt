@@ -242,4 +242,22 @@ class FRCTeleOpDriveControllerTest {
         assertFalse(releasedState.superstructure.marvin.flywheelActive)
         assertEquals(0.0, releasedState.superstructure.marvin.flywheel.targetVelocityRpm, 1e-4)
     }
+
+    @Test
+    fun copilotRightBumperSpinsUpFlywheelPreset() {
+        coPilotControllerState.rightBumper = true
+        teleOpController.teleopPeriodic()
+
+        val state = robot.store.state
+        assertTrue(state.superstructure.marvin.flywheelActive)
+        assertEquals(3650.0, state.superstructure.marvin.flywheel.targetVelocityRpm, 1e-4)
+        assertEquals(1.1, state.superstructure.marvin.cowl.targetAngleRotations, 1e-4)
+
+        coPilotControllerState.rightBumper = false
+        teleOpController.teleopPeriodic()
+
+        val releasedState = robot.store.state
+        assertFalse(releasedState.superstructure.marvin.flywheelActive)
+        assertEquals(0.0, releasedState.superstructure.marvin.flywheel.targetVelocityRpm, 1e-4)
+    }
 }
