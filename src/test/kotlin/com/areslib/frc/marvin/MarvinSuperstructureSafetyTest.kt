@@ -295,4 +295,31 @@ class MarvinSuperstructureSafetyTest {
 
         assertEquals(4500.0, flywheel.velocityRpmCommand, 1e-4)
     }
+
+    @Test
+    fun cowlCommandDispatchesTargetAngleWhenValid() {
+        val flywheel = RecordingFlywheelIO()
+        val cowl = RecordingCowlIO()
+        val intake = RecordingIntakeIO()
+        val feeder = RecordingFeederIO()
+        val floor = RecordingFloorIO()
+        val climber = RecordingClimberIO()
+        val subsystem = MarvinSuperstructure(flywheel, cowl, intake, feeder, floor, climber)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = MarvinState(
+                    cowl = CowlState(
+                        angleRotations = 1.0,
+                        angleValid = true,
+                        targetAngleRotations = 1.5
+                    )
+                )
+            )
+        )
+
+        subsystem.writeOutputs(state, 1.0)
+
+        assertEquals(1.5, cowl.angleCommand, 1e-4)
+        assertEquals(1.0, cowl.effortScale, 1e-4)
+    }
 }
