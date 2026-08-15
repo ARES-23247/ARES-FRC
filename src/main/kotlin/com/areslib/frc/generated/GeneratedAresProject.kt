@@ -16,28 +16,13 @@ import com.areslib.input.ControllerBindingRuntime
 import com.areslib.sequencer.Task
 import com.areslib.state.RobotState
 
-/** Typed robot implementations for every capability in the generated catalog. */
+/** Stable robot boundary for capabilities referenced by generated project documents. */
 interface GeneratedAresProjectCapabilities {
-    /** Implements action key intake.collect. */
-    fun actionIntakeCollect(): Task
+    /** Creates a hand-authored or season action by its catalog key, or null when unavailable. */
+    fun createActionTask(actionKey: String, arguments: Map<String, String>): Task? = null
 
-    /** Implements action key intake.stop. */
-    fun actionIntakeStop(): Task
-
-    /** Implements action key intake.stow. */
-    fun actionIntakeStow(): Task
-
-    /** Implements action key shooter.feedWhenReady. */
-    fun actionShooterFeedWhenReady(): Task
-
-    /** Implements action key shooter.prepare. */
-    fun actionShooterPrepare(): Task
-
-    /** Implements action key shooter.stop. */
-    fun actionShooterStop(): Task
-
-    /** Implements condition key shooter.ready. */
-    fun conditionShooterReady(): (RobotState) -> Boolean
+    /** Creates a hand-authored condition predicate by its catalog key, or null when unavailable. */
+    fun createCondition(conditionKey: String, arguments: Map<String, String>): ((RobotState) -> Boolean)? = null
 
     /** Platform trajectory adapter; returning null rejects a drive step safely. */
     fun createDriveTask(step: RoutineDriveStep): Task? = null
@@ -50,10 +35,10 @@ fun interface GeneratedAresProjectControlTaskSink {
 
 /** Generated from the project's checked-in ARES documents. Do not edit by hand. */
 object GeneratedAresProject {
-    const val GENERATOR_VERSION: Int = 6
+    const val GENERATOR_VERSION: Int = 7
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
-    const val CONTENT_SHA256: String = "bfe0002441877c8bbe4fa104d93b4a43c2d8212778d16e75d8739726b6819b0d"
-    const val SOURCE_SHA256: String = "1dee0c94f3f12073526332163acb515748cac6974372a4b6da29635473a8c38a"
+    const val CONTENT_SHA256: String = "3c0f9b206882080c41aa89bcbc8ce9fb3ac39faefa84a0f7043d2680f1e6adbe"
+    const val SOURCE_SHA256: String = "ada0522723064de9b44dc0dbfc58cae10d81dd7932424c5bad853cc3e024f87f"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -113,7 +98,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionIntakeCollect()
+                        registry.createActionTask(key, arguments)
                     }
                     "intake.stop" -> {
                         CapabilityArgumentReader(
@@ -121,7 +106,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionIntakeStop()
+                        registry.createActionTask(key, arguments)
                     }
                     "intake.stow" -> {
                         CapabilityArgumentReader(
@@ -129,7 +114,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionIntakeStow()
+                        registry.createActionTask(key, arguments)
                     }
                     "shooter.feedWhenReady" -> {
                         CapabilityArgumentReader(
@@ -137,7 +122,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionShooterFeedWhenReady()
+                        registry.createActionTask(key, arguments)
                     }
                     "shooter.prepare" -> {
                         CapabilityArgumentReader(
@@ -145,7 +130,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionShooterPrepare()
+                        registry.createActionTask(key, arguments)
                     }
                     "shooter.stop" -> {
                         CapabilityArgumentReader(
@@ -153,7 +138,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.actionShooterStop()
+                        registry.createActionTask(key, arguments)
                     }
                     else -> null
                 }
@@ -166,7 +151,7 @@ object GeneratedAresProject {
                             arguments = arguments,
                             allowedKeys = emptySet(),
                         )
-                        registry.conditionShooterReady()
+                        registry.createCondition(key, arguments)
                     }
                     else -> null
                 }
