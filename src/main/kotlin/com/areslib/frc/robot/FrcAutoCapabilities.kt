@@ -82,7 +82,32 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         NamedCommands.register(SHOOTER_STOP) { actionShooterStop() }
     }
 
-    override fun actionIntakeCollect(): Task = InstantAutoActionsTask(INTAKE_COLLECT.displayName) {
+    /** Stable generated-project boundary; catalog changes no longer require new Kotlin overrides. */
+    override fun createActionTask(actionKey: String, arguments: Map<String, String>): Task? {
+        require(arguments.isEmpty()) { "FRC named action '$actionKey' does not accept arguments" }
+        return when (actionKey) {
+            INTAKE_COLLECT.key.value -> actionIntakeCollect()
+            INTAKE_STOP.key.value -> actionIntakeStop()
+            INTAKE_STOW.key.value -> actionIntakeStow()
+            SHOOTER_PREPARE.key.value -> actionShooterPrepare()
+            SHOOTER_FEED_WHEN_READY.key.value -> actionShooterFeedWhenReady()
+            SHOOTER_STOP.key.value -> actionShooterStop()
+            else -> null
+        }
+    }
+
+    override fun createCondition(
+        conditionKey: String,
+        arguments: Map<String, String>,
+    ): ((RobotState) -> Boolean)? {
+        require(arguments.isEmpty()) { "FRC condition '$conditionKey' does not accept arguments" }
+        return when (conditionKey) {
+            "shooter.ready" -> ::flywheelIsReady
+            else -> null
+        }
+    }
+
+    fun actionIntakeCollect(): Task = InstantAutoActionsTask(INTAKE_COLLECT.displayName) {
         listOf(
             SetIntakePivot(deployed = true),
             SetIntakeRollers(INTAKE_ROLLER_RPS),
@@ -90,15 +115,15 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         )
     }
 
-    override fun actionIntakeStop(): Task = InstantAutoActionsTask(INTAKE_STOP.displayName) {
+    fun actionIntakeStop(): Task = InstantAutoActionsTask(INTAKE_STOP.displayName) {
         listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0))
     }
 
-    override fun actionIntakeStow(): Task = InstantAutoActionsTask(INTAKE_STOW.displayName) {
+    fun actionIntakeStow(): Task = InstantAutoActionsTask(INTAKE_STOW.displayName) {
         listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0), SetIntakePivot(deployed = false))
     }
 
-    override fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
+    fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
         listOf(
             SetFlywheelSpeed(AUTO_SHOT_RPM),
             SetCowlAngle(AUTO_SHOT_COWL_ROTATIONS),
@@ -106,12 +131,12 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         )
     }
 
-    override fun actionShooterFeedWhenReady(): Task = FeedWhenReadyTask()
+    fun actionShooterFeedWhenReady(): Task = FeedWhenReadyTask()
 
-    override fun actionShooterStop(): Task =
+    fun actionShooterStop(): Task =
         InstantAutoActionsTask(SHOOTER_STOP.displayName, ::shooterStopActions)
 
-    override fun conditionShooterReady(): (RobotState) -> Boolean = ::flywheelIsReady
+    fun conditionShooterReady(): (RobotState) -> Boolean = ::flywheelIsReady
 
     private fun shooterStopActions(): List<RobotAction> = listOf(
         SetFlywheelSpeed(0.0),
