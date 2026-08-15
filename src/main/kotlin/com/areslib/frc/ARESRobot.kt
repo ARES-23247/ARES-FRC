@@ -37,6 +37,7 @@ import com.areslib.frc.generatedruntime.FrcGeneratedControlsRuntime
 import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
 import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
+import com.areslib.frc.generated.subsystems.superstructure.GeneratedSuperstructureRegistry
 
 /** Returns false when any real mechanism adapter reports failed or reset configuration. */
 internal fun mechanismsConfigured(
@@ -378,6 +379,9 @@ class ARESRobot : TimedRobot() {
 
         // Generated subsystem DSL participates in the same lifecycle as handwritten mechanisms.
         GeneratedSubsystemRegistry.createAll(isReal).forEach(robot::registerSubsystem)
+        // Generated superstructures coordinate only generated Redux targets and must run after
+        // those generated subsystem lifecycles have been installed.
+        GeneratedSuperstructureRegistry.createAll().forEach(robot::registerSubsystem)
 
         // 5. Create and register the MarvinSuperstructure subsystem
         val superstructureSubsystem = MarvinSuperstructure(

@@ -35,10 +35,10 @@ fun interface GeneratedAresProjectControlTaskSink {
 
 /** Generated from the project's checked-in ARES documents. Do not edit by hand. */
 object GeneratedAresProject {
-    const val GENERATOR_VERSION: Int = 7
+    const val GENERATOR_VERSION: Int = 8
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
-    const val CONTENT_SHA256: String = "3c0f9b206882080c41aa89bcbc8ce9fb3ac39faefa84a0f7043d2680f1e6adbe"
-    const val SOURCE_SHA256: String = "ada0522723064de9b44dc0dbfc58cae10d81dd7932424c5bad853cc3e024f87f"
+    const val CONTENT_SHA256: String = "73cce2cc39008d606c69845907c11c4a29f588083cf2466fcbf948954e106846"
+    const val SOURCE_SHA256: String = "38f1a963fa1c868102e6b289367cf954d939d146e19c07ff52fab436ff6468b3"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
