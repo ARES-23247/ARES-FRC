@@ -26,11 +26,11 @@ jobs:
           path: ARES-FRC
 
       - name: Check out matching ARESLib feature dependency
-        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration'
+        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration' || github.event.pull_request.head.ref == 'codex/superstructure-runtime-integration' || github.ref_name == 'codex/superstructure-runtime-integration'
         uses: actions/checkout@v4
         with:
           repository: ARES-23247/ARESLib-Kotlin
-          ref: codex/zero-code-runtime-integration
+          ref: ${{ (github.event.pull_request.head.ref == 'codex/superstructure-runtime-integration' || github.ref_name == 'codex/superstructure-runtime-integration') && 'codex/superstructure-runtime-foundation' || 'codex/zero-code-runtime-integration' }}
           path: ARESLib-Kotlin
 
       - name: Set up JDK 17
@@ -43,12 +43,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Publish matching ARESLib validation repository
-        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration'
+        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration' || github.event.pull_request.head.ref == 'codex/superstructure-runtime-integration' || github.ref_name == 'codex/superstructure-runtime-integration'
         working-directory: ARESLib-Kotlin
         run: ./gradlew apiCheck publishReleaseValidation --no-parallel --no-daemon
 
       - name: Select matching ARESLib validation repository
-        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration'
+        if: github.event.pull_request.head.ref == 'codex/zero-code-runtime-integration' || github.ref_name == 'codex/zero-code-runtime-integration' || github.event.pull_request.head.ref == 'codex/superstructure-runtime-integration' || github.ref_name == 'codex/superstructure-runtime-integration'
         run: echo "ORG_GRADLE_PROJECT_aresRepository=file://${GITHUB_WORKSPACE}/ARESLib-Kotlin/build/release-repository" >> "$GITHUB_ENV"
 
       - name: Verify generated project and run tests
