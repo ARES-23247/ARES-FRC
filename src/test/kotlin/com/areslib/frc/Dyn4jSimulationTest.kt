@@ -180,13 +180,24 @@ class Dyn4jSimulationTest {
             vy = 0.1,
             vz = -1.0
         )
+        val opponentSpeakerBall = FlyingBall(
+            x = com.areslib.frc.marvin.MarvinConfig.FieldTargets.redSpeaker.x,
+            y = com.areslib.frc.marvin.MarvinConfig.FieldTargets.redSpeaker.y,
+            z = 2.0,
+            vx = 0.1,
+            vy = 0.1,
+            vz = -1.0
+        )
         flyingList.add(scoredBall)
+        flyingList.add(opponentSpeakerBall)
 
         // Step simulation
         sim.step(state, 0.02)
 
-        // Verify flying ball was removed
-        assertTrue(flyingList.isEmpty(), "Scored ball should be removed from flyingBalls list")
+        // RobotState defaults to BLUE: the blue shot scores, while the opponent speaker is not
+        // credited and its projectile remains in flight.
+        assertEquals(1, flyingList.size)
+        assertSame(opponentSpeakerBall, flyingList.single())
 
         // Verify new ground ball was spawned (balls size increased)
         assertEquals(initialGroundBalls + 1, ballsList.size, "A new ground ball should be spawned")

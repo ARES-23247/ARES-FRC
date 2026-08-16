@@ -27,11 +27,21 @@ class MarvinControllerReduxConsistencyTest {
 
         feeder.updateFeeders(rpmAligned = true, headingAligned = true, cowlReady = true)
         assertTrue(store.state.superstructure.marvin.transferActive)
+        assertEquals(1_000L, store.state.superstructure.marvin.transferStartedAtMs)
+        assertFalse(store.state.superstructure.marvin.transferConsumedForTrigger)
         assertEquals(MarvinConfig.FEEDER_SHOOT_SPEED_RPS, store.state.superstructure.marvin.feeder.targetVelocityRps)
 
         RobotClock.setMockTimeMs(1_450L)
-        feeder.updateFeeders(rpmAligned = true, headingAligned = true, cowlReady = true)
+        // A reconstructed controller must continue the timestamp retained in Redux rather than
+        // granting a new 450 ms window.
+        MarvinFeederController(store).updateFeeders(
+            rpmAligned = true,
+            headingAligned = true,
+            cowlReady = true
+        )
         assertFalse(store.state.superstructure.marvin.transferActive)
+        assertEquals(-1L, store.state.superstructure.marvin.transferStartedAtMs)
+        assertTrue(store.state.superstructure.marvin.transferConsumedForTrigger)
         assertEquals(0.0, store.state.superstructure.marvin.feeder.targetVelocityRps)
 
         RobotClock.setMockTimeMs(2_000L)
@@ -39,6 +49,7 @@ class MarvinControllerReduxConsistencyTest {
         assertFalse(store.state.superstructure.marvin.transferActive)
 
         feeder.cancelTransfer()
+        assertFalse(store.state.superstructure.marvin.transferConsumedForTrigger)
         feeder.updateFeeders(rpmAligned = true, headingAligned = true, cowlReady = true)
         assertTrue(store.state.superstructure.marvin.transferActive)
 
