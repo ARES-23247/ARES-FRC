@@ -159,7 +159,7 @@ class MarvinControlAndFreshnessRegressionTest {
         store.dispatch(SetFeederSpeed(8.0))
         store.dispatch(SetFloorSpeed(8.0))
         store.dispatch(SetClimberVoltage(6.0))
-        store.dispatch(SetTransferActive(true))
+        store.dispatch(StartTransfer())
         store.dispatch(com.areslib.action.RobotAction.JoystickDriveIntent(2.0, -1.0, 0.5))
 
         store.dispatch(SetMechanismSafetyInhibit(true))
