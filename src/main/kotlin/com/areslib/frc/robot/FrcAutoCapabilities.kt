@@ -2,6 +2,7 @@ package com.areslib.frc.robot
 
 import com.areslib.action.RobotAction
 import com.areslib.frc.marvin.MarvinConfig
+import com.areslib.frc.marvin.MarvinFeederController
 import com.areslib.frc.marvin.marvin
 import com.areslib.frc.marvin.SetFeederSpeed
 import com.areslib.frc.marvin.SetCowlAngle
@@ -10,7 +11,9 @@ import com.areslib.frc.marvin.SetFlywheelActive
 import com.areslib.frc.marvin.SetFlywheelSpeed
 import com.areslib.frc.marvin.SetIntakePivot
 import com.areslib.frc.marvin.SetIntakeRollers
-import com.areslib.frc.marvin.SetTransferActive
+import com.areslib.frc.marvin.CompleteTransfer
+import com.areslib.frc.marvin.ResetTransferCycle
+import com.areslib.frc.marvin.StartTransfer
 import com.areslib.frc.generated.GeneratedAresProjectCapabilities
 import com.areslib.pathing.CommandKey
 import com.areslib.pathing.NamedCommandDescriptor
@@ -152,7 +155,9 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         SetFlywheelActive(active = false),
         SetFeederSpeed(0.0),
         SetFloorSpeed(0.0),
-        SetTransferActive(active = false)
+        // Fail-closed close of any in-flight transfer: consuming the trigger is safer than
+        // SetTransferActive(false), which re-armed the one-shot latch mid-cycle.
+        CompleteTransfer()
     )
 
     private class InstantAutoActionsTask(
@@ -186,12 +191,15 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         override fun initialize(state: RobotState): List<RobotAction> {
             super.initialize(state)
             feedStartElapsedMs = NOT_STARTED
-            return emptyList()
+            // A previously consumed trigger (teleop cycle or an earlier auto task) must not
+            // block this task's own bounded transfer; re-arm the one-shot latch.
+            return listOf(ResetTransferCycle())
         }
 
         override fun isCompleted(state: RobotState, elapsedMs: Long): Boolean = when {
             feedStartElapsedMs != NOT_STARTED ->
-                elapsedMs < feedStartElapsedMs || elapsedMs - feedStartElapsedMs >= FEED_TRANSFER_DURATION_MS
+                elapsedMs < feedStartElapsedMs ||
+                    elapsedMs - feedStartElapsedMs >= MarvinFeederController.TRANSFER_DURATION_MS
             else -> elapsedMs >= FEED_READY_TIMEOUT_MS
         }
 
@@ -202,14 +210,19 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
             }
             feedStartElapsedMs = elapsedMs
             return listOf(
-                SetTransferActive(active = true),
+                StartTransfer(),
                 SetFeederSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS),
                 SetFloorSpeed(MarvinConfig.FEEDER_SHOOT_SPEED_RPS)
             )
         }
 
         override fun end(state: RobotState, interrupted: Boolean): List<RobotAction> {
-            val actions = listOf(SetTransferActive(active = false), SetFeederSpeed(0.0), SetFloorSpeed(0.0))
+            // Close the transfer through the bounded lifecycle whether it finished or was
+            // interrupted: consuming the trigger is the fail-safe outcome either way.
+            val actions = mutableListOf<RobotAction>(SetFeederSpeed(0.0), SetFloorSpeed(0.0))
+            if (state.superstructure.marvin.transferActive) {
+                actions.add(0, CompleteTransfer())
+            }
             super.end(state, interrupted)
             return actions
         }
@@ -241,6 +254,5 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     private const val RPM_TOLERANCE = 150.0
     private const val COWL_TOLERANCE_ROTATIONS = 0.05
     private const val FEED_READY_TIMEOUT_MS = 2_000L
-    private const val FEED_TRANSFER_DURATION_MS = 450L
     private const val NOT_STARTED = -1L
 }

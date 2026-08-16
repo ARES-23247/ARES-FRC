@@ -201,7 +201,12 @@ class FrcNativeAutoContractTest {
         assertTrue(ready(robot.store.state))
 
         val feedTask = FrcAutoCapabilities.actionShooterFeedWhenReady()
-        feedTask.initialize(robot.store.state)
+        // A consumed teleop trigger must not block the auto task: initialize re-arms the latch.
+        robot.store.dispatch(com.areslib.frc.marvin.CompleteTransfer())
+        assertTrue(robot.store.state.superstructure.marvin.transferConsumedForTrigger)
+        feedTask.initialize(robot.store.state).forEach(robot.store::dispatch)
+        assertFalse(robot.store.state.superstructure.marvin.transferConsumedForTrigger)
+
         feedTask.execute(robot.store.state, 20L).forEach(robot.store::dispatch)
         assertFalse(feedTask.isCompleted(robot.store.state, 20L))
         assertTrue(robot.store.state.superstructure.marvin.transferActive)
@@ -209,6 +214,8 @@ class FrcNativeAutoContractTest {
         assertTrue(feedTask.isCompleted(robot.store.state, 470L))
         feedTask.end(robot.store.state, interrupted = false).forEach(robot.store::dispatch)
         assertFalse(robot.store.state.superstructure.marvin.transferActive)
+        // The transfer closed through the bounded lifecycle: the one-shot trigger stays consumed.
+        assertTrue(robot.store.state.superstructure.marvin.transferConsumedForTrigger)
         assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
         assertEquals(0.0, robot.store.state.superstructure.marvin.floor.targetVelocityRps)
         assertNotNull(GeneratedAresProject.runtimeBindings(FrcAutoCapabilities))

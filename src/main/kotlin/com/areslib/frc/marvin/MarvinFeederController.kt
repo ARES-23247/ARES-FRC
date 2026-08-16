@@ -56,7 +56,7 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
         dispatchOnChange(store.state.superstructure.marvin.floor.targetVelocityRps, floorSpeed, ::SetFloorSpeed) {}
     }
 
-    private companion object {
+    internal companion object {
         const val TRANSFER_DURATION_MS = 450L
     }
 }
