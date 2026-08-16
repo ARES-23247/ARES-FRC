@@ -27,6 +27,14 @@ object MarvinConfig {
      */
     const val FEEDER_SHOOT_SPEED_RPS = 10.0
 
+    /** Manual spin-up presets used by the copilot controls. */
+    object OperatorShotPresets {
+        const val CLOSE_FLYWHEEL_RPM = 3350.0
+        const val CLOSE_COWL_ROTATIONS = 0.5
+        const val MID_FLYWHEEL_RPM = 3650.0
+        const val MID_COWL_ROTATIONS = 1.1
+    }
+
     /**
      * Maximum safe cowl/hood travel in mechanism rotations. Sourced by both the
      * [MarvinCowlController] software clamp and the [FRCCowlHardwareIO] TalonFX forward
@@ -85,5 +93,9 @@ object MarvinConfig {
             com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH,
             SPEAKER_CENTER_Y_METERS
         )
+
+        /** Active shuttle targets in the same blue-origin field frame as speaker aiming. */
+        val blueShuttle = Translation2d(2.0, 2.0)
+        val redShuttle = Translation2d(14.6, 2.0)
     }
 }

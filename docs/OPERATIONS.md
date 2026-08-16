@@ -38,10 +38,12 @@ Tests use JUnit 5 and configure WPILib desktop JNI extraction. On Windows the bu
 Normal operations use the pinned ARESLib release from Maven Central. To test an unpublished shared change through its exact binary bundle:
 
 ```powershell
+$candidate = "8.0.0-rc.<areslib-commit>"
 cd ..\ARESLib-Kotlin
-.\gradlew.bat apiCheck publishReleaseValidation
+.\gradlew.bat apiCheck publishReleaseValidation "-ParesVersion=$candidate"
 cd ..\ARES-FRC
-.\gradlew.bat test -ParesRepository="..\ARESLib-Kotlin\build\release-repository"
+$repository = ([Uri](Resolve-Path ..\ARESLib-Kotlin\build\release-repository)).AbsoluteUri
+.\gradlew.bat test "-ParesVersion=$candidate" "-ParesRepository=$repository"
 ```
 
 ## Deployment checklist
@@ -147,4 +149,4 @@ Verify the WPILib 2026 installation and its Java 17 runtime at `C:/Users/Public/
 
 ### Changes in ARESLib are not visible elsewhere
 
-Confirm the consumer's `aresVersion` is the intended Maven Central release. For an unpublished library change, run `publishReleaseValidation` in ARESLib and pass its `build/release-repository` through `-ParesRepository`. Do not copy shared classes into the season repository.
+Confirm the consumer's `aresVersion` is the intended Maven Central release. For an unpublished library change, publish a unique prerelease coordinate such as `8.0.0-rc.<areslib-commit>` and pass both that exact `-ParesVersion` and the isolated `build/release-repository` URI. Never republish a released coordinate with different bytes. Do not copy shared classes into the season repository.

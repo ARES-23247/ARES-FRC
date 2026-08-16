@@ -4,6 +4,7 @@ import com.areslib.control.assist.ShotResult
 import com.areslib.action.RobotAction
 import com.areslib.frc.FrcSwerveRobot
 import com.areslib.frc.marvin.MarvinShooterSubsystem
+import com.areslib.frc.marvin.MarvinConfig
 import com.areslib.frc.marvin.marvin
 import com.areslib.frc.marvin.SetClimberVoltage
 import com.areslib.frc.marvin.SetCowlAngle
@@ -16,7 +17,6 @@ import com.areslib.frc.marvin.SetIntakeRollers
 import com.areslib.frc.marvin.LatchMechanismSafetyFault
 import com.areslib.frc.marvin.StartSlamtake
 import com.areslib.frc.marvin.StopSlamtake
-import com.areslib.math.geometry.Translation2d
 import com.areslib.telemetry.GamepadState
 import edu.wpi.first.math.MathUtil
 import edu.wpi.first.wpilibj.DriverStation
@@ -52,10 +52,6 @@ class FRCTeleOpDriveController(
     private var controllerFaultLatched = false
     private var aButtonWasPressed = false
     private val shotResult = ShotResult()
-
-    // Pre-allocated shuttle targets in blue-origin field meters; index 1 is currently selected.
-    private val targetPosesRed = arrayOf(Translation2d(14.6, 6.0), Translation2d(14.6, 2.0))
-    private val targetPosesBlue = arrayOf(Translation2d(2.0, 6.0), Translation2d(2.0, 2.0))
 
     /**
      * Alliance used to interpret field-relative driver input.
@@ -157,7 +153,11 @@ class FRCTeleOpDriveController(
                 rbPressed -> {
                     // Aim and Shuttle
                     val isRed = cachedAlliance == DriverStation.Alliance.Red
-                    val shuttleTarget = if (isRed) targetPosesRed[1] else targetPosesBlue[1]
+                    val shuttleTarget = if (isRed) {
+                        MarvinConfig.FieldTargets.redShuttle
+                    } else {
+                        MarvinConfig.FieldTargets.blueShuttle
+                    }
 
                     marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
@@ -178,13 +178,13 @@ class FRCTeleOpDriveController(
 
             val targetFlywheelActive = when {
                 copilotRtPressed -> {
-                    targetFlywheelSpeed = 3350.0
-                    targetCowlAngle = 0.5
+                    targetFlywheelSpeed = MarvinConfig.OperatorShotPresets.CLOSE_FLYWHEEL_RPM
+                    targetCowlAngle = MarvinConfig.OperatorShotPresets.CLOSE_COWL_ROTATIONS
                     true
                 }
                 copilotRbPressed -> {
-                    targetFlywheelSpeed = 3650.0
-                    targetCowlAngle = 1.1
+                    targetFlywheelSpeed = MarvinConfig.OperatorShotPresets.MID_FLYWHEEL_RPM
+                    targetCowlAngle = MarvinConfig.OperatorShotPresets.MID_COWL_ROTATIONS
                     true
                 }
                 else -> false

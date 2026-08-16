@@ -72,10 +72,12 @@ Run these commands from this directory in PowerShell:
 Normal builds consume the pinned ARESLib release from Maven Central. Library developers can opt into sibling source substitution with `-ParesUseSiblingLib=true`, or validate the exact unpublished binaries with:
 
 ```powershell
+$candidate = "8.0.0-rc.<areslib-commit>"
 cd ..\ARESLib-Kotlin
-.\gradlew.bat apiCheck publishReleaseValidation
+.\gradlew.bat apiCheck publishReleaseValidation "-ParesVersion=$candidate"
 cd ..\ARES-FRC
-.\gradlew.bat test -ParesRepository="..\ARESLib-Kotlin\build\release-repository"
+$repository = ([Uri](Resolve-Path ..\ARESLib-Kotlin\build\release-repository)).AbsoluteUri
+.\gradlew.bat test "-ParesVersion=$candidate" "-ParesRepository=$repository"
 ```
 
 ## Non-negotiable conventions

@@ -121,6 +121,10 @@ data class MarvinState(
     val slamtakePhase: Int = 0,
     val flywheelActive: Boolean = false,
     val transferActive: Boolean = false,
+    /** Monotonic start time supplied by [StartTransfer], or `-1` while inactive. */
+    val transferStartedAtMs: Long = -1L,
+    /** Prevents one held trigger cycle from authorizing repeated transfers. */
+    val transferConsumedForTrigger: Boolean = false,
     /** Immediate output inhibit, including the normal temporary Disabled stop. */
     val mechanismSafetyInhibited: Boolean = false,
     /** Persistent fault latch; mode initialization cannot clear this flag. */

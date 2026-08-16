@@ -26,6 +26,21 @@ data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
 ) : RobotAction
 
+/** Starts one bounded feeder transfer using the action's deterministic monotonic timestamp. */
+data class StartTransfer @kotlin.jvm.JvmOverloads constructor(
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+/** Completes or fails closed one transfer and consumes the current trigger cycle. */
+data class CompleteTransfer @kotlin.jvm.JvmOverloads constructor(
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
+/** Ends the trigger cycle so a later press may authorize one new transfer. */
+data class ResetTransferCycle @kotlin.jvm.JvmOverloads constructor(
+    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
+) : RobotAction
+
 /**
  * Atomically zeros and optionally latches every drivetrain and Marvin mechanism command.
  *

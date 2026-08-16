@@ -99,9 +99,13 @@ class Dyn4jSimulation(
     val climberIO: ClimberIO = com.areslib.frc.sim.io.SimulatedClimberIO(this)
 
     private val scratchActions = mutableListOf<RobotAction>()
-    private val hubCenters = listOf(
-        Vector2(MarvinConfig.FieldTargets.blueSpeaker.x, MarvinConfig.FieldTargets.blueSpeaker.y),
-        Vector2(MarvinConfig.FieldTargets.redSpeaker.x, MarvinConfig.FieldTargets.redSpeaker.y)
+    private val blueHubCenter = Vector2(
+        MarvinConfig.FieldTargets.blueSpeaker.x,
+        MarvinConfig.FieldTargets.blueSpeaker.y
+    )
+    private val redHubCenter = Vector2(
+        MarvinConfig.FieldTargets.redSpeaker.x,
+        MarvinConfig.FieldTargets.redSpeaker.y
     )
     private val random = java.util.Random(seed)
     private val debug = java.lang.Boolean.getBoolean("ares.debug")
@@ -221,16 +225,15 @@ class Dyn4jSimulation(
             fb.z += fb.vz * dt
             fb.vz -= g * dt
 
-            var scored = false
-            for (hubCenter in hubCenters) {
-                val dx = fb.x - hubCenter.x
-                val dy = fb.y - hubCenter.y
-                val dist = Math.hypot(dx, dy)
-                if (dist < 0.6 && fb.z >= 1.6 && fb.z <= 2.8) {
-                    scored = true
-                    break
-                }
+            // Only the current alliance's speaker is a scoring target. Treating both field ends
+            // as valid made opponent-speaker shots disappear and re-enter at center as if scored.
+            val hubCenter = when (state.drive.alliance) {
+                com.areslib.state.Alliance.BLUE -> blueHubCenter
+                com.areslib.state.Alliance.RED -> redHubCenter
             }
+            val dx = fb.x - hubCenter.x
+            val dy = fb.y - hubCenter.y
+            val scored = Math.hypot(dx, dy) < 0.6 && fb.z >= 1.6 && fb.z <= 2.8
 
             when {
                 scored -> {

@@ -16,6 +16,7 @@ import com.areslib.pathing.CommandKey
 import com.areslib.pathing.NamedCommandDescriptor
 import com.areslib.pathing.NamedCommands
 import com.areslib.sequencer.Task
+import com.areslib.sequencer.TaskResources
 import com.areslib.state.RobotState
 
 /**
@@ -26,41 +27,49 @@ import com.areslib.state.RobotState
  * because task lifecycle state may never be shared between invocations or runs.
  */
 object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
+    private val COWL_RESOURCE = TaskResources.season(0)
+
     val INTAKE_COLLECT = NamedCommandDescriptor(
         key = CommandKey("intake.collect"),
         displayName = "Collect note",
         description = "Deploys the intake and runs the intake and floor rollers.",
-        category = "Intake"
+        category = "Intake",
+        requiredResources = TaskResources.INTAKE or TaskResources.FLOOR
     )
     val INTAKE_STOP = NamedCommandDescriptor(
         key = CommandKey("intake.stop"),
         displayName = "Stop intake",
         description = "Stops the intake and floor rollers without moving the pivot.",
-        category = "Intake"
+        category = "Intake",
+        requiredResources = TaskResources.INTAKE or TaskResources.FLOOR
     )
     val INTAKE_STOW = NamedCommandDescriptor(
         key = CommandKey("intake.stow"),
         displayName = "Stow intake",
         description = "Stops the rollers and retracts the intake pivot.",
-        category = "Intake"
+        category = "Intake",
+        requiredResources = TaskResources.INTAKE or TaskResources.FLOOR
     )
     val SHOOTER_PREPARE = NamedCommandDescriptor(
         key = CommandKey("shooter.prepare"),
         displayName = "Prepare shooter",
         description = "Commands the flywheel and cowl to the autonomous shooting preset.",
-        category = "Shooter"
+        category = "Shooter",
+        requiredResources = TaskResources.FLYWHEEL or COWL_RESOURCE
     )
     val SHOOTER_FEED_WHEN_READY = NamedCommandDescriptor(
         key = CommandKey("shooter.feedWhenReady"),
         displayName = "Shoot when ready",
         description = "Waits up to two seconds for fresh aligned flywheel RPM and cowl position, then runs one bounded transfer.",
-        category = "Shooter"
+        category = "Shooter",
+        requiredResources = TaskResources.FEEDER or TaskResources.FLOOR
     )
     val SHOOTER_STOP = NamedCommandDescriptor(
         key = CommandKey("shooter.stop"),
         displayName = "Stop shooter",
         description = "Stops the flywheel, feeder, and floor roller and clears the transfer latch.",
-        category = "Shooter"
+        category = "Shooter",
+        requiredResources = TaskResources.FLYWHEEL or TaskResources.FEEDER or TaskResources.FLOOR
     )
 
     val descriptors: List<NamedCommandDescriptor> = listOf(
@@ -107,7 +116,7 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         }
     }
 
-    fun actionIntakeCollect(): Task = InstantAutoActionsTask(INTAKE_COLLECT.displayName) {
+    fun actionIntakeCollect(): Task = InstantAutoActionsTask(INTAKE_COLLECT) {
         listOf(
             SetIntakePivot(deployed = true),
             SetIntakeRollers(INTAKE_ROLLER_RPS),
@@ -115,15 +124,15 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
         )
     }
 
-    fun actionIntakeStop(): Task = InstantAutoActionsTask(INTAKE_STOP.displayName) {
+    fun actionIntakeStop(): Task = InstantAutoActionsTask(INTAKE_STOP) {
         listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0))
     }
 
-    fun actionIntakeStow(): Task = InstantAutoActionsTask(INTAKE_STOW.displayName) {
+    fun actionIntakeStow(): Task = InstantAutoActionsTask(INTAKE_STOW) {
         listOf(SetIntakeRollers(0.0), SetFloorSpeed(0.0), SetIntakePivot(deployed = false))
     }
 
-    fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE.displayName) {
+    fun actionShooterPrepare(): Task = InstantAutoActionsTask(SHOOTER_PREPARE) {
         listOf(
             SetFlywheelSpeed(AUTO_SHOT_RPM),
             SetCowlAngle(AUTO_SHOT_COWL_ROTATIONS),
@@ -134,7 +143,7 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     fun actionShooterFeedWhenReady(): Task = FeedWhenReadyTask()
 
     fun actionShooterStop(): Task =
-        InstantAutoActionsTask(SHOOTER_STOP.displayName, ::shooterStopActions)
+        InstantAutoActionsTask(SHOOTER_STOP, ::shooterStopActions)
 
     fun conditionShooterReady(): (RobotState) -> Boolean = ::flywheelIsReady
 
@@ -147,9 +156,11 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     )
 
     private class InstantAutoActionsTask(
-        override val name: String,
+        descriptor: NamedCommandDescriptor,
         private val actions: () -> List<RobotAction>
     ) : Task {
+        override val name: String = descriptor.displayName
+        override val requiredResources: Long = descriptor.requiredResources
         private var dispatched = false
 
         override fun initialize(state: RobotState): List<RobotAction> {
@@ -169,6 +180,7 @@ object FrcAutoCapabilities : GeneratedAresProjectCapabilities {
     /** Bounded, fail-closed readiness gate for autonomous note transfer. */
     private class FeedWhenReadyTask : Task {
         override val name: String = SHOOTER_FEED_WHEN_READY.displayName
+        override val requiredResources: Long = SHOOTER_FEED_WHEN_READY.requiredResources
         private var feedStartElapsedMs = NOT_STARTED
 
         override fun initialize(state: RobotState): List<RobotAction> {

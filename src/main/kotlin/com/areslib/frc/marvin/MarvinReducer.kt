@@ -72,7 +72,43 @@ object MarvinReducer {
                     currentMarvin.flywheel.copy(allMotorsAtTarget = false)
                 }
             )
-            is SetTransferActive -> currentMarvin.copy(transferActive = action.active)
+            is StartTransfer -> if (
+                currentMarvin.transferActive || currentMarvin.transferConsumedForTrigger
+            ) {
+                null
+            } else {
+                currentMarvin.copy(
+                    transferActive = true,
+                    transferStartedAtMs = action.timestampMs
+                )
+            }
+            is CompleteTransfer -> currentMarvin.copy(
+                transferActive = false,
+                transferStartedAtMs = -1L,
+                transferConsumedForTrigger = true
+            )
+            is ResetTransferCycle -> currentMarvin.copy(
+                transferActive = false,
+                transferStartedAtMs = -1L,
+                transferConsumedForTrigger = false
+            )
+            is SetTransferActive -> if (action.active) {
+                currentMarvin.copy(
+                    transferActive = true,
+                    transferStartedAtMs = if (currentMarvin.transferActive) {
+                        currentMarvin.transferStartedAtMs
+                    } else {
+                        action.timestampMs
+                    },
+                    transferConsumedForTrigger = false
+                )
+            } else {
+                currentMarvin.copy(
+                    transferActive = false,
+                    transferStartedAtMs = -1L,
+                    transferConsumedForTrigger = false
+                )
+            }
             is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
             is SetClimberPositionRotations -> currentMarvin.withClimberPositionRotations(action.rotations)
             is StartSlamtake -> {
@@ -83,7 +119,9 @@ object MarvinReducer {
                     intake = currentMarvin.intake.copy(isDeployed = true, targetAngleDegrees = 90.0, targetRollerVelocityRps = 10.0),
                     floor = currentMarvin.floor.copy(targetVelocityRps = 10.0),
                     feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
-                    transferActive = false
+                    transferActive = false,
+                    transferStartedAtMs = -1L,
+                    transferConsumedForTrigger = false
                 )
             }
             is StopSlamtake -> {
@@ -93,7 +131,9 @@ object MarvinReducer {
                     intake = currentMarvin.intake.copy(targetRollerVelocityRps = 0.0),
                     floor = currentMarvin.floor.copy(targetVelocityRps = 0.0),
                     feeder = currentMarvin.feeder.copy(targetVelocityRps = 0.0),
-                    transferActive = false
+                    transferActive = false,
+                    transferStartedAtMs = -1L,
+                    transferConsumedForTrigger = false
                 )
             }
             is SlamtakeTimerExpired -> {
@@ -246,6 +286,9 @@ object MarvinReducer {
         is SetClimberPositionRotations,
         is SetFlywheelActive,
         is SetTransferActive,
+        is StartTransfer,
+        is CompleteTransfer,
+        is ResetTransferCycle,
         is StartSlamtake,
         is SlamtakeTimerExpired -> true
         else -> false
@@ -276,6 +319,8 @@ object MarvinReducer {
         slamtakePhase = 0,
         flywheelActive = false,
         transferActive = false,
+        transferStartedAtMs = -1L,
+        transferConsumedForTrigger = true,
         mechanismSafetyInhibited = true,
         mechanismSafetyFaultLatched = faultLatched,
         mechanismSafetyFaultReason = faultReason
