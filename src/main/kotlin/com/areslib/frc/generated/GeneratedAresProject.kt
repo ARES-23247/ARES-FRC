@@ -38,7 +38,7 @@ object GeneratedAresProject {
     const val GENERATOR_VERSION: Int = 8
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
     const val CONTENT_SHA256: String = "73cce2cc39008d606c69845907c11c4a29f588083cf2466fcbf948954e106846"
-    const val SOURCE_SHA256: String = "38f1a963fa1c868102e6b289367cf954d939d146e19c07ff52fab436ff6468b3"
+    const val SOURCE_SHA256: String = "c62618bdeb2b5274c5836fb7c47b6434728c26eb93959267aaa63e2b6ff13cc9"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -164,7 +164,7 @@ object GeneratedAresProject {
                     "intake.collect" -> setOf("floor", "intake")
                     "intake.stop" -> setOf("floor", "intake")
                     "intake.stow" -> setOf("floor", "intake")
-                    "shooter.feedWhenReady" -> setOf("floor", "shooter.cowl", "shooter.feeder", "shooter.flywheel")
+                    "shooter.feedWhenReady" -> setOf("floor", "shooter.feeder")
                     "shooter.prepare" -> setOf("shooter.cowl", "shooter.flywheel")
                     "shooter.stop" -> setOf("floor", "shooter.feeder", "shooter.flywheel")
                     else -> emptySet()
