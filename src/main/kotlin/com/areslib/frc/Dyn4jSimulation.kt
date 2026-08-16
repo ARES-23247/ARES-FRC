@@ -180,7 +180,11 @@ class Dyn4jSimulation(
         }
 
         val flywheelAtSpeed = state.superstructure.marvin.isFlywheelAtSpeed
-        val feederSpinning = simFeederVoltage > 2.0
+        // Gate on the feeder actuation contract (KV feed-forward), not an arbitrary voltage:
+        // the production shoot path only ever applies 1.2 V, which the previous >2.0 gate
+        // rejected — making the simulated robot unable to score through real control paths.
+        val feederSpinning = kotlin.math.abs(simFeederVoltage) >
+            com.areslib.frc.marvin.MarvinSuperstructure.FEEDER_SPIN_THRESHOLD_VOLTS
         if (flywheelAtSpeed && feederSpinning && state.superstructure.marvin.inventoryCount > 0 && shootCooldownTimer <= 0.0) {
             shootCooldownTimer = 0.15
             val newCount = state.superstructure.marvin.inventoryCount - 1

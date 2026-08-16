@@ -150,6 +150,64 @@ class Dyn4jSimulationTest {
         assertTrue(fb.vz > 0.0, "Vertical velocity should be positive due to cowl angle")
     }
 
+    /**
+     * The production shoot path applies `FEEDER_KV × FEEDER_SHOOT_SPEED_RPS` volts —
+     * 1.2 V at effort 1.0 — not a direct 12 V injection. The simulation spin gate must
+     * accept that voltage or no driver/autonomous control path can ever launch a note.
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Test
+    fun testProductionFeederVoltageLaunchesNote() {
+        val productionVolts = com.areslib.frc.marvin.MarvinSuperstructure.feederOutputVolts(
+            com.areslib.frc.marvin.MarvinConfig.FEEDER_SHOOT_SPEED_RPS,
+            effortScale = 1.0
+        )
+        assertTrue(
+            kotlin.math.abs(productionVolts) >
+                com.areslib.frc.marvin.MarvinSuperstructure.FEEDER_SPIN_THRESHOLD_VOLTS,
+            "Production feeder voltage ($productionVolts V) must pass the simulation spin gate"
+        )
+
+        val sim = Dyn4jSimulation(seed = 42L)
+        val state = RobotState(
+            superstructure = SuperstructureState(
+                custom = com.areslib.frc.marvin.MarvinState(
+                    flywheelActive = true,
+                    flywheel = com.areslib.frc.marvin.FlywheelState(
+                        velocityRpm = 4000.0,
+                        velocityValid = true,
+                        allMotorsAtTarget = true,
+                        targetVelocityRpm = 4000.0
+                    ),
+                    inventoryCount = 2
+                )
+            )
+        )
+
+        val flywheelSimField = Dyn4jSimulation::class.java.getDeclaredField("flywheelSim")
+        flywheelSimField.isAccessible = true
+        val flywheelSimInstance = flywheelSimField.get(sim) as com.areslib.sim.model.FlywheelSim
+        val angularVelField = com.areslib.sim.model.FlywheelSim::class.java.getDeclaredField("angularVelocityRadPerSec")
+        angularVelField.isAccessible = true
+        angularVelField.set(flywheelSimInstance, 4000.0 * 2.0 * Math.PI / 60.0)
+
+        val cowlAngleField = Dyn4jSimulation::class.java.getDeclaredField("simCowlAngle")
+        cowlAngleField.isAccessible = true
+        cowlAngleField.set(sim, 30.0)
+
+        sim.feederIO.setAppliedVoltage(productionVolts)
+
+        var shootAction: com.areslib.frc.marvin.SetInventoryCount? = null
+        for (i in 0..20) {
+            shootAction = sim.step(state, 0.02)
+                .filterIsInstance<com.areslib.frc.marvin.SetInventoryCount>()
+                .firstOrNull()
+            if (shootAction != null) break
+        }
+        assertNotNull(shootAction, "Production feeder voltage (1.2 V) must trigger a simulated shot")
+        assertEquals(1, shootAction!!.count)
+    }
+
     @Suppress("UNCHECKED_CAST")
     @Test
     fun testHubScoringAndCenterEjection() {

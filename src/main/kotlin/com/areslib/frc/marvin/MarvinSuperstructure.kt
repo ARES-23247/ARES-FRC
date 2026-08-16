@@ -136,9 +136,7 @@ class MarvinSuperstructure(
         intakeIO.setRollerVelocityRps(targetRollerSpeed)
 
         val targetFeederSpeed = finiteOrZero(marvin.feeder.targetVelocityRps)
-        feederIO.setAppliedVoltage(
-            (FEEDER_KV_VOLTS_PER_RPS * targetFeederSpeed * effortScale).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
-        )
+        feederIO.setAppliedVoltage(feederOutputVolts(targetFeederSpeed, effortScale))
 
         val targetFloorSpeed = finiteOrZero(marvin.floor.targetVelocityRps)
         floorIO.setAppliedVoltage(
@@ -170,7 +168,23 @@ class MarvinSuperstructure(
         private const val RETRACTED_PHASE = 2
         private const val RETRACT_AT_SECONDS = 0.5
         private const val FINISH_AT_SECONDS = 1.5
-        private const val FEEDER_KV_VOLTS_PER_RPS = 0.12
+
+        /** Feeder feed-forward gain: applied volts per commanded output-shaft RPS. */
+        const val FEEDER_KV_VOLTS_PER_RPS = 0.12
+
+        /**
+         * Simulation spin gate: the feeder is modelled as running above this |voltage|.
+         * The production shot feed commands [MarvinConfig.FEEDER_SHOOT_SPEED_RPS] RPS, i.e.
+         * `FEEDER_KV_VOLTS_PER_RPS * FEEDER_SHOOT_SPEED_RPS` = 1.2 V — this threshold must
+         * stay below that value or the simulated robot can never launch a note through the
+         * production control path. Pinned by test in Dyn4jSimulationTest.
+         */
+        const val FEEDER_SPIN_THRESHOLD_VOLTS = 0.5
+
+        /** Feeder output voltage: KV feed-forward, effort-scaled and bus-limited. */
+        fun feederOutputVolts(targetFeederRps: Double, effortScale: Double): Double =
+            (FEEDER_KV_VOLTS_PER_RPS * targetFeederRps * effortScale).coerceIn(-NOMINAL_VOLTAGE, NOMINAL_VOLTAGE)
+
         private const val FLOOR_KV_VOLTS_PER_RPS = 0.12
         private const val NOMINAL_VOLTAGE = 12.0
         private const val MAX_FLYWHEEL_RPM = 6000.0
