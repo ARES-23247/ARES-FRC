@@ -8,10 +8,7 @@ updates:
       time: "09:30"
       timezone: America/New_York
     ignore:
-      # Coroutines >=1.10 ships Kotlin 2.2 metadata unreadable by the 1.9 toolchain;
       # untrackable until the workspace-wide Kotlin 2.2 migration (see build pins).
-      - dependency-name: "org.jetbrains.kotlinx:kotlinx-coroutines-core"
-        versions: ["[1.9.0,)"]
     open-pull-requests-limit: 3
     labels: [dependencies]
     groups:
