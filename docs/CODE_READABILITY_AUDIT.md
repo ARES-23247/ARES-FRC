@@ -82,7 +82,7 @@ not included in the 56-file `src` inventory.
 - Obsolete intake/climber facade layers were removed; teleop dispatches their Redux actions directly.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinReducer.kt` — replaced an inaccurate zero-allocation
   claim with the reducer's actual deadband/freshness contract and documented pure composition.
-- `src/main/kotlin/com/areslib/frc/marvin/MarvinShooterFacade.kt` — documented measured field-frame
+- `src/main/kotlin/com/areslib/frc/marvin/MarvinShooterSubsystem.kt` — documented measured field-frame
   SOTM inputs, caller-owned scratch output, cowl rotations, rearward aim, and firing gates; named
   acceleration-lookahead and aim-gain literals and removed unused imports.
 - `src/main/kotlin/com/areslib/frc/marvin/MarvinState.kt` — documented all mechanism units, validity,

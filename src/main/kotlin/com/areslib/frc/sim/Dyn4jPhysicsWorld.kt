@@ -51,8 +51,21 @@ class Dyn4jPhysicsWorld(
             File("src/main/deploy/paths/field.json"),
             File("../ARES-FRC/src/main/deploy/paths/field.json")
         ).firstOrNull(File::isFile)
-        if (fieldFile != null) {
-            buildWorld(RobotFieldDocument.decode(fieldFile.readText()))
+        val fieldDocument = fieldFile?.let { file ->
+            // A corrupt season field document falls back to canonical walls exactly like a
+            // missing one; a decode crash inside the physics constructor takes the whole
+            // simulation down instead.
+            runCatching { RobotFieldDocument.decode(file.readText()) }
+                .onFailure { failure ->
+                    System.err.println(
+                        "Dyn4jPhysicsWorld: field.json failed to decode " +
+                            "(${failure.message ?: failure::class.java.simpleName}); using canonical field walls"
+                    )
+                }
+                .getOrNull()
+        }
+        if (fieldDocument != null) {
+            buildWorld(fieldDocument)
         } else {
             com.areslib.frc.sim.field.FrcFieldBuilder.buildWorldWalls(
                 world,
