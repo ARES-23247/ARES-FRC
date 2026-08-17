@@ -30,6 +30,7 @@ import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.DriverStation
 
 import com.areslib.frc.robot.FRCAutoOrchestrator
+import com.areslib.frc.robot.FrcLocalizationCalibrationControls
 import com.areslib.frc.robot.FrcAutoCapabilities
 import com.areslib.frc.robot.FRCTeleOpDriveController
 import com.areslib.frc.robot.FrcSysIdController
@@ -108,7 +109,7 @@ class ARESRobot : TimedRobot() {
     private lateinit var sysIdController: FrcSysIdController
     private var localizationCalibration: FrcLocalizationCalibrationSession? = null
     private var localizationVisionTracker: FrcVisionTracker? = null
-    private val calibrationButtonState = BooleanArray(12)
+    private var calibrationControls: FrcLocalizationCalibrationControls? = null
 
     private var cachedAlliance: DriverStation.Alliance = DriverStation.Alliance.Blue
     private val RED_SPEAKER = MarvinConfig.FieldTargets.redSpeaker
@@ -618,7 +619,6 @@ class ARESRobot : TimedRobot() {
         applyMechanismSafetyPolicy("test initialization")
         robot.swerveDrive.brake()
         localizationCalibration?.close()
-        calibrationButtonState.fill(false)
         val tracker = robot.visionTracker as? FrcVisionTracker
         localizationVisionTracker = tracker
         localizationCalibration = FrcLocalizationCalibrationSession(
@@ -626,45 +626,22 @@ class ARESRobot : TimedRobot() {
             swerveIO = robot.swerveDrivetrainIO,
             measurementsProvider = { tracker?.visionInputs?.measurements ?: emptyList() }
         )
+        calibrationControls = FrcLocalizationCalibrationControls(
+            session = localizationCalibration!!,
+            timestampMs = { com.areslib.util.RobotClock.currentTimeMillis() },
+        ).also { it.reset() }
     }
 
     override fun testPeriodic() {
         val homingComboPressed = handleMechanismHomingRequest()
         val calibration = localizationCalibration ?: return
         teleOpController.drivePeriodic()
-        val timestampMs = com.areslib.util.RobotClock.currentTimeMillis()
-        val pov = controller.pov
-
-        if (calibrationRising(0, controller.aButton)) calibration.toggleContinuousRecording()
-        if (calibrationRising(1, controller.bButton)) calibration.cycleTestType()
-        localizationVisionTracker?.fusionEnabled = when (calibration.testType) {
-            com.areslib.math.estimation.LocalizationCalibrationTestType.ODOMETRY_TRANSLATION,
-            com.areslib.math.estimation.LocalizationCalibrationTestType.ODOMETRY_ROTATION -> false
-            else -> true
-        }
-        if (calibrationRising(2, controller.xButton)) calibration.markStart(timestampMs)
-        if (calibrationRising(3, controller.yButton)) calibration.markEnd(timestampMs)
-        if (calibrationRising(4, controller.backButton && !homingComboPressed)) calibration.zeroTruth()
-        if (calibrationRising(5, controller.startButton && !homingComboPressed)) calibration.seedPoseToTruth(timestampMs)
-        if (calibrationRising(6, controller.leftBumperButton)) {
-            calibration.adjustTruth(deltaHeading = -Math.toRadians(5.0))
-        }
-        if (calibrationRising(7, controller.rightBumperButton)) {
-            calibration.adjustTruth(deltaHeading = Math.toRadians(5.0))
-        }
-        if (calibrationRising(8, pov == 0)) calibration.adjustTruth(deltaY = 0.05)
-        if (calibrationRising(9, pov == 180)) calibration.adjustTruth(deltaY = -0.05)
-        if (calibrationRising(10, pov == 270)) calibration.adjustTruth(deltaX = -0.05)
-        if (calibrationRising(11, pov == 90)) calibration.adjustTruth(deltaX = 0.05)
-
-        calibration.periodic(timestampMs)
-        robot.telemetry.putString("Calibration/Localization/TestType", calibration.testType.name)
-        robot.telemetry.putNumber("Calibration/Localization/RunId", calibration.runId.toDouble())
-        robot.telemetry.putBoolean("Calibration/Localization/Recording", calibration.continuousRecording)
-        robot.telemetry.putNumber("Calibration/Localization/TruthX", calibration.truthX)
-        robot.telemetry.putNumber("Calibration/Localization/TruthY", calibration.truthY)
-        robot.telemetry.putNumber("Calibration/Localization/TruthHeadingRad", calibration.truthHeading)
-        robot.telemetry.putNumber("Calibration/Localization/DroppedSamples", calibration.droppedSampleCount.toDouble())
+        calibrationControls?.update(
+            controller = controller,
+            tracker = localizationVisionTracker,
+            telemetry = robot.telemetry,
+            homingComboPressed = homingComboPressed,
+        )
     }
 
     override fun testExit() {
@@ -673,12 +650,6 @@ class ARESRobot : TimedRobot() {
         localizationVisionTracker = null
         localizationCalibration?.close()
         localizationCalibration = null
-    }
-
-    private fun calibrationRising(index: Int, pressed: Boolean): Boolean {
-        val rising = pressed && !calibrationButtonState[index]
-        calibrationButtonState[index] = pressed
-        return rising
     }
 
     private fun applyMechanismSafetyPolicy(source: String) {
