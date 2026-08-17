@@ -10,8 +10,15 @@ class MarvinFeederController(store: Store) : MarvinControllerBase(store) {
 
     /** Ends the current trigger cycle so a later press may authorize one new transfer. */
     fun cancelTransfer() {
-        store.dispatch(ResetTransferCycle())
-        stopOutputTargets()
+        val marvin = store.state.superstructure.marvin
+        // Idle teleop ticks reach this every frame; only dispatch when a cycle is genuinely
+        // armed or outputs are live, so the 20 ms loop does not churn no-op Redux reductions.
+        if (marvin.transferActive || marvin.transferConsumedForTrigger ||
+            marvin.feeder.targetVelocityRps != 0.0 || marvin.floor.targetVelocityRps != 0.0
+        ) {
+            store.dispatch(ResetTransferCycle())
+            stopOutputTargets()
+        }
     }
 
     private fun stopOutputTargets() {
