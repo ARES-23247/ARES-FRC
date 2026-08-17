@@ -203,8 +203,8 @@ tasks.withType(JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
 }
 
-koverReport {
-    defaults {
+kover {
+    reports {
         filters {
             excludes {
                 classes("frc.robot.generated.*", "com.areslib.frc.Main*")
