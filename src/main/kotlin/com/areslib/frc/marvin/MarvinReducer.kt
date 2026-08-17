@@ -92,23 +92,6 @@ object MarvinReducer {
                 transferStartedAtMs = -1L,
                 transferConsumedForTrigger = false
             )
-            is SetTransferActive -> if (action.active) {
-                currentMarvin.copy(
-                    transferActive = true,
-                    transferStartedAtMs = if (currentMarvin.transferActive) {
-                        currentMarvin.transferStartedAtMs
-                    } else {
-                        action.timestampMs
-                    },
-                    transferConsumedForTrigger = false
-                )
-            } else {
-                currentMarvin.copy(
-                    transferActive = false,
-                    transferStartedAtMs = -1L,
-                    transferConsumedForTrigger = false
-                )
-            }
             is SetInventoryCount -> currentMarvin.copy(inventoryCount = action.count)
             is SetClimberPositionRotations -> currentMarvin.withClimberPositionRotations(action.rotations)
             is StartSlamtake -> {
@@ -285,7 +268,6 @@ object MarvinReducer {
         is SetClimberVoltage,
         is SetClimberPositionRotations,
         is SetFlywheelActive,
-        is SetTransferActive,
         is StartTransfer,
         is CompleteTransfer,
         is ResetTransferCycle,

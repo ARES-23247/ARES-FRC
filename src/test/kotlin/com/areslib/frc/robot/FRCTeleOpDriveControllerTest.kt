@@ -159,7 +159,7 @@ class FRCTeleOpDriveControllerTest {
         robot.store.dispatch(SetIntakeRollers(10.0))
         robot.store.dispatch(SetFloorSpeed(10.0))
         robot.store.dispatch(SetFeederSpeed(10.0))
-        robot.store.dispatch(SetTransferActive(true))
+        robot.store.dispatch(StartTransfer())
         coPilotControllerState.x = true
 
         teleOpController.teleopPeriodic()

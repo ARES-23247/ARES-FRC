@@ -21,11 +21,6 @@ data class SetFlywheelActive @kotlin.jvm.JvmOverloads constructor(
 ) : RobotAction
 
 /** Latches whether a game-piece transfer has begun. */
-data class SetTransferActive @kotlin.jvm.JvmOverloads constructor(
-    val active: Boolean,
-    override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
-) : RobotAction
-
 /** Starts one bounded feeder transfer using the action's deterministic monotonic timestamp. */
 data class StartTransfer @kotlin.jvm.JvmOverloads constructor(
     override val timestampMs: Long = com.areslib.util.RobotClock.currentTimeMillis()
