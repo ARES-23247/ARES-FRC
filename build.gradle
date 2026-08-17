@@ -1,9 +1,9 @@
 plugins {
     id "java"
     id "application"
-    id "org.jetbrains.kotlin.jvm" version "1.9.23"
+    id "org.jetbrains.kotlin.jvm" version "1.9.25"
     id "edu.wpi.first.GradleRIO" version "2026.2.1"
-    id "org.jetbrains.kotlinx.kover" version "0.7.6"
+    id "org.jetbrains.kotlinx.kover" version "0.9.9"
 }
 
 repositories {
@@ -128,7 +128,7 @@ dependencies {
     nativeRelease wpi.java.vendor.jniRelease(wpi.platforms.desktop)
     simulationRelease wpi.sim.enableRelease()
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly wpi.java.deps.wpilibJniRelease(wpi.platforms.desktop)
     testRuntimeOnly wpi.java.vendor.jniRelease(wpi.platforms.desktop)
@@ -203,8 +203,8 @@ tasks.withType(JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
 }
 
-koverReport {
-    defaults {
+kover {
+    reports {
         filters {
             excludes {
                 classes("frc.robot.generated.*", "com.areslib.frc.Main*")
