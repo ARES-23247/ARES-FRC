@@ -46,7 +46,7 @@ jobs:
       - name: Verify immutable ARES 8 release is available
         run: >-
           curl --fail --silent --show-error --head
-          "https://repo1.maven.org/maven2/org/aresfirst/ares/ares-bom/9.0.0/ares-bom-9.0.0.pom"
+          "https://raw.githubusercontent.com/ARES-23247/ARESLib-Kotlin/maven/org/aresfirst/ares/ares-bom/9.2.1/ares-bom-9.2.1.pom"
 
       - name: Compile FRC sources
         working-directory: ARES-FRC

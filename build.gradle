@@ -12,6 +12,7 @@ repositories {
         maven { url uri(aresRepositoryUrl) }
     }
     mavenCentral()
+    maven { url 'https://raw.githubusercontent.com/ARES-23247/ARESLib-Kotlin/maven' }
 }
 
 sourceCompatibility = JavaVersion.VERSION_17
