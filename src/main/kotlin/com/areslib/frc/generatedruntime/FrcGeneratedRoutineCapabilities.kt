@@ -110,6 +110,27 @@ class FrcGeneratedRoutineCapabilities(
         )
     }
 
+    /**
+     * Generated teleop drivetrain sink. Axis bindings already applied deadband and shaping, so this
+     * scales the normalized command to season limits and applies the alliance perspective. Field
+     * coordinates are blue-origin: RED rotates translation intent 180 degrees (matches
+     * FRCTeleOpDriveController); rotation is never alliance-mirrored. Generated bindings run after
+     * the hand-written controller, so an explicitly authored GUI binding stays authoritative.
+     */
+    override fun onDriveCommand(vx: Double, vy: Double, omega: Double, active: Boolean) {
+        if (!active) return
+        val boundedVx = if (vx.isFinite()) vx.coerceIn(-1.0, 1.0) else 0.0
+        val boundedVy = if (vy.isFinite()) vy.coerceIn(-1.0, 1.0) else 0.0
+        val boundedOmega = if (omega.isFinite()) omega.coerceIn(-1.0, 1.0) else 0.0
+        val allianceScale = if (robot.store.state.drive.alliance == Alliance.RED) -1.0 else 1.0
+        robot.drive.joystickDrive(
+            boundedVx * MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale,
+            boundedVy * MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale,
+            boundedOmega * MAX_TELEOP_ROTATION_RPS,
+            isFieldCentric = true,
+        )
+    }
+
     private fun trajectoryLimits(preset: TrajectoryPreset): TrajectoryLimits {
         val scale = when (preset) {
             TrajectoryPreset.SAFE -> 0.45
@@ -134,6 +155,8 @@ class FrcGeneratedRoutineCapabilities(
     private companion object {
         const val DEFAULT_ACCELERATION_MPS2 = 3.0
         const val DRIVE_RADIUS_METERS = 0.3907
+        const val MAX_TELEOP_DRIVE_SPEED_MPS = 4.5
+        const val MAX_TELEOP_ROTATION_RPS = Math.PI
     }
 }
 

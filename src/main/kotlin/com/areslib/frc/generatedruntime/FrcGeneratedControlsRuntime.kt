@@ -45,7 +45,7 @@ private class WpilibFrcControllerPortSampler : FrcControllerPortSampler {
 internal class FrcGeneratedControlsRuntime(
     private val stateProvider: () -> RobotState,
     private val dispatch: (RobotAction) -> Unit,
-    capabilities: GeneratedAresProjectCapabilities,
+    private val capabilities: GeneratedAresProjectCapabilities,
     private val portSampler: FrcControllerPortSampler = WpilibFrcControllerPortSampler(),
 ) : GeneratedAresProjectControlTaskSink {
     private val directTaskExecutor = TaskExecutor()
@@ -87,6 +87,7 @@ internal class FrcGeneratedControlsRuntime(
             }
             port++
         }
+        GeneratedAresProject.emitDriveCommand(capabilities)
 
         if (directTaskExecutor.size > 0) {
             val actions = directTaskExecutor.update(stateProvider(), RobotClock.currentTimeMillis())
