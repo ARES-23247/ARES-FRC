@@ -11,6 +11,7 @@ repositories {
     if (aresRepositoryUrl != null && !aresRepositoryUrl.trim().isEmpty()) {
         maven { url uri(aresRepositoryUrl) }
     }
+    mavenLocal()
     mavenCentral()
     maven { url 'https://raw.githubusercontent.com/ARES-23247/ARESLib-Kotlin/maven' }
 }
