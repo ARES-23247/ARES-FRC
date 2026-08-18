@@ -174,7 +174,10 @@ class ARESRobot : TimedRobot() {
             val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
 
             val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
-            val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
+            val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(
+                defaultOffsets = defaultOffsets,
+                typedTuningOffsets = com.areslib.frc.config.CanonicalDrivebaseConfig.profiledOffsets()
+            )
 
             val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
                 frc.robot.generated.TunerConstants.DrivetrainConstants,
