@@ -76,7 +76,7 @@ wpi.java.debugJni = false
 
 // Set this to true to enable desktop support.
 def includeDesktopSupport = true
-def aresVersion = providers.gradleProperty('aresVersion').getOrElse('9.1.0')
+def aresVersion = providers.gradleProperty('aresVersion').getOrElse('9.2.0')
 def aresOsName = System.getProperty('os.name').toLowerCase()
 def aresSimulatorRuntime = aresOsName.contains('windows')
     ? 'simulator-runtime-windows'
