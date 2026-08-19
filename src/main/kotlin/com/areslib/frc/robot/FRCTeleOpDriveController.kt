@@ -73,6 +73,14 @@ class FRCTeleOpDriveController(
     /** Active alliance speaker target in blue-origin field coordinates, in meters. */
     var speakerTranslation = com.areslib.frc.marvin.MarvinConfig.FieldTargets.blueSpeaker
 
+    /**
+     * True when a drivetrain assist (copilot X-lock or speaker/shuttle aiming) owned the most
+     * recent frame's drivetrain command. The generated controls runtime suppresses its stick
+     * drive while this is set so scheme bindings cannot override an assisted frame.
+     */
+    var drivetrainAssistActive = false
+        private set
+
     /** Clears the local controller-fault guard; the robot shell separately validates hardware health. */
     fun teleopInit() {
         controllerFaultLatched = false
@@ -141,8 +149,10 @@ class FRCTeleOpDriveController(
             var targetFlywheelSpeed = marvin.flywheel.targetVelocityRpm
             var targetCowlAngle = marvin.cowl.targetAngleRotations
 
+            var aimOwnsRotation = false
             rotation = when {
                 rtPressed -> {
+                    aimOwnsRotation = true
                     // Shoot-on-the-Move (SOTM) Speaker Aiming
                     marvinShooter.updateShootOnTheMove(
                         currentPose = currentPose,
@@ -151,6 +161,7 @@ class FRCTeleOpDriveController(
                     )
                 }
                 rbPressed -> {
+                    aimOwnsRotation = true
                     // Aim and Shuttle
                     val isRed = cachedAlliance == DriverStation.Alliance.Red
                     val shuttleTarget = if (isRed) {
@@ -167,6 +178,7 @@ class FRCTeleOpDriveController(
                     )
                 }
                 bPressed -> {
+                    aimOwnsRotation = true
                     // Static Shoot (Speaker Aiming)
                     marvinShooter.updateStaticShoot(
                         currentPose = currentPose,
@@ -209,6 +221,8 @@ class FRCTeleOpDriveController(
                     robot.store.dispatch(SetFlywheelSpeed(0.0))
                 }
             }
+
+            drivetrainAssistActive = xLockRequested || aimOwnsRotation
 
             // Apply drive command without skipping mechanism processing while X-locked.
             if (xLockRequested) {
