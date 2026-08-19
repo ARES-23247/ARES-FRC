@@ -106,6 +106,7 @@ class ARESRobot : TimedRobot() {
     private lateinit var teleOpController: FRCTeleOpDriveController
     private lateinit var autoOrchestrator: FRCAutoOrchestrator
     private lateinit var generatedControlsRuntime: FrcGeneratedControlsRuntime
+    private lateinit var teleopGeneratedCapabilities: com.areslib.frc.generatedruntime.FrcGeneratedRoutineCapabilities
     private lateinit var sysIdController: FrcSysIdController
     private var localizationCalibration: FrcLocalizationCalibrationSession? = null
     private var localizationVisionTracker: FrcVisionTracker? = null
@@ -464,10 +465,14 @@ class ARESRobot : TimedRobot() {
         sysIdController = FrcSysIdController(robot.telemetryManager.dataLoggingTelemetry, flywheelIO)
         applyAlliance(DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue))
         FrcAutoCapabilities.register()
+        teleopGeneratedCapabilities = com.areslib.frc.generatedruntime.FrcGeneratedRoutineCapabilities(robot)
         generatedControlsRuntime = FrcGeneratedControlsRuntime(
             stateProvider = { robot.store.state },
             dispatch = robot.store::dispatch,
-            capabilities = FrcAutoCapabilities,
+            capabilities = teleopGeneratedCapabilities,
+            // The hand controller runs first; while one of its assists (copilot X-lock or
+            // speaker/shuttle aiming) owns the frame, scheme stick drive must stay silent.
+            driveEmissionGate = { !teleOpController.drivetrainAssistActive },
         )
         autoOrchestrator = FRCAutoOrchestrator(robot, sim)
         autoOrchestrator.publishCatalog()

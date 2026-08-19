@@ -117,16 +117,15 @@ class FrcGeneratedRoutineCapabilities(
      * FRCTeleOpDriveController); rotation is never alliance-mirrored. Generated bindings run after
      * the hand-written controller, so an explicitly authored GUI binding stays authoritative.
      */
+    private val driveCommandScratch = DoubleArray(3)
+
     override fun onDriveCommand(vx: Double, vy: Double, omega: Double, active: Boolean) {
         if (!active) return
-        val boundedVx = if (vx.isFinite()) vx.coerceIn(-1.0, 1.0) else 0.0
-        val boundedVy = if (vy.isFinite()) vy.coerceIn(-1.0, 1.0) else 0.0
-        val boundedOmega = if (omega.isFinite()) omega.coerceIn(-1.0, 1.0) else 0.0
-        val allianceScale = if (robot.store.state.drive.alliance == Alliance.RED) -1.0 else 1.0
+        generatedSwerveTeleopCommand(vx, vy, omega, robot.store.state.drive.alliance, driveCommandScratch)
         robot.drive.joystickDrive(
-            boundedVx * MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale,
-            boundedVy * MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale,
-            boundedOmega * MAX_TELEOP_ROTATION_RPS,
+            driveCommandScratch[0],
+            driveCommandScratch[1],
+            driveCommandScratch[2],
             isFieldCentric = true,
         )
     }
@@ -152,7 +151,7 @@ class FrcGeneratedRoutineCapabilities(
         )
     }
 
-    private companion object {
+    internal companion object {
         const val DEFAULT_ACCELERATION_MPS2 = 3.0
         const val DRIVE_RADIUS_METERS = 0.3907
         const val MAX_TELEOP_DRIVE_SPEED_MPS = 4.5
@@ -279,6 +278,27 @@ private class NativeFrcDriveTask(
         "online-replan", "online_replan" -> TrajectoryEngine.ONLINE_REPLAN
         else -> error("Unknown trajectory engine '$key'")
     }
+}
+
+/**
+ * Normalized scheme drive axes scaled to the season teleop limits and mirrored for RED (field
+ * coordinates are blue-origin; rotation is never mirrored). Pure and writes into [out] as
+ * {forwardMps, strafeMps, rotationRps} so the per-frame sink stays allocation-free and testable.
+ */
+internal fun generatedSwerveTeleopCommand(
+    vx: Double,
+    vy: Double,
+    omega: Double,
+    alliance: Alliance,
+    out: DoubleArray,
+) {
+    val boundedVx = if (vx.isFinite()) vx.coerceIn(-1.0, 1.0) else 0.0
+    val boundedVy = if (vy.isFinite()) vy.coerceIn(-1.0, 1.0) else 0.0
+    val boundedOmega = if (omega.isFinite()) omega.coerceIn(-1.0, 1.0) else 0.0
+    val allianceScale = if (alliance == Alliance.RED) -1.0 else 1.0
+    out[0] = boundedVx * FrcGeneratedRoutineCapabilities.MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale
+    out[1] = boundedVy * FrcGeneratedRoutineCapabilities.MAX_TELEOP_DRIVE_SPEED_MPS * allianceScale
+    out[2] = boundedOmega * FrcGeneratedRoutineCapabilities.MAX_TELEOP_ROTATION_RPS
 }
 
 /** Robot-footprint field check used before localization is reset or a routine is armed. */
