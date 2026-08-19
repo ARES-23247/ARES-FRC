@@ -47,6 +47,12 @@ internal class FrcGeneratedControlsRuntime(
     private val dispatch: (RobotAction) -> Unit,
     private val capabilities: GeneratedAresProjectCapabilities,
     private val portSampler: FrcControllerPortSampler = WpilibFrcControllerPortSampler(),
+    /**
+     * Scheme stick drive is suppressed while this gate returns false, letting hand-authored
+     * assists (X-lock, speaker/shuttle aiming) own those frames instead of being overwritten
+     * by the every-frame generated emit.
+     */
+    private val driveEmissionGate: () -> Boolean = { true },
 ) : GeneratedAresProjectControlTaskSink {
     private val directTaskExecutor = TaskExecutor()
     private val routineManager = RoutineManager(
@@ -87,7 +93,7 @@ internal class FrcGeneratedControlsRuntime(
             }
             port++
         }
-        GeneratedAresProject.emitDriveCommand(capabilities)
+        if (driveEmissionGate()) GeneratedAresProject.emitDriveCommand(capabilities)
 
         if (directTaskExecutor.size > 0) {
             val actions = directTaskExecutor.update(stateProvider(), RobotClock.currentTimeMillis())
