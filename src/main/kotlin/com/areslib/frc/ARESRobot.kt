@@ -39,6 +39,8 @@ import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
 import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
 import com.areslib.frc.generated.subsystems.superstructure.GeneratedSuperstructureRegistry
+import com.areslib.frc.sim.FrcDashboardDriveInput
+import com.areslib.frc.sim.applyTo
 
 /** Returns false when any real mechanism adapter reports failed or reset configuration. */
 internal fun mechanismsConfigured(
@@ -96,6 +98,7 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var robot: FrcSwerveRobot
     private var sim: Dyn4jSimulation? = null
+    private var dashboardDriveInput: FrcDashboardDriveInput? = null
     private lateinit var marvinShooter: MarvinShooterSubsystem
 
     private val controller = XboxController(0)
@@ -216,6 +219,9 @@ class ARESRobot : TimedRobot() {
             // Simulation IOs
             val simInstance = Dyn4jSimulation(seed = 42L)
             sim = simInstance
+            // Desktop control is intentionally constructed only in simulation. A dashboard frame
+            // can never replace physical driver input on a real RoboRIO.
+            dashboardDriveInput = FrcDashboardDriveInput()
             swerveIO = null
             visionIO = null
             flywheelIO = simInstance.flywheelIO
@@ -543,6 +549,15 @@ class ARESRobot : TimedRobot() {
         }
         controller.updateState(controllerState)
         coPilotController.updateState(coPilotControllerState)
+        dashboardDriveInput?.poll()?.let { command ->
+            command.applyTo(controllerState)
+            val requestedAlliance = if (command.isRedAlliance) {
+                DriverStation.Alliance.Red
+            } else {
+                DriverStation.Alliance.Blue
+            }
+            if (requestedAlliance != cachedAlliance) applyAlliance(requestedAlliance)
+        }
     }
 
     private fun applyAlliance(alliance: DriverStation.Alliance) {
@@ -826,6 +841,13 @@ class ARESRobot : TimedRobot() {
             }
         } catch (error: Throwable) {
             capture(error)
+        }
+        try {
+            dashboardDriveInput?.close()
+        } catch (error: Throwable) {
+            capture(error)
+        } finally {
+            dashboardDriveInput = null
         }
         try {
             sim?.close()
