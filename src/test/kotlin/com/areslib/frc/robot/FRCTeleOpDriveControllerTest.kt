@@ -1,7 +1,10 @@
 package com.areslib.frc.robot
 
 import com.areslib.frc.FrcSwerveRobot
+import com.areslib.frc.Dyn4jSimulation
 import com.areslib.frc.marvin.*
+import com.areslib.frc.sim.FrcDashboardDriveFrameGate
+import com.areslib.frc.sim.applyTo
 import com.areslib.state.RobotState
 import com.areslib.state.SuperstructureState
 import com.areslib.telemetry.GamepadState
@@ -97,6 +100,38 @@ class FRCTeleOpDriveControllerTest {
         
         // Same input should produce non-zero drive commands
         assertTrue(vx2 != 0.0 || vy2 != 0.0)
+    }
+
+    @Test
+    fun `leased dashboard frame reaches FRC teleop and moves dyn4j along field X`() {
+        val gate = FrcDashboardDriveFrameGate()
+        val flags = ((1L shl 3) or (1L shl 4)).toDouble() // TeleOp + field-centric, Blue
+        assertTrue(gate.accept(dashboardFrame(sequence = 0L, flags = flags), nowMs = 1_000L))
+        assertTrue(
+            gate.accept(
+                dashboardFrame(sequence = 1L, vx = 3.0, flags = flags),
+                nowMs = 1_020L
+            )
+        )
+
+        requireNotNull(gate.current(1_020L)).applyTo(controllerState)
+        teleOpController.cachedAlliance = DriverStation.Alliance.Blue
+        teleOpController.drivePeriodic()
+        assertTrue(robot.store.state.drive.xVelocityMetersPerSecond > 2.5)
+        assertEquals(0.0, robot.store.state.drive.yVelocityMetersPerSecond, 1e-6)
+
+        val simulation = Dyn4jSimulation(seed = 42L)
+        try {
+            val start = simulation.getPoseUpdate()
+            repeat(40) { simulation.step(robot.store.state, 0.02) }
+            val moved = simulation.getPoseUpdate()
+            assertTrue(moved.xMeters - start.xMeters > 0.25, "dashboard forward must move along FRC +X")
+            assertTrue(kotlin.math.abs(moved.yMeters - start.yMeters) < moved.xMeters - start.xMeters)
+        } finally {
+            simulation.close()
+        }
+
+        assertNull(gate.current(1_521L), "the receiver lease must expire without new frames")
     }
 
     @Test
@@ -196,6 +231,21 @@ class FRCTeleOpDriveControllerTest {
         assertEquals(0.0, robot.store.state.superstructure.marvin.flywheel.targetVelocityRpm)
         assertEquals(0.0, robot.store.state.superstructure.marvin.feeder.targetVelocityRps)
     }
+
+    private fun dashboardFrame(
+        sequence: Long,
+        vx: Double = 0.0,
+        flags: Double,
+    ): DoubleArray = doubleArrayOf(
+        2.0,
+        7_001.0,
+        sequence.toDouble(),
+        (10_000L + sequence).toDouble(),
+        vx,
+        0.0,
+        0.0,
+        flags,
+    )
 
     @Test
     fun slamtakeRequiresANewAButtonEdgeAfterCompletion() {
