@@ -264,6 +264,11 @@ class Dyn4jSimulationTest {
         val newestBall = ballsList.last()
         assertEquals(com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH / 2.0, newestBall.transform.translationX, 0.05, "Scored ball should eject to field X center")
         assertEquals(com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH / 2.0, newestBall.transform.translationY, 0.05, "Scored ball should eject to field Y center")
+        assertEquals(
+            scoredBall.metadata.instanceKey,
+            com.areslib.sim.field.SimGamePieceBodyFactory.metadata(newestBall)?.instanceKey,
+            "Scored-piece identity should survive center ejection",
+        )
         
         // Verify it has non-zero ejection velocities
         assertTrue(newestBall.linearVelocity.magnitude > 1.0, "Ejected ball should have an outward velocity")
@@ -310,6 +315,11 @@ class Dyn4jSimulationTest {
         assertEquals(5.0, dynamicBody.transform.translationY, 0.1, "Landed ball should match final Y position")
         assertEquals(3.0, dynamicBody.linearVelocity.x, 1e-3, "Residual linear velocity X should be preserved")
         assertEquals(-2.0, dynamicBody.linearVelocity.y, 1e-3, "Residual linear velocity Y should be preserved")
+        assertEquals(
+            landingBall.metadata.instanceKey,
+            com.areslib.sim.field.SimGamePieceBodyFactory.metadata(dynamicBody)?.instanceKey,
+            "Landed-piece identity should survive the 2.5-D to Dyn4j transition",
+        )
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -335,10 +345,11 @@ class Dyn4jSimulationTest {
 
         val mockTelemetry = object : ITelemetry {
             val arrays = mutableMapOf<String, DoubleArray>()
+            val numbers = mutableMapOf<String, Double>()
             override fun putDoubleArray(key: String, value: DoubleArray) {
                 arrays[key] = value
             }
-            override fun putNumber(key: String, value: Double) {}
+            override fun putNumber(key: String, value: Double) { numbers[key] = value }
             override fun putString(key: String, value: String) {}
             override fun putBoolean(key: String, value: Boolean) {}
             override fun getNumber(key: String, defaultValue: Double): Double = defaultValue
@@ -359,6 +370,21 @@ class Dyn4jSimulationTest {
         assertEquals(3.0, poseArray[lastIdx + 1])
         assertEquals(2.5, poseArray[lastIdx + 2], "Flying ball Z coordinate must be published correctly")
         assertEquals(1.0, poseArray[lastIdx + 3], "Identity quaternion qw must be 1.0")
+
+        val gamePieceFrame = mockTelemetry.arrays[com.areslib.telemetry.TelemetryTopicConstants.GAME_PIECES_FRAME]
+        assertNotNull(gamePieceFrame)
+        assertEquals(2.0, gamePieceFrame!![0], 0.0)
+        assertEquals((ballsList.size + flyingList.size).toDouble(), gamePieceFrame[1], 0.0)
+        assertEquals(3.0, gamePieceFrame[2 + ballsList.size * 9 + 2], 0.0)
+        assertEquals(3.0, gamePieceFrame[2 + ballsList.size * 9 + 3], 0.0)
+
+        val poseFrame = mockTelemetry.arrays["ARES/SimulatorPoseFrame"]
+        assertNotNull(poseFrame)
+        assertEquals(10, poseFrame!!.size)
+        assertEquals(2.0, poseFrame[0], 1e-9, "Dyn4j truth X should remain distinct from Redux state")
+        assertEquals(0.0, poseFrame[3], 1e-9, "Default Redux EKF X should not be replaced by truth")
+        assertEquals(0.0, poseFrame[6], 1e-9, "Default Redux odometry X should remain independently observable")
+        assertEquals(2.0, mockTelemetry.numbers["ARES/TruePose/0"]!!, 1e-9)
     }
 
     @Test

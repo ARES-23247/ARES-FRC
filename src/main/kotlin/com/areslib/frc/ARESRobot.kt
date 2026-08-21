@@ -39,6 +39,8 @@ import com.areslib.frc.vision.FrcLocalizationCalibrationSession
 import com.areslib.frc.vision.FrcVisionTracker
 import com.areslib.frc.generated.subsystems.GeneratedSubsystemRegistry
 import com.areslib.frc.generated.subsystems.superstructure.GeneratedSuperstructureRegistry
+import com.areslib.frc.sim.FrcDashboardDriveInput
+import com.areslib.frc.sim.applyTo
 
 /** Returns false when any real mechanism adapter reports failed or reset configuration. */
 internal fun mechanismsConfigured(
@@ -96,6 +98,7 @@ class ARESRobot : TimedRobot() {
 
     private lateinit var robot: FrcSwerveRobot
     private var sim: Dyn4jSimulation? = null
+    private var dashboardDriveInput: FrcDashboardDriveInput? = null
     private lateinit var marvinShooter: MarvinShooterSubsystem
 
     private val controller = XboxController(0)
@@ -175,7 +178,10 @@ class ARESRobot : TimedRobot() {
             val feederFX = com.ctre.phoenix6.hardware.TalonFX(20, can2Bus)
 
             val defaultOffsets = frc.robot.generated.TunerConstants.getDefaultOffsets()
-            val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(defaultOffsets)
+            val activeOffsets = com.areslib.drivetrain.SwerveOffsetManager.loadOffsets(
+                defaultOffsets = defaultOffsets,
+                typedTuningOffsets = com.areslib.frc.config.CanonicalDrivebaseConfig.profiledOffsets()
+            )
 
             val ctreDrivetrain = frc.robot.generated.TunerConstants.TunerSwerveDrivetrain(
                 frc.robot.generated.TunerConstants.DrivetrainConstants,
@@ -213,6 +219,9 @@ class ARESRobot : TimedRobot() {
             // Simulation IOs
             val simInstance = Dyn4jSimulation(seed = 42L)
             sim = simInstance
+            // Desktop control is intentionally constructed only in simulation. A dashboard frame
+            // can never replace physical driver input on a real RoboRIO.
+            dashboardDriveInput = FrcDashboardDriveInput()
             swerveIO = null
             visionIO = null
             flywheelIO = simInstance.flywheelIO
@@ -540,6 +549,15 @@ class ARESRobot : TimedRobot() {
         }
         controller.updateState(controllerState)
         coPilotController.updateState(coPilotControllerState)
+        dashboardDriveInput?.poll()?.let { command ->
+            command.applyTo(controllerState)
+            val requestedAlliance = if (command.isRedAlliance) {
+                DriverStation.Alliance.Red
+            } else {
+                DriverStation.Alliance.Blue
+            }
+            if (requestedAlliance != cachedAlliance) applyAlliance(requestedAlliance)
+        }
     }
 
     private fun applyAlliance(alliance: DriverStation.Alliance) {
@@ -825,6 +843,13 @@ class ARESRobot : TimedRobot() {
             capture(error)
         }
         try {
+            dashboardDriveInput?.close()
+        } catch (error: Throwable) {
+            capture(error)
+        } finally {
+            dashboardDriveInput = null
+        }
+        try {
             sim?.close()
         } catch (error: Throwable) {
             capture(error)
@@ -848,7 +873,7 @@ class ARESRobot : TimedRobot() {
 
     // ── Simulation ──
 
-    /** Advances dyn4j, dispatches simulated events/ground-truth pose, and publishes 3D state. */
+    /** Advances Dyn4j, dispatches ideal simulated odometry/events, and publishes distinct truth. */
     override fun simulationPeriodic() {
         if (!RobotBase.isSimulation()) return
         val simInstance = sim ?: return
@@ -863,7 +888,8 @@ class ARESRobot : TimedRobot() {
             robot.store.dispatch(action)
         }
 
-        // Dispatch pose update so the state has odometry
+        // Feed the ideal simulated odometry observation through Redux. Dyn4j truth is published
+        // separately by publishVisualization; it never overwrites estimator telemetry topics.
         val poseUpdate = simInstance.getPoseUpdate()
         robot.store.dispatch(poseUpdate)
 
