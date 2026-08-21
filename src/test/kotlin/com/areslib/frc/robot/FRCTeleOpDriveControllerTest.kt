@@ -135,6 +135,55 @@ class FRCTeleOpDriveControllerTest {
     }
 
     @Test
+    fun `five simulated minutes of FRC dashboard frames retain translation and rotation authority`() {
+        val gate = FrcDashboardDriveFrameGate()
+        val flags = ((1L shl 3) or (1L shl 4)).toDouble() // TeleOp + field-centric, Blue
+        val simulation = Dyn4jSimulation(seed = 43L)
+        var maximumLinearCommand = 0.0
+        var minimumHeading = Double.POSITIVE_INFINITY
+        var maximumHeading = Double.NEGATIVE_INFINITY
+        try {
+            assertTrue(gate.accept(dashboardFrame(sequence = 0L, flags = flags), nowMs = 1_000L))
+            repeat(15_000) { index ->
+                val sequence = index.toLong() + 1L
+                val nowMs = 1_000L + sequence * 20L
+                val phase = (index / 750) % 4
+                val vx = when (phase) { 0 -> 2.0; 1 -> 0.5; 2 -> -2.0; else -> -0.5 }
+                val vy = when (phase) { 0 -> 0.5; 1 -> 2.0; 2 -> -0.5; else -> -2.0 }
+                val omega = if (phase % 2 == 0) 0.8 else -0.8
+                assertTrue(
+                    gate.accept(
+                        dashboardFrame(sequence, vx = vx, vy = vy, omega = omega, flags = flags),
+                        nowMs = nowMs
+                    ),
+                    "dashboard frame rejected at simulated tick $index"
+                )
+                val current = requireNotNull(gate.current(nowMs))
+                current.applyTo(controllerState)
+                teleOpController.cachedAlliance = DriverStation.Alliance.Blue
+                teleOpController.drivePeriodic()
+                val drive = robot.store.state.drive
+                maximumLinearCommand = maxOf(
+                    maximumLinearCommand,
+                    kotlin.math.hypot(drive.xVelocityMetersPerSecond, drive.yVelocityMetersPerSecond)
+                )
+                simulation.step(robot.store.state, 0.02)
+                val pose = simulation.getPoseUpdate()
+                assertTrue(pose.xMeters.isFinite() && pose.yMeters.isFinite() && pose.headingRadians.isFinite())
+                minimumHeading = minOf(minimumHeading, pose.headingRadians)
+                maximumHeading = maxOf(maximumHeading, pose.headingRadians)
+            }
+
+            assertTrue(maximumLinearCommand > 1.5, "dashboard translation authority degraded during soak")
+            assertTrue(maximumHeading - minimumHeading > 0.5, "dashboard rotation authority degraded during soak")
+            assertNotNull(gate.current(301_000L), "fresh 50 Hz frames must keep the receiver lease alive")
+            assertNull(gate.current(301_501L), "the receiver must still fail closed after the soak stops")
+        } finally {
+            simulation.close()
+        }
+    }
+
+    @Test
     fun testAllianceRelativeDirectionInversionWorksForBlueVsRed() {
         controllerState.leftStickY = -1.0f
         controllerState.leftStickX = -1.0f
@@ -235,6 +284,8 @@ class FRCTeleOpDriveControllerTest {
     private fun dashboardFrame(
         sequence: Long,
         vx: Double = 0.0,
+        vy: Double = 0.0,
+        omega: Double = 0.0,
         flags: Double,
     ): DoubleArray = doubleArrayOf(
         2.0,
@@ -242,8 +293,8 @@ class FRCTeleOpDriveControllerTest {
         sequence.toDouble(),
         (10_000L + sequence).toDouble(),
         vx,
-        0.0,
-        0.0,
+        vy,
+        omega,
         flags,
     )
 
