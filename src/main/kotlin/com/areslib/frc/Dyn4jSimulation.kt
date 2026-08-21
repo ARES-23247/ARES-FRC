@@ -16,11 +16,11 @@ import com.areslib.frc.sim.Dyn4jPhysicsWorld
 import com.areslib.frc.sim.Dyn4jSimTelemetryPublisher
 import com.areslib.frc.sim.Dyn4jSwerveModuleSim
 import org.dyn4j.dynamics.Body
-import org.dyn4j.geometry.Geometry
-import org.dyn4j.geometry.MassType
 import org.dyn4j.geometry.Vector2
 import edu.wpi.first.networktables.NetworkTableInstance
 import com.areslib.state.RobotFieldDocument
+import com.areslib.sim.field.SimGamePieceBodyFactory
+import com.areslib.sim.field.SimGamePieceMetadata
 
 /** Mutable 2.5-D projectile state; positions are meters and velocities are meters per second. */
 class FlyingBall(
@@ -29,7 +29,8 @@ class FlyingBall(
     var z: Double,
     var vx: Double,
     var vy: Double,
-    var vz: Double
+    var vz: Double,
+    val metadata: SimGamePieceMetadata = DEFAULT_FRC_PIECE_METADATA,
 )
 
 /**
@@ -73,6 +74,8 @@ class Dyn4jSimulation(
     private var lastFieldConfigJson = ""
 
     private var shootCooldownTimer = 0.0
+    private val inventoryPieces = java.util.ArrayDeque<SimGamePieceMetadata>()
+    private var fallbackPieceSequence = 0L
 
     internal val flywheelSim = FlywheelSim()
     internal val intakePivotSim = IntakePivotSim()
@@ -117,6 +120,8 @@ class Dyn4jSimulation(
         val timestamp = com.areslib.util.RobotClock.currentTimeMillis()
 
         if (dt <= 0.0) return actions
+
+        reconcileInventoryMetadata(state.superstructure.marvin.inventoryCount)
 
         val fieldConfigJson = fieldConfigSubscriber.get()
         if (fieldConfigJson.isNotBlank() && fieldConfigJson != lastFieldConfigJson) {
@@ -166,8 +171,10 @@ class Dyn4jSimulation(
                 val bx = ball.transform.translationX
                 val by = ball.transform.translationY
                 if (isInsideIntakeCaptureZone(robotX, robotY, robotHeading, bx, by)) {
+                    val metadata = SimGamePieceBodyFactory.metadata(ball) ?: nextFallbackPiece("captured")
                     physicsWorld.world.removeBody(ball)
                     physicsWorld.balls.removeAt(i)
+                    inventoryPieces.addLast(metadata)
                     if (feederPieceDetectorConfigured) {
                         simFeederPieceDetected = true
                     } else {
@@ -216,7 +223,8 @@ class Dyn4jSimulation(
             val vy = robotVy + launchVy
             val vz = vVert
 
-            val flyingBall = FlyingBall(bx, by, bz, vx, vy, vz)
+            val metadata = inventoryPieces.pollFirst() ?: nextFallbackPiece("launched")
+            val flyingBall = FlyingBall(bx, by, bz, vx, vy, vz, metadata)
             physicsWorld.flyingBalls.add(flyingBall)
             if (debug) println("BALL SHOT (2.5D)! Pos: ($bx, $by, $bz), Vel: ($vx, $vy, $vz). Inventory left: $newCount")
         }
@@ -249,24 +257,17 @@ class Dyn4jSimulation(
                     val evx = Math.cos(ejectAngle) * ejectSpeed
                     val evy = Math.sin(ejectAngle) * ejectSpeed
 
-                    val ball = Body()
-                    val fixture = ball.addFixture(Geometry.createCircle(0.0635))
-                    fixture.friction = 0.6
-                    fixture.restitution = 0.4
-                    fixture.density = 5.92
-                    ball.setMass(MassType.NORMAL)
-                    ball.linearDamping = 2.0
-                    ball.angularDamping = 2.0
-                    ball.translate(
-                        com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH / 2.0,
-                        com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH / 2.0
+                    val ball = SimGamePieceBodyFactory.createBody(
+                        metadata = fb.metadata,
+                        x = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_LENGTH / 2.0,
+                        y = com.areslib.math.coordinate.CoordinateTransformers.FRC_FIELD_WIDTH / 2.0,
                     )
                     ball.linearVelocity.set(evx, evy)
                     
                     physicsWorld.world.addBody(ball)
                     physicsWorld.balls.add(ball)
                 }
-                fb.z <= 0.0635 -> {
+                fb.z <= fb.metadata.thicknessMeters / 2.0 -> {
                     physicsWorld.flyingBalls.removeAt(i)
                     if (debug) println("BALL LANDED! Spawning back as dynamic 2D body at (${fb.x}, ${fb.y})")
 
@@ -275,15 +276,7 @@ class Dyn4jSimulation(
                     val cx = fb.x.coerceIn(0.1, fieldWidth - 0.1)
                     val cy = fb.y.coerceIn(0.1, fieldHeight - 0.1)
 
-                    val ball = Body()
-                    val fixture = ball.addFixture(Geometry.createCircle(0.0635))
-                    fixture.friction = 0.6
-                    fixture.restitution = 0.4
-                    fixture.density = 5.92
-                    ball.setMass(MassType.NORMAL)
-                    ball.linearDamping = 2.0
-                    ball.angularDamping = 2.0
-                    ball.translate(cx, cy)
+                    val ball = SimGamePieceBodyFactory.createBody(fb.metadata, cx, cy)
                     ball.linearVelocity.set(fb.vx, fb.vy)
 
                     physicsWorld.world.addBody(ball)
@@ -311,8 +304,18 @@ class Dyn4jSimulation(
 
     /** Publishes mechanism and piece poses for desktop 3-D visualization. */
     fun publishVisualization(state: RobotState, telemetry: ITelemetry) {
+        val truth = physicsWorld.robotBody.transform
         telemetryPublisher.publishVisualization(
-            state, telemetry, intakePivotSim.angleDegrees, simCowlAngle, flywheelRotationAngle, physicsWorld.balls, physicsWorld.flyingBalls
+            state = state,
+            telemetry = telemetry,
+            intakeAngleDegrees = intakePivotSim.angleDegrees,
+            simCowlAngle = simCowlAngle,
+            flywheelRotationAngle = flywheelRotationAngle,
+            balls = physicsWorld.balls,
+            flyingBalls = physicsWorld.flyingBalls,
+            trueX = truth.translationX,
+            trueY = truth.translationY,
+            trueHeading = truth.rotationAngle,
         )
     }
 
@@ -326,12 +329,33 @@ class Dyn4jSimulation(
         physicsWorld.buildWorld(config)
     }
 
+    private fun reconcileInventoryMetadata(inventoryCount: Int) {
+        val boundedCount = inventoryCount.coerceAtLeast(0)
+        while (inventoryPieces.size > boundedCount) inventoryPieces.removeLast()
+        while (inventoryPieces.size < boundedCount) inventoryPieces.addLast(nextFallbackPiece("inventory"))
+    }
+
+    private fun nextFallbackPiece(prefix: String): SimGamePieceMetadata =
+        SimGamePieceBodyFactory.fallback(
+            instanceId = "frc-$prefix-${fallbackPieceSequence++}",
+            typeId = "frc-fuel",
+            diameterMeters = 0.127,
+            massKg = 0.235,
+        )
+
     override fun close() {
         if (closed) return
         closed = true
         fieldConfigSubscriber.close()
     }
 }
+
+private val DEFAULT_FRC_PIECE_METADATA = SimGamePieceBodyFactory.fallback(
+    instanceId = "frc-flying-test-piece",
+    typeId = "frc-fuel",
+    diameterMeters = 0.127,
+    massKg = 0.235,
+)
 
 /** Pure robot-frame aperture check used by the runtime simulation and geometry regressions. */
 internal fun isInsideIntakeCaptureZone(

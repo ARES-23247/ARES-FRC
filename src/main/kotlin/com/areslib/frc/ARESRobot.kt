@@ -873,7 +873,7 @@ class ARESRobot : TimedRobot() {
 
     // ── Simulation ──
 
-    /** Advances dyn4j, dispatches simulated events/ground-truth pose, and publishes 3D state. */
+    /** Advances Dyn4j, dispatches ideal simulated odometry/events, and publishes distinct truth. */
     override fun simulationPeriodic() {
         if (!RobotBase.isSimulation()) return
         val simInstance = sim ?: return
@@ -888,7 +888,8 @@ class ARESRobot : TimedRobot() {
             robot.store.dispatch(action)
         }
 
-        // Dispatch pose update so the state has odometry
+        // Feed the ideal simulated odometry observation through Redux. Dyn4j truth is published
+        // separately by publishVisualization; it never overwrites estimator telemetry topics.
         val poseUpdate = simInstance.getPoseUpdate()
         robot.store.dispatch(poseUpdate)
 

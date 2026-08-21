@@ -4,6 +4,8 @@ import org.dyn4j.dynamics.Body
 import com.areslib.state.RobotState
 import com.areslib.telemetry.ITelemetry
 import com.areslib.frc.FlyingBall
+import com.areslib.sim.field.SimGamePieceTelemetryFrame
+import com.areslib.telemetry.TelemetryTopicConstants
 
 /**
  * Packs robot mechanisms and game pieces into WPILib-style 3-D pose arrays.
@@ -14,7 +16,11 @@ import com.areslib.frc.FlyingBall
  */
 class Dyn4jSimTelemetryPublisher {
     private var activeFuelData = DoubleArray(100 * 7)
+    private var gamePieceFrame = DoubleArray(SimGamePieceTelemetryFrame.requiredSize(0))
+    private var gamePieceSequence = 0L
     private val subsystemPoseBuf = DoubleArray(7)
+    private val simulatorPoseFrame = DoubleArray(10)
+    private var simulatorPoseSequence = 0L
 
     /** Publishes one visualization frame from cached Redux and simulation state. */
     fun publishVisualization(
@@ -24,8 +30,12 @@ class Dyn4jSimTelemetryPublisher {
         simCowlAngle: Double,
         flywheelRotationAngle: Double,
         balls: List<Body>,
-        flyingBalls: List<FlyingBall>
+        flyingBalls: List<FlyingBall>,
+        trueX: Double,
+        trueY: Double,
+        trueHeading: Double,
     ) {
+        publishPoseComparison(state, telemetry, trueX, trueY, trueHeading)
         val robotX = state.drive.odometryX
         val robotY = state.drive.odometryY
         val robotHeading = state.drive.odometryHeading
@@ -90,5 +100,62 @@ class Dyn4jSimTelemetryPublisher {
             activeFuelData[i] = 0.0
         }
         telemetry.putDoubleArray("Robot/FuelPoses", activeFuelData)
+
+        val requiredFrameSize = SimGamePieceTelemetryFrame.requiredSize(totalBallsCount)
+        if (gamePieceFrame.size != requiredFrameSize) gamePieceFrame = DoubleArray(requiredFrameSize)
+        for (i in balls.indices) {
+            SimGamePieceTelemetryFrame.writeBody(gamePieceFrame, i, balls[i])
+        }
+        for (i in flyingBalls.indices) {
+            val flying = flyingBalls[i]
+            SimGamePieceTelemetryFrame.write(
+                buffer = gamePieceFrame,
+                recordIndex = balls.size + i,
+                metadata = flying.metadata,
+                x = flying.x,
+                y = flying.y,
+                rotationRadians = 0.0,
+            )
+        }
+        SimGamePieceTelemetryFrame.finish(gamePieceFrame, totalBallsCount, gamePieceSequence)
+        gamePieceSequence = if (gamePieceSequence >= MAX_EXACT_DOUBLE_INTEGER) 0L else gamePieceSequence + 1L
+        telemetry.putDoubleArray(TelemetryTopicConstants.GAME_PIECES_FRAME, gamePieceFrame)
+    }
+
+    /** Publishes Dyn4j truth separately from Redux EKF/odometry and one atomic comparison frame. */
+    private fun publishPoseComparison(
+        state: RobotState,
+        telemetry: ITelemetry,
+        trueX: Double,
+        trueY: Double,
+        trueHeading: Double,
+    ) {
+        val estimator = state.drive.poseEstimator
+        telemetry.putNumber("ARES/TruePose/0", trueX)
+        telemetry.putNumber("ARES/TruePose/1", trueY)
+        telemetry.putNumber("ARES/TruePose/2", trueHeading)
+        telemetry.putNumber(TelemetryTopicConstants.ESTIMATED_POSE_X, estimator.estimatedPoseX)
+        telemetry.putNumber(TelemetryTopicConstants.ESTIMATED_POSE_Y, estimator.estimatedPoseY)
+        telemetry.putNumber(TelemetryTopicConstants.ESTIMATED_POSE_HEADING, estimator.estimatedPoseHeading)
+        telemetry.putNumber(TelemetryTopicConstants.DRIVE_ODOM_X, state.drive.odometryX)
+        telemetry.putNumber(TelemetryTopicConstants.DRIVE_ODOM_Y, state.drive.odometryY)
+        telemetry.putNumber(TelemetryTopicConstants.DRIVE_ODOM_HEADING, state.drive.odometryHeading)
+
+        simulatorPoseFrame[0] = trueX
+        simulatorPoseFrame[1] = trueY
+        simulatorPoseFrame[2] = trueHeading
+        simulatorPoseFrame[3] = estimator.estimatedPoseX
+        simulatorPoseFrame[4] = estimator.estimatedPoseY
+        simulatorPoseFrame[5] = estimator.estimatedPoseHeading
+        simulatorPoseFrame[6] = state.drive.odometryX
+        simulatorPoseFrame[7] = state.drive.odometryY
+        simulatorPoseFrame[8] = state.drive.odometryHeading
+        simulatorPoseFrame[9] = simulatorPoseSequence.toDouble()
+        simulatorPoseSequence = if (simulatorPoseSequence >= MAX_EXACT_DOUBLE_INTEGER) 0L else simulatorPoseSequence + 1L
+        telemetry.putDoubleArray("ARES/SimulatorPoseFrame", simulatorPoseFrame)
+    }
+
+    private companion object {
+        const val MAX_EXACT_DOUBLE_INTEGER = 9_007_199_254_740_991L
     }
 }
