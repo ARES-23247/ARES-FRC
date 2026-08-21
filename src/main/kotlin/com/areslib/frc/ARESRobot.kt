@@ -28,6 +28,7 @@ import edu.wpi.first.wpilibj.TimedRobot
 import edu.wpi.first.wpilibj.XboxController
 import edu.wpi.first.wpilibj.RobotBase
 import edu.wpi.first.wpilibj.DriverStation
+import edu.wpi.first.wpilibj.Filesystem
 
 import com.areslib.frc.robot.FRCAutoOrchestrator
 import com.areslib.frc.robot.FrcLocalizationCalibrationControls
@@ -86,6 +87,47 @@ internal fun validatedPdhCurrent(readingAmps: Double, robotEnabled: Boolean): Do
         Double.NaN
     }
 
+internal data class FrcFieldContract(
+    val config: com.areslib.state.RobotFieldConfig,
+    val aprilTagLayout: edu.wpi.first.apriltag.AprilTagFieldLayout,
+)
+
+/** Pure field loader used by both the roboRIO and desktop simulation composition paths. */
+internal object FrcFieldContractLoader {
+    var error: String? = null
+        private set
+
+    fun load(bytes: ByteArray): FrcFieldContract? {
+        error = null
+        val config = runCatching {
+            com.areslib.state.RobotFieldDocument.decode(bytes.decodeToString())
+        }.getOrElse { failure ->
+            error = failure.message ?: failure::class.java.simpleName
+            return null
+        }
+        val issues = com.areslib.state.RobotFieldValidator.validate(
+            config,
+            com.areslib.state.FieldType.FRC,
+            requireAprilTags = true,
+        )
+        if (issues.isNotEmpty()) {
+            error = issues.first().message
+            return null
+        }
+        return runCatching {
+            FrcFieldContract(
+                config,
+                com.areslib.frc.vision.FrcAprilTagFieldLayoutFactory.create(config),
+            )
+        }.getOrElse { failure ->
+            error = failure.message ?: failure::class.java.simpleName
+            null
+        }
+    }
+}
+
+internal fun loadFrcFieldContract(bytes: ByteArray): FrcFieldContract? = FrcFieldContractLoader.load(bytes)
+
 /**
  * WPILib lifecycle and dependency-composition root for Marvin XIX.
  *
@@ -143,6 +185,27 @@ class ARESRobot : TimedRobot() {
         edu.wpi.first.wpilibj.Threads.setCurrentThreadPriority(true, 10)
 
         val isReal = RobotBase.isReal()
+        val fieldContract = runCatching {
+            java.io.File(Filesystem.getDeployDirectory(), "paths/field.json").readBytes()
+        }.getOrNull()?.let(::loadFrcFieldContract)
+        if (fieldContract != null) {
+            com.areslib.state.RobotFieldManager.setActiveConfig(fieldContract.config)
+        } else {
+            com.areslib.state.RobotFieldManager.setActiveConfig(
+                com.areslib.state.RobotFieldConfig(
+                    id = "unavailable-frc-season-field",
+                    name = "Unavailable FRC season field",
+                    fieldType = com.areslib.state.FieldType.FRC,
+                    widthMeters = 16.541,
+                    heightMeters = 8.211,
+                    apriltags = emptyList(),
+                )
+            )
+            DriverStation.reportError(
+                "ARES: canonical field unavailable; AprilTag localization disabled: ${FrcFieldContractLoader.error}",
+                false,
+            )
+        }
 
         // 1. Declare the hardware IO instances (either physical or simulation)
         val swerveIO: SwerveHardwareIO?
@@ -198,16 +261,24 @@ class ARESRobot : TimedRobot() {
             // Each Limelight retains its independently surveyed robot-space transform from
             // its own web UI. Passing no pose is intentional: never overwrite either camera
             // with a shared placeholder extrinsic.
-            val crescendoTagIds = IntArray(16) { it + 1 }
-            val limelightShooter = FrcLimelightIO(
-                tableName = "limelight-shooter",
-                validFiducialIds = crescendoTagIds
-            )
-            val limelightBack = FrcLimelightIO(
-                tableName = "limelight-back",
-                validFiducialIds = crescendoTagIds
-            )
-            visionIO = com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
+            val validTagIds = fieldContract?.config?.apriltags
+                ?.sortedBy(com.areslib.state.RobotFieldAprilTag::id)
+                ?.map(com.areslib.state.RobotFieldAprilTag::id)
+                ?.toIntArray()
+                ?: IntArray(0)
+            visionIO = if (validTagIds.isNotEmpty()) {
+                val limelightShooter = FrcLimelightIO(
+                    tableName = "limelight-shooter",
+                    validFiducialIds = validTagIds,
+                )
+                val limelightBack = FrcLimelightIO(
+                    tableName = "limelight-back",
+                    validFiducialIds = validTagIds,
+                )
+                com.areslib.hardware.vision.CompositeVisionIO(listOf(limelightShooter, limelightBack))
+            } else {
+                null
+            }
 
             flywheelIO = FRCFlywheelHardwareIO(leftMasterFX, leftFollowerFX, rightMasterFX, rightFollowerFX)
             cowlIO = FRCCowlHardwareIO(cowlFX)
@@ -217,7 +288,9 @@ class ARESRobot : TimedRobot() {
             climberIO = FRCClimberHardwareIO(climberFX)
         } else {
             // Simulation IOs
-            val simInstance = Dyn4jSimulation(seed = 42L)
+            val simInstance = fieldContract?.config?.let { config ->
+                Dyn4jSimulation(config = config, seed = 42L)
+            } ?: Dyn4jSimulation(seed = 42L)
             sim = simInstance
             // Desktop control is intentionally constructed only in simulation. A dashboard frame
             // can never replace physical driver input on a real RoboRIO.
