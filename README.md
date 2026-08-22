@@ -107,3 +107,7 @@ $repository = ([Uri](Resolve-Path ..\ARESLib-Kotlin\build\release-repository)).A
 | `src/main/kotlin/com/areslib/frc/generated/` | Deterministic checked-in Kotlin generated from `.ares/` |
 | `src/main/deploy/paths/` | Canonical field geometry consumed by simulation and Analytics |
 | `src/test/kotlin/` | Lifecycle, reducer, IO, simulation, and autonomous regression tests |
+
+## License
+
+ARES-authored season and simulation code is licensed under [Apache License 2.0](LICENSE). WPILib, CTRE Phoenix, and other vendor dependencies retain their own licenses and terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
