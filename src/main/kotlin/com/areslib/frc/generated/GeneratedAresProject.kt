@@ -64,8 +64,8 @@ fun interface GeneratedAresProjectControlTaskSink {
 object GeneratedAresProject {
     const val GENERATOR_VERSION: Int = 8
     const val CATALOG_SHA256: String = "19ed9bc352df84bfeb33770fb1cb7b3507de57d4e80f38a4ed4427affab97246"
-    const val CONTENT_SHA256: String = "54584a6357dcaf6ed1390a9696ebd0d4d4543f33678ef5d7ade7464a130a6e97"
-    const val SOURCE_SHA256: String = "fb8932c603ecd3169c3646749f5140d5dd42ab159851fb7c1c48410ab0bf1552"
+    const val CONTENT_SHA256: String = "6076e40c3ed8333a941ab9f6d7acbfd6fcf9af578fb0c5d33052e4bde168adaf"
+    const val SOURCE_SHA256: String = "dcf75e3dbad9e6801aaf5ae9827c8831d5a96b625fe829d2ff02193aeddb4256"
 
     const val PROJECT_ID: String = "team23247-marvin-xix"
     const val PROJECT_LEAGUE: String = "FRC"
@@ -74,6 +74,12 @@ object GeneratedAresProject {
     const val ROBOT_WIDTH_METERS: Double = 0.8
     const val FIELD_LENGTH_METERS: Double = 16.54175
     const val FIELD_WIDTH_METERS: Double = 8.21055
+
+    /** Canonical runtime choices reviewed in .ares/project.json. */
+    object RuntimeOptions {
+        const val FTC_HUB_COMMAND_TRANSPORT: String = "STANDARD_SDK"
+        const val FTC_LIMELIGHT_PROXY_ENABLED: Boolean = false
+    }
 
     val knownActionKeys: Set<String> = setOf("intake.collect", "intake.stop", "intake.stow", "shooter.feedWhenReady", "shooter.prepare", "shooter.stop")
     val knownConditionKeys: Set<String> = setOf("shooter.ready")
