@@ -98,6 +98,12 @@ Start WPILib desktop simulation with:
 .\gradlew.bat simulateJava
 ```
 
+When the project is opened in ARES Robotics Studio, **Local Sim → Start driving** can enable the
+simulation-only Driver Station directly. The dashboard publishes a leased, neutral-first control
+frame and the robot publishes an atomic acknowledgement. If the frame becomes stale or invalid,
+the simulated Driver Station disables and outputs fail closed. The direct Gradle/WPILib workflow
+remains available for advanced debugging and does not change physical RoboRIO behavior.
+
 Choose a production-generated entry by setting `SmartDashboard/SelectedAuto`. Only match-reviewed
 entries from `.ares/autonomous-catalog.json` appear in that chooser; the checked-in default is the
 safe `do-nothing` routine. The drive-and-shoot scenario lives under `src/test/resources/ares/` and is
