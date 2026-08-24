@@ -58,6 +58,20 @@ class FrcDashboardDriveInputTest {
         assertFalse(gate.accept(frame(sequence = 3, flags = 1L shl 12), nowMs = 4_040))
     }
 
+    @Test
+    fun `receiver acknowledgement reports identity freshness and fail closed expiry`() {
+        val gate = FrcDashboardDriveFrameGate()
+        val acknowledgement = DoubleArray(FrcDashboardDriveFrameGate.ACK_VALUE_COUNT)
+        assertTrue(gate.accept(frame(session = 91, sequence = 7), nowMs = 5_000))
+
+        gate.copyAcknowledgement(acknowledgement, nowMs = 5_050)
+        assertEquals(listOf(1.0, 2.0, 91.0, 7.0, 50.0), acknowledgement.take(5))
+
+        gate.copyAcknowledgement(acknowledgement, nowMs = 5_501)
+        assertEquals(4.0, acknowledgement[1])
+        assertEquals(0.0, acknowledgement[5])
+    }
+
     private fun frame(
         session: Long = 42,
         sequence: Long,
