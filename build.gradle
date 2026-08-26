@@ -78,7 +78,7 @@ wpi.java.debugJni = false
 
 // Set this to true to enable desktop support.
 def includeDesktopSupport = true
-def aresVersion = providers.gradleProperty('aresVersion').getOrElse('9.11.0')
+def aresVersion = providers.gradleProperty('aresVersion').getOrElse('9.13.0')
 def aresOsName = System.getProperty('os.name').toLowerCase()
 def aresSimulatorRuntime = aresOsName.contains('windows')
     ? 'simulator-runtime-windows'
@@ -189,8 +189,12 @@ test {
     }
 }
 
-// Simulation configuration.
-wpi.sim.addGui().defaultEnabled = true
+// Simulation configuration. ARES Studio is the normal beginner-facing simulator UI;
+// opt into WPILib's low-level HAL window with -ParesFrcHalGui=true when debugging IO.
+def aresFrcHalGuiEnabled = providers.gradleProperty('aresFrcHalGui')
+    .map { it.toBoolean() }
+    .getOrElse(false)
+wpi.sim.addGui().defaultEnabled = aresFrcHalGuiEnabled
 wpi.sim.addDriverstation()
 
 // Setting up main class for simulation execution
@@ -203,6 +207,13 @@ jar {
 tasks.withType(JavaExec) {
     mainClass = ROBOT_MAIN_CLASS
     classpath = sourceSets.main.runtimeClasspath
+    if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")) {
+        def requestedJava = providers.gradleProperty("aresFrcJavaExecutable").orNull
+        def wpilibJava = file(requestedJava ?: "C:/Users/Public/wpilib/2026/jdk/bin/java.exe")
+        if (wpilibJava.isFile()) {
+            executable = wpilibJava.absolutePath
+        }
+    }
 }
 
 kover {
