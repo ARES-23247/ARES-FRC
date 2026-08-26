@@ -36,9 +36,10 @@ After editing the project, regenerate and verify the Kotlin compiled onto the Ro
 .\gradlew.bat verifyAresProject
 ```
 
-`src/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt` is checked in and must not be
-edited by hand. `compileKotlin` depends on `verifyAresProject`, so stale generated code blocks a
-build. Generation requires neither the RoboRIO nor a network connection.
+`build/generated/ares/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt` is disposable
+mechanical plumbing and must not be edited or committed. `compileKotlin` regenerates and validates
+it from the canonical documents using the pinned ARES code generator. Generation requires neither
+the RoboRIO nor a network connection.
 
 ## Coordinate and preflight contract
 

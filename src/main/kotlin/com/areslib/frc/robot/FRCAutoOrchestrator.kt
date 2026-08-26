@@ -19,7 +19,7 @@ import com.areslib.routine.RoutineStep
 import com.areslib.state.RoutineExecutionStatus
 import com.areslib.util.RobotClock
 
-/** Result of resolving a dashboard request against the checked-in generated autonomous catalog. */
+/** Result of resolving a dashboard request against the build-generated canonical autonomous catalog. */
 data class FrcAutonomousSelection(
     val entry: AutonomousCatalogEntry,
     val requestedId: String,

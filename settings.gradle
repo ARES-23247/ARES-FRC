@@ -2,7 +2,9 @@ import org.gradle.internal.os.OperatingSystem
 
 pluginManagement {
     repositories {
-        mavenLocal()
+        if (providers.gradleProperty('aresUseMavenLocal').map { it.toBoolean() }.getOrElse(false)) {
+            mavenLocal()
+        }
         gradlePluginPortal()
         String frcYear = '2026'
         File frcHome

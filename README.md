@@ -97,7 +97,7 @@ $repository = ([Uri](Resolve-Path ..\ARESLib-Kotlin\build\release-repository)).A
 
 | Path | Purpose |
 |---|---|
-| `.ares-robot.json` | Offline project identity used by Analytics workspace discovery |
+| `.ares/project.json` | Canonical identity, geometry, coordinate convention, and runtime policy used by Studio and generation |
 | `.ares/` | Canonical routines plus autonomous and action catalogs |
 | `src/main/kotlin/com/areslib/frc/ARESRobot.kt` | `TimedRobot` lifecycle and real/sim composition root |
 | `src/main/kotlin/com/areslib/frc/robot/` | Teleop drive and autonomous orchestration |
