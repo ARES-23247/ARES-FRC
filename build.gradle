@@ -11,7 +11,9 @@ repositories {
     if (aresRepositoryUrl != null && !aresRepositoryUrl.trim().isEmpty()) {
         maven { url uri(aresRepositoryUrl) }
     }
-    mavenLocal()
+    if (providers.gradleProperty('aresUseMavenLocal').map { it.toBoolean() }.getOrElse(false)) {
+        mavenLocal()
+    }
     mavenCentral()
     maven { url 'https://raw.githubusercontent.com/ARES-23247/ARESLib-Kotlin/maven' }
 }
@@ -23,8 +25,8 @@ kotlin {
     jvmToolchain(17)
 }
 
-// Editable subsystem starters live under src/. Mechanical registration/definition plumbing and
-// generated contract tests are disposable build products recreated from .ares/subsystems.
+// All document-derived project/runtime registration and contract tests are disposable build
+// products. Editable starters and platform adapters stay under src/ and retain explicit ownership.
 def generatedAresSubsystemMainDir = file("${buildDir}/generated/ares/main/kotlin")
 def generatedAresSubsystemTestDir = file("${buildDir}/generated/ares/test/kotlin")
 def generatedAresDrivebaseMainDir = file("${buildDir}/generated/ares/drivebase/kotlin")
@@ -78,7 +80,7 @@ wpi.java.debugJni = false
 
 // Set this to true to enable desktop support.
 def includeDesktopSupport = true
-def aresVersion = providers.gradleProperty('aresVersion').getOrElse('9.13.0')
+def aresVersion = providers.gradleProperty('aresVersion').getOrElse('10.0.0')
 def aresOsName = System.getProperty('os.name').toLowerCase()
 def aresSimulatorRuntime = aresOsName.contains('windows')
     ? 'simulator-runtime-windows'
@@ -268,10 +270,9 @@ task fetchOffsets {
     }
 }
 
-// Canonical `.ares` documents are the source of truth. The project composition source remains
-// checked in for offline robot builds. Subsystem starters are explicit source files; only their
-// entirely mechanical plumbing is placed under build/generated.
-def generatedAresSource = file("src/main/kotlin/com/areslib/frc/generated/GeneratedAresProject.kt")
+// Canonical `.ares` documents are the source of truth. Offline builds deterministically regenerate
+// all mechanical project composition below build/generated from the pinned ARES code generator.
+def generatedAresSource = file("${generatedAresSubsystemMainDir}/com/areslib/frc/generated/GeneratedAresProject.kt")
 def subsystemStarterSource = file("src/main/kotlin/com/areslib/frc/generated/subsystems")
 def subsystemCodegenArgs = [
     "--subsystems-starter-output", subsystemStarterSource.absolutePath,
@@ -286,7 +287,7 @@ def drivebaseCodegenArgs = [
 
 tasks.register("generateAresProject", JavaExec) {
     group = "ARES"
-    description = "Generate checked-in project Kotlin and disposable subsystem plumbing; never replace starters."
+    description = "Generate disposable project/runtime plumbing and tests; never replace editable starters."
     classpath = configurations.aresCodegen
     mainClass = "com.areslib.codegen.AresProjectCodegenCli"
     args "--project", projectDir.absolutePath,
@@ -299,14 +300,13 @@ tasks.register("generateAresProject", JavaExec) {
 
 tasks.register("prepareAresSubsystemPlumbing", JavaExec) {
     group = "build setup"
-    description = "Materialize disposable subsystem registration/tests without modifying editable starters."
+    description = "Materialize all disposable project/subsystem plumbing without modifying editable starters."
     classpath = configurations.aresCodegen
     mainClass = "com.areslib.codegen.AresProjectCodegenCli"
     args "--project", projectDir.absolutePath,
         "--output", generatedAresSource.absolutePath,
         "--package", "com.areslib.frc.generated",
-        "--platform", "FRC",
-        "--subsystems-only"
+        "--platform", "FRC"
     args subsystemCodegenArgs
     args drivebaseCodegenArgs
 }
@@ -368,7 +368,7 @@ tasks.register("replaceSubsystemStarters", JavaExec) {
 
 tasks.register("verifyAresProject", JavaExec) {
     group = "verification"
-    description = "Fail when checked-in project Kotlin, starters, or generated subsystem plumbing is stale."
+    description = "Regenerate disposable plumbing and fail when canonical documents or protected starters are invalid."
     dependsOn tasks.named("prepareAresSubsystemPlumbing")
     classpath = configurations.aresCodegen
     mainClass = "com.areslib.codegen.AresProjectCodegenCli"
