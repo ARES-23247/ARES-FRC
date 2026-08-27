@@ -64,8 +64,10 @@ class RepositorySafetyContractTest {
         ).readText()
         assertTrue(lifecycleSource.contains("generatedControlsRuntime.update()"))
         assertTrue(lifecycleSource.contains("cancelGeneratedControls(\"FRC disabled\")"))
-        assertTrue(runtimeSource.contains("GeneratedAresProject.createControllerRuntimes"))
-        assertTrue(runtimeSource.contains("?: \"hardcoded-only\""))
-        assertFalse(runtimeSource.contains("mavenLocal"))
+        assertTrue(runtimeSource.contains("FrcGeneratedProjectControlsRuntime"))
+        assertTrue(runtimeSource.contains("definition = GeneratedAresProject.runtimeDefinition"))
+        assertFalse(runtimeSource.contains("TaskExecutor"))
+        assertFalse(File(projectRoot, "build.gradle").readText().contains("mavenLocal"))
+        assertFalse(File(projectRoot, "settings.gradle").readText().contains("mavenLocal"))
     }
 }
