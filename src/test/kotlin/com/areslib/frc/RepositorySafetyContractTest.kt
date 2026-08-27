@@ -70,4 +70,14 @@ class RepositorySafetyContractTest {
         assertFalse(File(projectRoot, "build.gradle").readText().contains("mavenLocal"))
         assertFalse(File(projectRoot, "settings.gradle").readText().contains("mavenLocal"))
     }
+
+    @Test
+    fun `FRC simulator remains free of FTC OpMode and Control Hub APIs`() {
+        val sources = File(projectRoot, "src/main").walkTopDown()
+            .filter { it.isFile && it.extension in setOf("kt", "java") }
+            .joinToString("\n") { it.readText() }
+
+        assertFalse(sources.contains("import com.qualcomm.robotcore"))
+        assertFalse(sources.contains("import org.firstinspires.ftc"))
+    }
 }
