@@ -11,9 +11,6 @@ repositories {
     if (aresRepositoryUrl != null && !aresRepositoryUrl.trim().isEmpty()) {
         maven { url uri(aresRepositoryUrl) }
     }
-    if (providers.gradleProperty('aresUseMavenLocal').map { it.toBoolean() }.getOrElse(false)) {
-        mavenLocal()
-    }
     mavenCentral()
     maven { url 'https://raw.githubusercontent.com/ARES-23247/ARESLib-Kotlin/maven' }
 }
@@ -80,7 +77,7 @@ wpi.java.debugJni = false
 
 // Set this to true to enable desktop support.
 def includeDesktopSupport = true
-def aresVersion = providers.gradleProperty('aresVersion').getOrElse('10.0.0')
+def aresVersion = providers.gradleProperty('aresVersion').getOrElse('10.1.0')
 def aresOsName = System.getProperty('os.name').toLowerCase()
 def aresSimulatorRuntime = aresOsName.contains('windows')
     ? 'simulator-runtime-windows'
@@ -159,6 +156,11 @@ task extractTestNatives(type: Copy) {
 test {
     dependsOn extractTestNatives
     useJUnitPlatform()
+
+    // Unit and simulator tests run from the repository root, where historical sample logs are
+    // intentionally versioned. Production retention must never prune those fixtures while a test
+    // robot is constructed; generated test logs remain ignored and are cleaned by the build.
+    systemProperty "ares.logging.retention.enabled", "false"
     
     // Configure test task to run using WPILib's compatible JDK to avoid JNI loader MSVC runtime crashes
     if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")) {
