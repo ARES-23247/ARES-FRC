@@ -405,9 +405,9 @@ class ARESRobot : TimedRobot() {
             com.areslib.hardware.HardwareRegistry.registerDevice(
                 "Swerve",
                 swerveIO,
-                com.areslib.hardware.TopologyNode(
+                com.areslib.telemetry.schema.TopologyNode(
                     id = "Swerve",
-                    type = com.areslib.hardware.TopologyNodeType.CANIVORE,
+                    type = com.areslib.telemetry.schema.TopologyNodeType.CANIVORE,
                     displayName = "CTRE Swerve (${com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS})",
                     canBus = com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS,
                     connectionType = "CAN-FD",
@@ -424,9 +424,9 @@ class ARESRobot : TimedRobot() {
             com.areslib.hardware.HardwareRegistry.registerDevice(
                 "Vision",
                 visionIO,
-                com.areslib.hardware.TopologyNode(
+                com.areslib.telemetry.schema.TopologyNode(
                     id = "Vision",
-                    type = com.areslib.hardware.TopologyNodeType.CAMERA,
+                    type = com.areslib.telemetry.schema.TopologyNodeType.CAMERA,
                     displayName = "Dual Limelight",
                     connectionType = "NetworkTables",
                     metadata = mapOf("sources" to "limelight-shooter,limelight-back")
@@ -980,9 +980,9 @@ internal fun marvinCanTopology(
     displayName: String,
     primaryCanId: Int,
     vararg memberCanIds: Int
-): com.areslib.hardware.TopologyNode = com.areslib.hardware.TopologyNode(
+): com.areslib.telemetry.schema.TopologyNode = com.areslib.telemetry.schema.TopologyNode(
     id = displayName,
-    type = com.areslib.hardware.TopologyNodeType.CAN_MOTOR_CONTROLLER,
+    type = com.areslib.telemetry.schema.TopologyNodeType.CAN_MOTOR_CONTROLLER,
     displayName = displayName,
     canId = primaryCanId,
     canBus = com.areslib.frc.generated.drivebase.GeneratedAresDrivebaseConfig.CTRE_CAN_BUS,
